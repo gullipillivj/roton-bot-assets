@@ -1,25 +1,41 @@
-async function getStrength(symbol) {
-  try {
-    const closes = await fetchPrices(symbol);
+// getStrength.js
+const { debugLog, debugError } = require('./debug');
 
-    // RSI calculation
-    const rsi = technicalindicators.RSI.calculate({ values: closes, period: 14 });
+function getStrength(prices, lifeCycleLimits) {
+    try {
+        const { lastPrice, change24h } = prices;
+        const { maxUp, maxDown } = lifeCycleLimits;
 
-    // EMA calculations
-    const emaShort = technicalindicators.EMA.calculate({ values: closes, period: 5 });
-    const emaLong = technicalindicators.EMA.calculate({ values: closes, period: 20 });
+        debugLog("getStrength", "Inputs received", { lastPrice, change24h, maxUp, maxDown });
 
-    const latestPrice = closes[closes.length - 1];
-    const latestRSI = rsi[rsi.length - 1];
-    const latestShort = emaShort[emaShort.length - 1];
-    const latestLong = emaLong[emaLong.length - 1];
+        let shouldBuy = false;
+        let shouldHop = false;
+        let expectedGain = 0;
 
-    // Score combines RSI + EMA difference
-    const score = latestRSI + (latestShort - latestLong);
+        // Entry condition: near 0% and trending upward
+        if (Math.abs(change24h) < 0.5 && change24h > 0) {
+            shouldBuy = true;
+            expectedGain = 2; // placeholder target
+            debugLog("getStrength", "BUY condition met", { change24h });
+        }
 
-    return { symbol, price: latestPrice, rsi: latestRSI, score };
-  } catch (err) {
-    console.error("Error calculating strength for", symbol, err);
-    return { symbol, price: 0, rsi: 0, score: -999 };
-  }
+        // Hop condition: coin near life cycle upper limit
+        if (change24h >= maxUp - 1) {
+            shouldHop = true;
+            debugLog("getStrength", "HOP condition met", { change24h, maxUp });
+        }
+
+        // Exit condition: coin near life cycle lower limit
+        if (change24h <= maxDown + 1) {
+            debugLog("getStrength", "EXIT condition met", { change24h, maxDown });
+        }
+
+        return { shouldBuy, shouldHop, expectedGain };
+
+    } catch (err) {
+        debugError("getStrength", err);
+        return { shouldBuy: false, shouldHop: false, expectedGain: 0 };
+    }
 }
+
+module.exports = { getStrength };

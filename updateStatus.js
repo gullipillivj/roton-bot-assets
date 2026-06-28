@@ -1,19 +1,38 @@
-function updateStatus(activeValue, bufferValue, totalValue, investment, stopLoss) {
-  // Update panel values
-  document.getElementById("activeValue").innerText = activeValue.toFixed(2);
-  document.getElementById("bufferValue").innerText = bufferValue.toFixed(2);
-  document.getElementById("totalValue").innerText = totalValue.toFixed(2);
+// updateStatus.js
+const { debugLog, debugError } = require('./debug');
 
-  // Calculate profit %
-  let profitPercent = ((totalValue - investment) / investment) * 100;
-  document.getElementById("profitPercent").innerText = profitPercent.toFixed(2) + "%";
+function updateStatus(message, data = null) {
+    try {
+        // Display message on UI (pseudo-code)
+        document.getElementById("statusPanel").innerText = message;
 
-  // Stop loss status
-  if (totalValue <= investment * (1 - stopLoss)) {
-    document.getElementById("stopLossStatus").innerText = "Triggered";
-    document.getElementById("stopLossStatus").style.color = "red";
-  } else {
-    document.getElementById("stopLossStatus").innerText = "Safe";
-    document.getElementById("stopLossStatus").style.color = "green";
-  }
+        // Debug log for system + dev analysis
+        debugLog("updateStatus", `UI message displayed: ${message}`, data);
+
+    } catch (err) {
+        debugError("updateStatus", err);
+    }
 }
+
+function showTrend(trendState) {
+    let message;
+    if (trendState === "+") {
+        message = "Market trend today: UP, Adjust your investment and profit parameters accordingly.";
+    } else {
+        message = "Market trend today: DOWN, Adjust your investment and profit parameters accordingly.";
+    }
+
+    updateStatus(message, { trendState });
+}
+
+function showProfitLoss(profitLoss) {
+    const message = `Current Profit/Loss: ${(profitLoss * 100).toFixed(2)}%`;
+    updateStatus(message, { profitLoss });
+}
+
+function showExit(reason) {
+    const message = `Bot exited: ${reason}`;
+    updateStatus(message, { reason });
+}
+
+module.exports = { updateStatus, showTrend, showProfitLoss, showExit };
