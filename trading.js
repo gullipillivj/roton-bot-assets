@@ -1,6 +1,17 @@
 // trading.js — trading loop with debug logs
 // Debug mode enabled
-logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
+var running = false;
+var runNumber = 0;
+var position = null;
+var investment = 0;
+var profitTarget = 1;
+var stopLoss = 0.5;
+var profit = 0;
+var balance = 0;
+var fees = 0;
+var hopCount = 0;
+var startTime = Date.now();
+var holdStart = null;
 async function tradingLoop(runNumber) {
     logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
 
