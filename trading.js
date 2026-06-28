@@ -3,16 +3,21 @@
 // Global state variables
 var running = false;
 var runNumber = 0;
-var position = null;        // start with no position
-var investment = 500;       // or read from UI later
-var profitTarget = 1;       // %
-var stopLoss = 0.5;         // %
-var profit = 0;
-var balance = 1000;         // starting balance
-var fees = 0;
-var hopCount = 0;
-var startTime = Date.now();
-var holdStart = null;
+var position = null;
+
+// Read balances from UI inputs (fallback defaults if empty)
+function initGlobals() {
+    investment = parseFloat(document.getElementById("investmentBalance").value) || 500;
+    balance = parseFloat(document.getElementById("startingBalance").value) || 1000;
+    profitTarget = parseFloat(document.getElementById("profitTarget").value) || 1;
+    stopLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
+
+    profit = 0;
+    fees = 0;
+    hopCount = 0;
+    startTime = Date.now();
+    holdStart = null;
+}
 
 // Trading loop
 async function tradingLoop(runNumber) {
@@ -28,11 +33,19 @@ async function tradingLoop(runNumber) {
 
                 if (bestCoin) {
                     const qty = investment / bestCoin.price;
+
+                    // Apply buy fee (0.1%)
+                    const buyFee = investment * 0.001;
+                    fees += buyFee;
+                    balance -= buyFee;
+
                     position = { symbol: bestCoin.symbol, price: bestCoin.price, qty: qty };
                     holdStart = Date.now();
                     showTrend(bestCoin.change24h);
+
                     logMessage("[DEBUG] Bought " + bestCoin.symbol + " at " + bestCoin.price +
-                               " | Qty: " + qty.toFixed(6));
+                               " | Qty: " + qty.toFixed(6) +
+                               " | Fee: " + buyFee.toFixed(2));
                     updateCurrentValue(bestCoin.price, position);
                 } else {
                     logMessage("[DEBUG] No coin selected, retrying...");
@@ -47,10 +60,19 @@ async function tradingLoop(runNumber) {
 
                 if (currentPrice > position.price * (1 + profitTarget/100)) {
                     const tradeProfit = (currentPrice - position.price) * position.qty;
-                    profit += tradeProfit;
-                    balance += tradeProfit;
+
+                    // Apply sell fee (0.1%)
+                    const sellFee = (currentPrice * position.qty) * 0.001;
+                    fees += sellFee;
+
+                    balance += tradeProfit - sellFee;
+                    profit += tradeProfit - sellFee;
+
                     logMessage("[DEBUG] Profit target hit! Sold " + position.symbol +
-                               " at " + currentPrice + " | Profit: " + tradeProfit.toFixed(2));
+                               " at " + currentPrice +
+                               " | Profit: " + (tradeProfit - sellFee).toFixed(2) +
+                               " | Fee: " + sellFee.toFixed(2));
+
                     position = null;
                     holdStart = null;
                 } else {
