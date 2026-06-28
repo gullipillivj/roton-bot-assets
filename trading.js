@@ -58,7 +58,7 @@ async function tradingLoop(runNumber) {
                 }
 
                 // Stop conditions
-                if (fees >= profit) {
+                if (profit > 0 && fees >= profit) {
                     logMessage("[DEBUG] Fees exceeded profit. Stopping bot.");
                     stopBot(runNumber);
                     break;
