@@ -2,7 +2,7 @@
 // Debug mode enabled
 var running = false;
 var runNumber = 0;
-var position = 0;
+var position = null;
 var investment = 0;
 var profitTarget = 1;
 var stopLoss = 0.5;
@@ -11,7 +11,8 @@ var balance = 0;
 var fees = 0;
 var hopCount = 0;
 var startTime = Date.now();
-var holdStart = 0;
+var holdStart = null;
+
 async function tradingLoop(runNumber) {
     logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
 
