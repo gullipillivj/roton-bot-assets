@@ -1,6 +1,6 @@
 // trading.js — trading loop with debug logs
 // Debug mode enabled
-
+logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
 async function tradingLoop(runNumber) {
     logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
 
