@@ -1,6 +1,6 @@
 // coins.js — Binance API helpers
 // Debug mode enabled
-
+logMessage("[DEBUG] Binance data received: " + data.symbol + " change=" + data.priceChangePercent + "%");
 async function pickBestCoin(symbols) {
     let bestCoin = null;
     let bestChange = -Infinity;
