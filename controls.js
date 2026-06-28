@@ -1,22 +1,68 @@
-let botInterval;
+// controls.js — start/stop/exit button logic, validation, run counter
+// Debug mode enabled
 
-function showDebug(msg, color="black") {
-  const label = document.getElementById("debugLabel");
-  label.style.color = color;
-  label.textContent = msg;
-}
+let runCounter = 0;
 
 function startBot() {
-  showDebug("Bot started...", "green");
-  botInterval = setInterval(simulate, 15000);
+    running = true;
+    runCounter++;
+
+    document.querySelector("button[onclick='startBot()']").disabled = true;
+    document.querySelector("button[onclick='stopBot()']").disabled = false;
+    document.querySelector("button[onclick='exitBot()']").disabled = false;
+
+    balance = parseFloat(document.getElementById("balance").value) || 1000;
+    investment = parseFloat(document.getElementById("investment").value) || 500;
+
+    if (investment > balance) {
+        logMessage("Error: Investment cannot exceed available balance.");
+        running = false;
+        document.querySelector("button[onclick='startBot()']").disabled = false;
+        console.debug("[Controls] Invalid investment > balance");
+        return;
+    }
+
+    profitTarget = parseFloat(document.getElementById("profitTarget").value) || 1;
+    stopLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
+    profit = 0;
+    position = null;
+    holdStart = null;
+    hopCount = 0;
+    fees = 0;
+    startTime = Date.now();
+
+    document.getElementById("status").textContent = "Bot is running...";
+    logMessage("Starting simulation with balance " + balance + " and investment " + investment);
+
+    console.debug("[Controls] Bot started, Run:", runCounter, "Balance:", balance, "Investment:", investment);
+
+    tradingLoop(runCounter);
 }
 
-function stopBot() {
-  clearInterval(botInterval);
-  showDebug("Bot stopped.", "red");
+function stopBot(runNumber) {
+    running = false;
+    document.querySelector("button[onclick='startBot()']").disabled = false;
+    document.querySelector("button[onclick='stopBot()']").disabled = true;
+    document.querySelector("button[onclick='exitBot()']").disabled = true;
+
+    balance += profit;
+    document.getElementById("status").textContent = "Bot stopped.";
+    logMessage("Stopped. Final balance: " + balance.toFixed(2) +
+               " | Net profit: " + profit.toFixed(2));
+
+    addRunResult(runNumber, profit);
+
+    console.debug("[Controls] Bot stopped, Run:", runNumber, "Profit:", profit, "Balance:", balance);
 }
 
-function goHome() {
-  showDebug("Exiting to home...", "blue");
-  window.location.href = "/";
+function exitBot() {
+    running = false;
+    document.querySelector("button[onclick='startBot()']").disabled = false;
+    document.querySelector("button[onclick='stopBot()']").disabled = true;
+    document.querySelector("button[onclick='exitBot()']").disabled = true;
+
+    document.getElementById("status").textContent = "Exited to home.";
+    logMessage("Exited simulation.");
+
+    console.debug("[Controls] Bot exited");
 }
