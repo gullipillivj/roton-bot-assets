@@ -1,18 +1,20 @@
 // trading.js — trading loop with debug logs
-// Debug mode enabled
+
+// Global state variables
 var running = false;
 var runNumber = 0;
-var position = null;
-var investment = 0;
-var profitTarget = 1;
-var stopLoss = 0.5;
+var position = null;        // start with no position
+var investment = 500;       // or read from UI later
+var profitTarget = 1;       // %
+var stopLoss = 0.5;         // %
 var profit = 0;
-var balance = 0;
+var balance = 1000;         // starting balance
 var fees = 0;
 var hopCount = 0;
 var startTime = Date.now();
 var holdStart = null;
 
+// Trading loop
 async function tradingLoop(runNumber) {
     logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
 
@@ -20,9 +22,10 @@ async function tradingLoop(runNumber) {
 
     while (running) {
         try {
-            if (!position) {
+            if (position === null) {
                 logMessage("[DEBUG] No position, picking best coin...");
                 const bestCoin = await pickBestCoin(symbols);
+
                 if (bestCoin) {
                     const qty = investment / bestCoin.price;
                     position = { symbol: bestCoin.symbol, price: bestCoin.price, qty: qty };
@@ -34,7 +37,8 @@ async function tradingLoop(runNumber) {
                 } else {
                     logMessage("[DEBUG] No coin selected, retrying...");
                 }
-            } else {
+
+            } else if (position && position.symbol) {
                 logMessage("[DEBUG] Checking current price for " + position.symbol);
                 const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${position.symbol}`);
                 const data = await res.json();
