@@ -63,7 +63,7 @@ async function tradingLoop(runNumber) {
                     stopBot(runNumber);
                     break;
                 }
-                if (hopCount >= 12) {
+                if (hopCount > 0 && hopCount >= 12) {
                     logMessage("[DEBUG] Hop limit reached. Stopping bot.");
                     stopBot(runNumber);
                     break;
