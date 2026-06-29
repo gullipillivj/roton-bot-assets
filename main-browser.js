@@ -4,6 +4,7 @@
 // are already loaded by other scripts
 
 async function initBot(userId) {
+    console.log("function name from", "initBot");
     debugLog("main", `Initializing bot for user ${userId}`);
 
     try {
