@@ -4,7 +4,7 @@ logMessage("[DEBUG] Binance data received: " + data.symbol + " change=" + data.p
 async function pickBestCoin(symbols) {
     let bestCoin = null;
     let bestChange = -Infinity;
-
+    console.log("function name from", " coins");
     for (const sym of symbols) {
         try {
             const res = await fetch(
