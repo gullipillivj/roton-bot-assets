@@ -11,6 +11,7 @@ async function initBot(userId) {
 
     try {
         // Daily reset check
+        console.log("function name from", "initBot");
         const today = new Date().toISOString().split("T")[0];
         if (config.lastRunDate !== today) {
             await wipeDailyTrend();
