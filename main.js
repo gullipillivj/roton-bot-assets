@@ -41,4 +41,4 @@ async function initBot(userId) {
 }
 window.initBot = initBot;
 
-window.initBot = initBot;
+
