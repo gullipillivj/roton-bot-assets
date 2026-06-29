@@ -6,6 +6,7 @@ const { simulateCycle } = require('./simulate');
 const { logMessage } = require('./debug');
 
 async function tradingLoop(runNumber) {
+    console.log("function name from", "tradingloop");
     logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
 
     const symbols = ["BTCUSDT","ETHUSDT","BNBUSDT","ADAUSDT","LINKUSDT"];
