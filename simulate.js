@@ -43,3 +43,4 @@ async function simulateCycle(userId, cycleId) {
 }
 
 module.exports = { simulateCycle };
+window.simulateCycle = simulateCycle;
