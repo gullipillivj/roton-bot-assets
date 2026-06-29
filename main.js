@@ -9,7 +9,7 @@ async function initBot(userId) {
     console.log("function name from", "initBot");
    // debugLog("main", `Initializing bot for user ${userId}`);
 
-    try {
+   // try {
         // Daily reset check
         console.log("function name from", "initBot");
         const today = new Date().toISOString().split("T")[0];
@@ -25,9 +25,9 @@ async function initBot(userId) {
 
         debugLog("main", "Bot run completed successfully");
 
-    } catch (err) {
-        debugError("main", err);
-    }
+  //  } catch (err) {
+       // debugError("main", err);
+    //}
 }
 
 
