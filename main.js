@@ -29,3 +29,4 @@ async function initBot(userId) {
 }
 
 module.exports = { initBot };
+window.initBot = initBot;
