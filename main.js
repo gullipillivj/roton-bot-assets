@@ -1,9 +1,9 @@
 // main.js
-const { debugLog, debugError } = require('./debug');
-const { runBot } = require('./runbot');
-const { wipeDailyTrend } = require('./trend');
-const { wipeHistory } = require('./updateHistory');
-const { config } = require('./config');
+const { debugLog, debugError } = './debug';
+const { runBot } = './runbot';
+const { wipeDailyTrend } = './trend';
+const { wipeHistory } = './updateHistory';
+const { config } = './config';
 
 async function initBot(userId) {
     debugLog("main", `Initializing bot for user ${userId}`);
@@ -28,5 +28,5 @@ async function initBot(userId) {
     }
 }
 
-module.exports = { initBot };
+
 window.initBot = initBot;
