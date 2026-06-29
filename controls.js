@@ -36,6 +36,11 @@ function exitBot() {
     document.getElementById("log").textContent = "--- Log Panel ---";
     document.getElementById("currentValue").textContent = "Current Value: -";
 }
+
+function startBot() { /* … */ }
+function stopBot() { /* … */ }
+function exitBot() { /* … */ }
+
 window.startBot = startBot;
 window.stopBot = stopBot;
 window.exitBot = exitBot;
