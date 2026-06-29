@@ -20,7 +20,7 @@ async function initBot(userId) {
         }
 
         // Start trading cycles
-        await runBot(userId);
+        await simulateCycle(userId, 1);
 
         debugLog("main", "Bot run completed successfully");
 
