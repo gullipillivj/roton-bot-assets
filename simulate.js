@@ -1,9 +1,5 @@
 // simulate.js
-const { debugLog, debugError } = require('./debug');
-const { getStrength } = require('./getStrength');
-const { fetchPrices } = require('./fetchPrices');
-const { fetchSymbols } = require('./fetchSymbols');
-const { config } = require('./config');
+
 
 async function simulateCycle(userId, cycleId) {
     console.log("function name from", "simulatecycle");
@@ -43,5 +39,5 @@ async function simulateCycle(userId, cycleId) {
     }
 }
 
-module.exports = { simulateCycle };
+
 window.simulateCycle = simulateCycle;
