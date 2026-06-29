@@ -80,3 +80,5 @@ async function tradingLoop(runNumber) {
 }
 
 module.exports = { tradingLoop };
+window.tradingLoop = tradingLoop;
+
