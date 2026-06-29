@@ -7,7 +7,7 @@ const { config } = './config';
 
 async function initBot(userId) {
     console.log("function name from", "initBot");
-    debugLog("main", `Initializing bot for user ${userId}`);
+   // debugLog("main", `Initializing bot for user ${userId}`);
 
     try {
         // Daily reset check
