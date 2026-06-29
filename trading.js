@@ -1,107 +1,82 @@
-// trading.js — trading loop with debug logs
+// trading.js — consolidated trading loop with debug logs
+// Debug mode enabled
 
-// Global state variables
-var running = false;
-var runNumber = 0;
-var position = null;
+const { pickBestCoin, showTrend } = require('./coins');
+const { simulateCycle } = require('./simulate');
+const { logMessage } = require('./debug');
 
-// Read balances from UI inputs (fallback defaults if empty)
-function initGlobals() {
-    investment = parseFloat(document.getElementById("investmentBalance").value) || 500;
-    balance = parseFloat(document.getElementById("startingBalance").value) || 1000;
-    profitTarget = parseFloat(document.getElementById("profitTarget").value) || 1;
-    stopLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
-
-    profit = 0;
-    fees = 0;
-    hopCount = 0;
-    startTime = Date.now();
-    holdStart = null;
-}
-
-// Trading loop
 async function tradingLoop(runNumber) {
     logMessage("[DEBUG] tradingLoop entered, Run=" + runNumber);
 
     const symbols = ["BTCUSDT","ETHUSDT","BNBUSDT","ADAUSDT","LINKUSDT"];
+    let cycleCount = 0;
 
-    while (running) {
-        try {
-            if (position === null) {
+    while (running && cycleCount < 2) { // 2 cycles
+        let hops = 0;
+        logMessage("[DEBUG] Starting cycle " + (cycleCount + 1));
+
+        while (running && hops < 3) { // 2–3 hops per cycle
+            try {
                 logMessage("[DEBUG] No position, picking best coin...");
                 const bestCoin = await pickBestCoin(symbols);
 
-                if (bestCoin) {
-                    const qty = investment / bestCoin.price;
-
-                    // Apply buy fee (0.1%)
-                    const buyFee = investment * 0.001;
-                    fees += buyFee;
-                    balance -= buyFee;
-
-                    position = { symbol: bestCoin.symbol, price: bestCoin.price, qty: qty };
-                    holdStart = Date.now();
-                    showTrend(bestCoin.change24h);
-
-                    logMessage("[DEBUG] Bought " + bestCoin.symbol + " at " + bestCoin.price +
-                               " | Qty: " + qty.toFixed(6) +
-                               " | Fee: " + buyFee.toFixed(2));
-                    updateCurrentValue(bestCoin.price, position);
-                } else {
+                if (!bestCoin) {
                     logMessage("[DEBUG] No coin selected, retrying...");
+                    break;
                 }
 
-            } else if (position && position.symbol) {
-                logMessage("[DEBUG] Checking current price for " + position.symbol);
-                const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${position.symbol}`);
-                const data = await res.json();
-                const currentPrice = parseFloat(data.price);
-                updateCurrentValue(currentPrice, position);
+                // Lifecycle % check: first buy when coin is nearing upward movement
+                showTrend(bestCoin.change24h);
+                logMessage("[DEBUG] Best coin chosen: " + bestCoin.symbol +
+                           " | Change24h=" + bestCoin.change24h.toFixed(2));
 
-                if (currentPrice > position.price * (1 + profitTarget/100)) {
-                    const tradeProfit = (currentPrice - position.price) * position.qty;
+                const qty = investment / bestCoin.price;
+                position = { symbol: bestCoin.symbol, price: bestCoin.price, qty: qty };
+                holdStart = Date.now();
 
-                    // Apply sell fee (0.1%)
-                    const sellFee = (currentPrice * position.qty) * 0.001;
-                    fees += sellFee;
+                logMessage("[DEBUG] Bought " + bestCoin.symbol + " at " + bestCoin.price +
+                           " | Qty: " + qty.toFixed(6));
+                updateCurrentValue(bestCoin.price, position);
 
-                    balance += tradeProfit - sellFee;
-                    profit += tradeProfit - sellFee;
+                // Run hop simulation for this coin
+                const profitResult = await simulateCycle("user", runNumber);
+                profit += profitResult || 0;
+                balance += profitResult || 0;
 
-                    logMessage("[DEBUG] Profit target hit! Sold " + position.symbol +
-                               " at " + currentPrice +
-                               " | Profit: " + (tradeProfit - sellFee).toFixed(2) +
-                               " | Fee: " + sellFee.toFixed(2));
+                logMessage("[DEBUG] Profit updated: " + profit.toFixed(2) +
+                           " | Balance=" + balance.toFixed(2));
 
-                    position = null;
-                    holdStart = null;
-                } else {
-                    logMessage("[DEBUG] Holding " + position.symbol + " at " + currentPrice.toFixed(2));
-                }
+                hops++;
+                hopCount++;
+                logMessage("[DEBUG] Hop count=" + hopCount);
 
                 // Stop conditions
-                if (profit > 0 && fees >= profit) {
+                if (fees >= profit) {
                     logMessage("[DEBUG] Fees exceeded profit. Stopping bot.");
                     stopBot(runNumber);
-                    break;
-                }
-                if (hopCount > 0 && hopCount >= 12) {
-                    logMessage("[DEBUG] Hop limit reached. Stopping bot.");
-                    stopBot(runNumber);
-                    break;
+                    return;
                 }
                 if (Date.now() - startTime >= 2700000) {
                     logMessage("[DEBUG] Max runtime reached. Stopping bot.");
                     stopBot(runNumber);
-                    break;
+                    return;
                 }
+
+            } catch (err) {
+                logMessage("[DEBUG] Error in tradingLoop: " + err);
             }
-        } catch (err) {
-            logMessage("[DEBUG] Error in tradingLoop: " + err);
+
+            // Wait 15 seconds before next hop
+            await new Promise(r => setTimeout(r, 15000));
+            logMessage("[DEBUG] Hop iteration complete, Run=" + runNumber);
         }
 
-        // Wait 15 seconds before next iteration
-        await new Promise(r => setTimeout(r, 15000));
-        logMessage("[DEBUG] Loop iteration complete, Run=" + runNumber);
+        cycleCount++;
+        logMessage("[DEBUG] Cycle " + cycleCount + " completed");
     }
+
+    logMessage("[DEBUG] Bot exiting after " + cycleCount + " cycles");
+    stopBot(runNumber);
 }
+
+module.exports = { tradingLoop };
