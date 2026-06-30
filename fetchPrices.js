@@ -12,3 +12,4 @@ async function fetchPrices(symbol) {
     return [];
   }
 }
+window.fetchPrices = fetchPrices;
