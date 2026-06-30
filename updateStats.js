@@ -14,3 +14,4 @@ function updateStats(investment, profit) {
   document.getElementById("totalProfit").innerText = totalProfit.toFixed(2);
   document.getElementById("avgProfit").innerText = avgProfitPercent.toFixed(2) + "%";
 }
+window.updateStats = updateStats;
