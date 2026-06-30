@@ -1,5 +1,4 @@
 // updateStatus.js
-const { debugLog, debugError } = require('./debug');
 
 function updateStatus(message, data = null) {
     try {
@@ -35,4 +34,4 @@ function showExit(reason) {
     updateStatus(message, { reason });
 }
 
-module.exports = { updateStatus, showTrend, showProfitLoss, showExit };
+
