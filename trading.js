@@ -30,4 +30,5 @@ async function tradeCycle(userId, balance, profitTarget, stopLoss) {
     }
 }
 
-module.exports = { tradeCycle };
+
+window.initBot = tradeCycle;
