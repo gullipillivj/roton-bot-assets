@@ -1,6 +1,4 @@
 // trend.js
-const { debugLog, debugError } = require('./debug');
-const firebase = require('./firebase'); // assume Firebase SDK wrapper
 
 async function recordTrade(userId, date, profitLoss) {
     try {
@@ -37,4 +35,4 @@ async function wipeDailyTrend() {
     }
 }
 
-module.exports = { recordTrade, computeTrend, wipeDailyTrend };
+window.computeTrend = computeTrend;
