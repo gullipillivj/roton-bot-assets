@@ -13,3 +13,4 @@ async function fetchSymbols() {
     console.error("Error fetching symbols:", err);
   }
 }
+window.fetchSymbols = fetchSymbols;
