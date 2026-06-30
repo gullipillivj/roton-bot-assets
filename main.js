@@ -1,9 +1,9 @@
 
 document.body.innerHTML += "<br>[main.js] loaded successfully";
 async function initBot(userId) {
-  const panel = document.getElementById("logPanel");
+  const panel = document.getElementById("label");
   if (panel) {
-    panel.innerHTML += "<br>[main] initBot executed for " + userId;
+    panel.innerHTML = "how are you (user " + userId + ")";
   }
 }
 
