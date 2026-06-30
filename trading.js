@@ -1,6 +1,3 @@
-const { debugLog } = require('./debug');
-const { getCurrentPrice } = require('./coins');
-const { simulateBuy, simulateSell } = require('./simulate');
 
 async function tradeCycle(userId, balance, profitTarget, stopLoss) {
     const price = await getCurrentPrice("BTC");
