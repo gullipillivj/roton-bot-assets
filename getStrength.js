@@ -38,4 +38,4 @@ function getStrength(prices, lifeCycleLimits) {
     }
 }
 
-module.exports = { getStrength };
+window.getStrength = getStrength;
