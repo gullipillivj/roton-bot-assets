@@ -1,19 +1,24 @@
-async function runBot(userId) {
-  debugLog("runbot", `Bot started for user ${userId}`);
+// main.js
 
-  try {
-    const balance = { entryPrice: null, totalProfit: 0 };
+async function initBot(userId) {
+    debugLog("main", `Initializing bot for user ${userId}`);
 
-    for (let i = 0; i < 10 && controls.isRunning; i++) {
-      debugLog("runbot", `Cycle ${i + 1} started`);
-      const profit = await tradeCycle(userId, balance, controls.profitTarget, controls.stopLoss);
-      balance.totalProfit += profit;
-      debugLog("runbot", `Cycle ${i + 1} finished | Profit: ${profit.toFixed(2)}%`);
-      await sleep(2000);
+    try {
+        const today = new Date().toISOString().split("T")[0];
+        if (controls.lastRunDate !== today) {
+            await wipeDailyTrend();
+            await wipeHistory();
+            controls.lastRunDate = today;
+            debugLog("main", "Daily reset completed", { date: today });
+        }
+
+        await runBot(userId);
+
+        debugLog("main", "Bot run completed successfully");
+    } catch (err) {
+        debugError("main", err);
     }
-
-    debugLog("runbot", `Bot completed | Total Profit: ${balance.totalProfit.toFixed(2)}%`);
-  } catch (err) {
-    debugError("runbot", err);
-  }
 }
+
+// Attach to browser global instead of Node exports
+window.initBot = initBot;
