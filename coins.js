@@ -39,3 +39,4 @@ function showTrend(change24h) {
 
     console.debug("[Coins] Trend:", trend, "Change:", change24h.toFixed(2));
 }
+window.pickBestCoin = pickBestCoin;
