@@ -1,6 +1,4 @@
 // updateHistory.js
-const { debugLog, debugError } = require('./debug');
-const firebase = require('./firebase'); // assume Firebase SDK wrapper
 
 async function logTrade(userId, date, tradeData) {
     try {
@@ -31,4 +29,4 @@ async function wipeHistory() {
     }
 }
 
-module.exports = { logTrade, getHistory, wipeHistory };
+
