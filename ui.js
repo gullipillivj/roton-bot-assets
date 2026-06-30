@@ -53,3 +53,4 @@ function addRunResult(runNumber, netProfit) {
 
     console.debug("[UI] RunResult added:", "Run", runNumber, "Profit", netProfit);
 }
+
