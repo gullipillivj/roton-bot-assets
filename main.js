@@ -1,13 +1,31 @@
 // main.js
+const { debugLog, debugError } = require('./debug');
+const { runBot } = require('./runbot');
+const { wipeDailyTrend } = require('./trend');
+const { wipeHistory } = require('./updateHistory');
+const { config } = require('./config');
 
-function initBot(userId) {
-  // Find the label element
-  const label = document.getElementById("statusLabel");
-  if (label) {
-    // Update label with hello message
-    label.innerText = "Hello " + userId;
-  }
+async function initBot(userId) {
+    debugLog("main", `Initializing bot for user ${userId}`);
+
+    try {
+        // Daily reset check
+        const today = new Date().toISOString().split("T")[0];
+        if (config.lastRunDate !== today) {
+            await wipeDailyTrend();
+            await wipeHistory();
+            config.lastRunDate = today;
+            debugLog("main", "Daily reset completed", { date: today });
+        }
+
+        // Start trading cycles
+        await runBot(userId);
+
+        debugLog("main", "Bot run completed successfully");
+
+    } catch (err) {
+        debugError("main", err);
+    }
 }
 
-// Expose globally
-window.initBot = initBot;
+module.exports = { initBot };
