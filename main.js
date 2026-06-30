@@ -1,3 +1,5 @@
+
+document.body.innerHTML += "<br>[main.js] loaded successfully";
 async function initBot(userId) {
   // Update the Log Panel so you can see it in the page
   const panel = document.getElementById("logPanel");
