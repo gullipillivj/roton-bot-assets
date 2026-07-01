@@ -6,10 +6,9 @@ function updateStatus(message, data = null) {
         document.getElementById("statusPanel").innerText = message;
 
         // Debug log for system + dev analysis
-        debugLog("updateStatus", `UI message displayed: ${message}`, data);
-
+        
     } catch (err) {
-        debugError("updateStatus", err);
+        
     }
 }
 
