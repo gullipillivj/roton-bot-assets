@@ -1,6 +1,6 @@
 // coins.js — Binance API helpers
 // Debug mode enabled
-logMessage("[DEBUG] Binance data received: " + data.symbol + " change=" + data.priceChangePercent + "%");
+logMessage("Binance data received: " + data.symbol + " change=" + data.priceChangePercent + "%");
 async function pickBestCoin(symbols) {
     let bestCoin = null;
     let bestChange = -Infinity;
@@ -40,3 +40,4 @@ function showTrend(change24h) {
     console.debug("[Coins] Trend:", trend, "Change:", change24h.toFixed(2));
 }
 window.pickBestCoin = pickBestCoin;
+window.showTrend = showTrend;
