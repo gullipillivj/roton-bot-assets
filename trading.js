@@ -5,7 +5,6 @@ async function tradeCycle(userId, balance, profitTarget, stopLoss) {
     if (!balance.entryPrice) {
         balance.entryPrice = price;
         await simulateBuy(userId, price);
-        debugLog("trade", `Bought at ${price}`);
         return 0;
     }
 
@@ -13,17 +12,14 @@ async function tradeCycle(userId, balance, profitTarget, stopLoss) {
 
     if (changePct >= profitTarget) {
         await simulateSell(userId, price);
-        debugLog("trade", `Profit target hit: ${changePct.toFixed(2)}%`);
-        balance.entryPrice = null;
+         balance.entryPrice = null;
         return changePct;
     } else if (changePct <= -stopLoss) {
         await simulateSell(userId, price);
-        debugLog("trade", `Stop loss triggered: ${changePct.toFixed(2)}%`);
-        balance.entryPrice = null;
+         balance.entryPrice = null;
         return changePct;
     } else {
-        debugLog("trade", `Holding position | Change: ${changePct.toFixed(2)}%`);
-        return changePct;
+         return changePct;
     }
 }
 
