@@ -22,5 +22,13 @@ async function initBot(userId) {
         console.error("[BOT ERROR]", err);
     }
 }
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    if (panel) {
+        panel.value += msg + "\n";
+        panel.scrollTop = panel.scrollHeight;
+    }
+}
 
 window.initBot = initBot;
+window.logToPanel = logToPanel;
