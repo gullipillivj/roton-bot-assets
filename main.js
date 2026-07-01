@@ -1,34 +1,23 @@
-async function initBot(userId) {
-    try {
-        const startBalance = parseFloat(document.getElementById("startBalance").value);
-        const investBalance = parseFloat(document.getElementById("investBalance").value);
-        const profitTarget = parseFloat(document.getElementById("profitTarget").value);
-        const stopLoss = parseFloat(document.getElementById("stopLoss").value);
+let botRunning = false;
 
-        console.log("[BOT INIT]", { startBalance, investBalance, profitTarget, stopLoss });
-
-        // Daily reset check
-        const today = new Date().toISOString().split("T")[0];
-        if (config.lastRunDate !== today) {
-            await wipeDailyTrend();
-            await wipeHistory();
-            config.lastRunDate = today;
+function initBot(cycles) {
+    botRunning = true;
+    logToPanel("Bot started with " + cycles + " cycles");
+    for (let i = 1; i <= cycles; i++) {
+        if (!botRunning) {
+            logToPanel("Bot stopped at cycle " + i);
+            return;
         }
-
-        // Start trading cycles
-        await runBot(userId, startBalance, investBalance, profitTarget, stopLoss);
-
-    } catch (err) {
-        console.error("[BOT ERROR]", err);
+        logToPanel("Running cycle " + i);
+        simulateCycle(i);
     }
+    logToPanel("Bot finished");
 }
-function logToPanel(msg) {
-    const panel = document.getElementById("logPanel");
-    if (panel) {
-        panel.value += msg + "\n";
-        panel.scrollTop = panel.scrollHeight;
-    }
+
+function stopBot() {
+    botRunning = false;
+    logToPanel("Stop signal received");
 }
 
 window.initBot = initBot;
-window.logToPanel = logToPanel;
+window.stopBot = stopBot;
