@@ -3,8 +3,7 @@
 
 async function simulateCycle(userId, cycleId) {
     console.log("function name from", "simulatecycle");
-    debugLog("simulate", `Starting cycle ${cycleId} for user ${userId}`);
-
+   
     let hops = 0;
     let profit = 0;
 
@@ -13,29 +12,22 @@ async function simulateCycle(userId, cycleId) {
 
         while (hops < config.HOP_LIMIT) {
             const prices = await fetchPrices("BTCUSDT"); // example symbol
-            debugLog("simulate", `Hop ${hops + 1} | Prices fetched`, prices);
-
+            
             const strength = getStrength(prices, lifeCycleLimits["BTCUSDT"]);
-            debugLog("simulate", `Hop ${hops + 1} | Strength calculated`, strength);
-
+            
             if (strength.shouldBuy) {
-                debugLog("simulate", `Hop ${hops + 1}: BUY triggered`, { change24h: prices.change24h });
-                profit += strength.expectedGain;
+                     profit += strength.expectedGain;
             } else if (strength.shouldHop) {
-                debugLog("simulate", `Hop ${hops + 1}: HOP triggered`, { change24h: prices.change24h });
-            } else {
-                debugLog("simulate", `Hop ${hops + 1}: HOLD decision`, { change24h: prices.change24h });
-            }
+                    } else {
+             }
 
             hops++;
         }
 
-        debugLog("simulate", `Cycle ${cycleId} ended | Total Profit: ${profit}%`);
-        return profit;
+          return profit;
 
     } catch (err) {
-        debugError("simulate", err);
-        return null;
+          return null;
     }
 }
 
