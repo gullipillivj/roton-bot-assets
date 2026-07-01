@@ -53,4 +53,7 @@ function addRunResult(runNumber, netProfit) {
 
     console.debug("[UI] RunResult added:", "Run", runNumber, "Profit", netProfit);
 }
-
+window.logMessage = logMessage;
+window.updateCurrentValue = updateCurrentValue;
+window.initChart = initChart;
+window.addRunResult = addRunResult;
