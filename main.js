@@ -1,10 +1,21 @@
-function initBot(userId) {
-  const panel = document.getElementById("label");
-  if (panel) {
-    // Overwrite whatever was there with "how are you"
-    panel.innerHTML = "how are you";
-  }
+// main.js
+
+async function initBot(userId) {
+     try {
+        // Daily reset check
+        const today = new Date().toISOString().split("T")[0];
+        if (config.lastRunDate !== today) {
+            await wipeDailyTrend();
+            await wipeHistory();
+            config.lastRunDate = today;
+               }
+
+        // Start trading cycles
+        await runBot(userId);
+
+         } catch (err) {
+      
+    }
 }
 
-// Expose globally so inline onclick can find it
 window.initBot = initBot;
