@@ -5,7 +5,6 @@ async function simulateCycle(cycleNumber) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // internal coin selection
     let coin = await pickBestCoin();
 
     logToPanel(`[INFO] Cycle ${cycleNumber} started`);
@@ -23,6 +22,7 @@ async function simulateCycle(cycleNumber) {
     while (true) {
         let lastValue = balance;
 
+        // 4 checks = 2 minutes total
         for (let i = 1; i <= 4; i++) {
             await new Promise(resolve => setTimeout(resolve, 30000));
             usdtValue = await evaluateCoin(coin, balance);
@@ -30,8 +30,8 @@ async function simulateCycle(cycleNumber) {
             const diff = usdtValue - balance;
             const profitPercent = (diff / balance) * 100;
 
-            // only show profit checks, no coin names
-            logToPanel(`[INFO] Profit check: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+            // keep user engaged with profit updates
+            logToPanel(`[INFO] Profit update: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
 
             if (profitPercent >= window.controls.profitTarget) {
                 stopWithSummary(usdtValue, reserve, cycleNumber);
