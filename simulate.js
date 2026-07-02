@@ -27,6 +27,7 @@ async function simulateCycle(cycleNumber) {
 
             document.getElementById("investBalance").value = usdtValue.toFixed(2);
 
+            // stop conditions
             if (profitPercent >= window.controls.profitTarget) {
                 logToPanel(`[CYCLE ${cycleNumber}] Profit target reached (${profitPercent.toFixed(2)}%)`);
                 stopWithSummary(usdtValue, reserve);
@@ -72,7 +73,8 @@ function stopWithSummary(usdtValue, reserve) {
     const startBalance = window.controls.startBalance;
     const investBalance = window.controls.investBalance;
 
-    const totalWallet = startBalance + (usdtValue - (investBalance - reserve));
+    // wallet = start + profit/loss
+    const totalWallet = startBalance + (usdtValue - (balanceBaseline(investBalance, reserve)));
     const totalChange = totalWallet - startBalance;
     const percentChange = (totalChange / startBalance) * 100;
 
@@ -85,4 +87,9 @@ function stopWithSummary(usdtValue, reserve) {
     logToPanel("Net Change: " + totalChange.toFixed(2) + " USDT (" + percentChange.toFixed(2) + "%)");
 
     window.stopBot();
+}
+
+// helper to get baseline invested portion
+function balanceBaseline(investBalance, reserve) {
+    return investBalance - reserve;
 }
