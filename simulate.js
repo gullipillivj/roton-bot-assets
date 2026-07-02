@@ -10,13 +10,14 @@ async function simulateCycle(cycleNumber) {
 
     let usdtValue = balance;
     let continueCycle = true;
+    let cycleStart = Date.now();
 
     while (continueCycle) {
-        // 2 minutes total, check every 30 seconds
-        const holdTime = 120000;
-        const interval = 30000;
+        const holdTime = 120000; // 2 minutes
+        const interval = 30000;  // 30 seconds
         const checks = holdTime / interval;
 
+        let lastValue = balance;
         let rising = false;
 
         for (let i = 1; i <= checks; i++) {
@@ -25,40 +26,69 @@ async function simulateCycle(cycleNumber) {
 
             logToPanel(`[CYCLE ${cycleNumber}] Hoping check ${i}: ${coin} value = ${usdtValue.toFixed(2)} USDT`);
 
+            // live update textbox
+            document.getElementById("investBalance").value = usdtValue.toFixed(2);
+
             const profitPercent = ((usdtValue - balance) / balance) * 100;
 
-            // stop if profit target reached
             if (profitPercent >= window.controls.profitTarget) {
-                logToPanel(`[CYCLE ${cycleNumber}] Profit target reached (${profitPercent.toFixed(2)}%), stopping bot`);
-                window.controls.investBalance = usdtValue + reserve;
-                window.stopBot();
+                logToPanel(`[CYCLE ${cycleNumber}] Profit target reached (${profitPercent.toFixed(2)}%)`);
+                stopWithSummary(usdtValue, reserve);
                 return;
             }
 
-            // stop if stop loss triggered
             if (profitPercent <= -window.controls.stopLoss) {
-                logToPanel(`[CYCLE ${cycleNumber}] Stop loss triggered (${profitPercent.toFixed(2)}%), exiting coin`);
-                continueCycle = false;
-                break;
+                logToPanel(`[CYCLE ${cycleNumber}] Stop loss triggered (${profitPercent.toFixed(2)}%)`);
+                stopWithSummary(usdtValue, reserve);
+                return;
             }
 
-            // mark rising if value increased vs last check
-            if (usdtValue > balance) {
+            if (usdtValue > lastValue) {
                 rising = true;
             }
+            lastValue = usdtValue;
+        }
+
+        if (Date.now() - cycleStart >= 240000) {
+            logToPanel(`[CYCLE ${cycleNumber}] Max cycle time reached (4 mins)`);
+            stopWithSummary(usdtValue, reserve);
+            return;
         }
 
         if (rising) {
-            logToPanel(`[CYCLE ${cycleNumber}] Coin ${coin} is still rising, continue holding`);
-            balance = usdtValue; // update balance baseline
+            logToPanel(`[CYCLE ${cycleNumber}] Coin ${coin} is rising, continue holding`);
+            balance = usdtValue;
         } else {
             logToPanel(`[CYCLE ${cycleNumber}] Coin ${coin} not rising, switching to new coin`);
             coin = await pickBestCoin();
-            balance = usdtValue; // carry forward current value
+            balance = usdtValue;
             logToPanel(`[CYCLE ${cycleNumber}] Switched to ${coin} with ${balance.toFixed(2)} USDT`);
         }
 
-        // update investBalance each loop
         window.controls.investBalance = usdtValue + reserve;
+        document.getElementById("investBalance").value = window.controls.investBalance.toFixed(2);
     }
+}
+
+// helper to stop and show summary
+function stopWithSummary(usdtValue, reserve) {
+    window.controls.investBalance = usdtValue + reserve;
+
+    const startBalance = window.controls.startBalance;
+    const investBalance = window.controls.investBalance;
+    const totalChange = investBalance - startBalance;
+    const percentChange = (totalChange / startBalance) * 100;
+
+    // update textboxes
+    document.getElementById("startBalance").value = startBalance.toFixed(2);
+    document.getElementById("investBalance").value = investBalance.toFixed(2);
+
+    // log summary
+    logToPanel("Bot run complete");
+    logToPanel("Final Start Balance: " + startBalance.toFixed(2) + " USDT");
+    logToPanel("Final Investment Balance: " + investBalance.toFixed(2) + " USDT");
+    logToPanel("Net Change: " + totalChange.toFixed(2) + " USDT (" + percentChange.toFixed(2) + "%)");
+
+    // stop bot
+    window.stopBot();
 }
