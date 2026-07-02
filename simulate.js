@@ -9,7 +9,6 @@ async function simulateCycle(cycleNumber) {
 
     logToPanel(`[INFO] Cycle ${cycleNumber} started`);
 
-    // show coin name only if it's reputed
     if (reputedCoins.includes(coin)) {
         logToPanel(`[INFO] Bought ${coin} with ${balance.toFixed(2)} USDT`);
     } else {
@@ -22,22 +21,27 @@ async function simulateCycle(cycleNumber) {
     while (true) {
         let lastValue = balance;
 
-        // 4 checks = 2 minutes total
         for (let i = 1; i <= 4; i++) {
             await new Promise(resolve => setTimeout(resolve, 30000));
+
             usdtValue = await evaluateCoin(coin, balance);
+            if (!usdtValue || isNaN(usdtValue)) usdtValue = balance;
 
             const diff = usdtValue - balance;
             const profitPercent = (diff / balance) * 100;
 
-            // keep user engaged with profit updates
+            // keep user engaged
             logToPanel(`[INFO] Profit update: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+
+            // internal hop if coin not rising (hidden from logs)
+            if (profitPercent <= 0 && i === 4) {
+                coin = await pickBestCoin();
+            }
 
             if (profitPercent >= window.controls.profitTarget) {
                 stopWithSummary(usdtValue, reserve, cycleNumber);
                 return;
             }
-
             if (profitPercent <= -window.controls.stopLoss) {
                 stopWithSummary(usdtValue, reserve, cycleNumber);
                 return;
@@ -56,21 +60,4 @@ async function simulateCycle(cycleNumber) {
         window.controls.investBalance = usdtValue + reserve;
         document.getElementById("investBalance").value = window.controls.investBalance.toFixed(2);
     }
-}
-
-function stopWithSummary(usdtValue, reserve, cycleNumber) {
-    window.controls.investBalance = usdtValue + reserve;
-
-    const startBalance = window.controls.startBalance;
-    const investBalance = window.controls.investBalance;
-
-    const totalWallet = startBalance + (usdtValue - (investBalance - reserve));
-    const totalChange = totalWallet - startBalance;
-    const percentChange = (totalChange / startBalance) * 100;
-
-    logToPanel(`[INFO] Cycle ${cycleNumber} complete`);
-    logToPanel(`[INFO] Net Wallet: ${totalWallet.toFixed(2)} USDT`);
-    logToPanel(`[INFO] Profit/Loss: ${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
-
-    window.stopBot();
 }
