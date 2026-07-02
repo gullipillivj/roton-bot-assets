@@ -7,9 +7,9 @@ async function simulateCycle(cycleNumber) {
 
     logToPanel(`[INFO] Cycle ${cycleNumber} started`);
 
-    // initial coin
+    // pick one coin from coins.js
     let coin = await pickBestCoin();
-    logToPanel(`[DEBUG] First coin chosen: ${coin}`);
+    logToPanel(`[INFO] Bought ${coin} with ${balance.toFixed(2)} USDT`);
 
     let usdtValue = balance;
 
@@ -19,39 +19,34 @@ async function simulateCycle(cycleNumber) {
 
         // re‑enquire coins.js every 30s
         const coins = await getRisingCoins();
-        logToPanel(`[DEBUG] Coins fetched from Binance: ${coins.join(", ")}`);
 
         // evaluate current coin
         usdtValue = await evaluateCoin(coin, balance);
         if (!usdtValue || isNaN(usdtValue)) {
             usdtValue = balance;
-            logToPanel(`[DEBUG] evaluateCoin invalid, fallback balance ${balance.toFixed(2)} USDT`);
         }
 
         const diff = usdtValue - balance;
         const profitPercent = (diff / balance) * 100;
 
-        // always log profit update
-        logToPanel(`[DEBUG] Coin: ${coin}, Profit update: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+        // show coin, price, profit/loss, %
+        logToPanel(`[INFO] Coin: ${coin}, Current Value: ${usdtValue.toFixed(2)} USDT, Change: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
 
         // hop if coin is falling
         if (profitPercent < 0) {
             coin = coins[Math.floor(Math.random() * coins.length)];
-            logToPanel(`[DEBUG] Hop to new coin: ${coin}`);
+            logToPanel(`[INFO] Switched to new coin: ${coin}`);
         }
 
         // profit/stop‑loss checks
-        if (profitPercent >= window.controls.profitTarget) {
-            return stopWithSummary(usdtValue, reserve, cycleNumber);
-        }
-        if (profitPercent <= -window.controls.stopLoss) {
-            return stopWithSummary(usdtValue, reserve, cycleNumber);
+        if (profitPercent >= window.controls.profitTarget || profitPercent <= -window.controls.stopLoss) {
+            break;
         }
 
         balance = usdtValue;
     }
 
-    // after 4 hops, finish cycle
+    // finish cycle summary
     return stopWithSummary(usdtValue, reserve, cycleNumber);
 }
 
