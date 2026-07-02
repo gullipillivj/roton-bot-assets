@@ -8,12 +8,7 @@ async function simulateCycle(cycleNumber) {
     let coin = await pickBestCoin();
 
     logToPanel(`[INFO] Cycle ${cycleNumber} started`);
-
-    if (reputedCoins.includes(coin)) {
-        logToPanel(`[INFO] Bought ${coin} with ${balance.toFixed(2)} USDT`);
-    } else {
-        logToPanel(`[INFO] Investment placed with ${balance.toFixed(2)} USDT`);
-    }
+    logToPanel(`[DEBUG] First coin chosen: ${coin}`);
 
     let usdtValue = balance;
     let cycleStart = Date.now();
@@ -30,12 +25,12 @@ async function simulateCycle(cycleNumber) {
             const diff = usdtValue - balance;
             const profitPercent = (diff / balance) * 100;
 
-            // keep user engaged
-            logToPanel(`[INFO] Profit update: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+            // DEBUG: show coin name + profit
+            logToPanel(`[DEBUG] Coin: ${coin}, Profit update: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
 
-            // internal hop if coin not rising (hidden from logs)
             if (profitPercent <= 0 && i === 4) {
                 coin = await pickBestCoin();
+                logToPanel(`[DEBUG] Hop to new coin: ${coin}`);
             }
 
             if (profitPercent >= window.controls.profitTarget) {
