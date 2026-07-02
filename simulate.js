@@ -1,35 +1,5 @@
 // simulate.js
 
-// fetch rising mid/low range coins
-async function getRisingCoins() {
-    try {
-        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
-        const data = await res.json();
-
-        // filter: USDT pairs, positive change, mid/low range volume
-        const rising = data.filter(item =>
-            item.symbol.endsWith("USDT") &&
-            parseFloat(item.priceChangePercent) > 0 &&
-            parseFloat(item.quoteVolume) > 500000 // >$0.5M daily volume
-        );
-
-        // sort by % gain descending
-        rising.sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
-
-        const topCoins = rising.slice(0, 10).map(item => item.symbol);
-        logToPanel(`[INFO] Rising coins selected: ${topCoins.join(", ")}`);
-        return topCoins;
-    } catch (err) {
-        logToPanel(`[ERROR] Failed to fetch rising coins: ${err}`);
-        return ["BTCUSDT", "ETHUSDT", "ADAUSDT", "BNBUSDT"];
-    }
-}
-
-async function pickBestCoin() {
-    const coins = await getRisingCoins();
-    return coins[Math.floor(Math.random() * coins.length)];
-}
-
 async function simulateCycle(cycleNumber) {
     let investBalance = window.controls.investBalance;
     const reserve = investBalance * 0.1;
@@ -41,7 +11,6 @@ async function simulateCycle(cycleNumber) {
     let usdtValue = balance;
     let cycleStart = Date.now();
 
-    // keep looping until stop conditions
     while (true) {
         const holdTime = 120000; // 2 minutes
         const interval = 30000;  // 30 seconds
@@ -84,7 +53,6 @@ async function simulateCycle(cycleNumber) {
             return;
         }
 
-        // hop logic
         if (rising) {
             logToPanel(`[CYCLE ${cycleNumber}] Coin ${coin} is rising, continue holding`);
             balance = usdtValue;
@@ -100,14 +68,12 @@ async function simulateCycle(cycleNumber) {
     }
 }
 
-// stop and show summary
 function stopWithSummary(usdtValue, reserve) {
     window.controls.investBalance = usdtValue + reserve;
 
     const startBalance = window.controls.startBalance;
     const investBalance = window.controls.investBalance;
 
-    // true wallet total = startBalance + profit/loss
     const totalWallet = startBalance + (usdtValue - (investBalance - reserve));
     const totalChange = totalWallet - startBalance;
     const percentChange = (totalChange / startBalance) * 100;
@@ -118,7 +84,7 @@ function stopWithSummary(usdtValue, reserve) {
     logToPanel("Bot stopped");
     logToPanel("Final Start Balance: " + totalWallet.toFixed(2) + " USDT");
     logToPanel("Final Investment Balance: " + investBalance.toFixed(2) + " USDT");
-    logToPanel("Net Change: " + totalChange.toFixed(2) + " USDT (" + percentChange.toFixed(2) + "%)");
+    logToPanel("Net Change: " + totalChange.toFixed(2)} USDT (" + percentChange.toFixed(2) + "%)");
 
     window.stopBot();
 }
