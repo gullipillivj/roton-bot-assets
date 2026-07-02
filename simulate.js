@@ -1,6 +1,6 @@
 // simulate.js
 
-// helper: fetch rising mid/low range coins
+// fetch rising mid/low range coins
 async function getRisingCoins() {
     try {
         const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
@@ -10,15 +10,13 @@ async function getRisingCoins() {
         const rising = data.filter(item =>
             item.symbol.endsWith("USDT") &&
             parseFloat(item.priceChangePercent) > 0 &&
-            parseFloat(item.quoteVolume) > 500000 // at least $0.5M daily volume
+            parseFloat(item.quoteVolume) > 500000 // >$0.5M daily volume
         );
 
         // sort by % gain descending
         rising.sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
 
-        // take top 10 movers
         const topCoins = rising.slice(0, 10).map(item => item.symbol);
-
         logToPanel(`[INFO] Rising coins selected: ${topCoins.join(", ")}`);
         return topCoins;
     } catch (err) {
@@ -29,8 +27,7 @@ async function getRisingCoins() {
 
 async function pickBestCoin() {
     const coins = await getRisingCoins();
-    const index = Math.floor(Math.random() * coins.length);
-    return coins[index];
+    return coins[Math.floor(Math.random() * coins.length)];
 }
 
 async function simulateCycle(cycleNumber) {
@@ -42,10 +39,9 @@ async function simulateCycle(cycleNumber) {
     logToPanel(`[CYCLE ${cycleNumber}] Bought ${coin} with ${balance.toFixed(2)} USDT`);
 
     let usdtValue = balance;
-    let continueCycle = true;
     let cycleStart = Date.now();
 
-    while (continueCycle) {
+    while (true) {
         const holdTime = 120000; // 2 minutes
         const interval = 30000;  // 30 seconds
         const checks = holdTime / interval;
@@ -62,7 +58,6 @@ async function simulateCycle(cycleNumber) {
 
             logToPanel(`[CYCLE ${cycleNumber}] Hoping check ${i}: ${coin} value = ${usdtValue.toFixed(2)} USDT | Profit ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
 
-            // live update textbox
             document.getElementById("investBalance").value = usdtValue.toFixed(2);
 
             if (profitPercent >= window.controls.profitTarget) {
@@ -77,9 +72,7 @@ async function simulateCycle(cycleNumber) {
                 return;
             }
 
-            if (usdtValue > lastValue) {
-                rising = true;
-            }
+            if (usdtValue > lastValue) rising = true;
             lastValue = usdtValue;
         }
 
@@ -104,7 +97,7 @@ async function simulateCycle(cycleNumber) {
     }
 }
 
-// helper: stop and show summary
+// stop and show summary
 function stopWithSummary(usdtValue, reserve) {
     window.controls.investBalance = usdtValue + reserve;
 
@@ -116,11 +109,9 @@ function stopWithSummary(usdtValue, reserve) {
     const totalChange = totalWallet - startBalance;
     const percentChange = (totalChange / startBalance) * 100;
 
-    // update BOTH textboxes correctly
     document.getElementById("startBalance").value = totalWallet.toFixed(2);
     document.getElementById("investBalance").value = investBalance.toFixed(2);
 
-    // log summary
     logToPanel("Bot stopped");
     logToPanel("Final Start Balance: " + totalWallet.toFixed(2) + " USDT");
     logToPanel("Final Investment Balance: " + investBalance.toFixed(2) + " USDT");
