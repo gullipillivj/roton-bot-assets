@@ -41,6 +41,7 @@ async function simulateCycle(cycleNumber) {
     let usdtValue = balance;
     let cycleStart = Date.now();
 
+    // keep looping until stop conditions
     while (true) {
         const holdTime = 120000; // 2 minutes
         const interval = 30000;  // 30 seconds
@@ -76,12 +77,14 @@ async function simulateCycle(cycleNumber) {
             lastValue = usdtValue;
         }
 
+        // hard stop after 4 mins
         if (Date.now() - cycleStart >= 240000) {
             logToPanel(`[CYCLE ${cycleNumber}] Max cycle time reached (4 mins)`);
             stopWithSummary(usdtValue, reserve);
             return;
         }
 
+        // hop logic
         if (rising) {
             logToPanel(`[CYCLE ${cycleNumber}] Coin ${coin} is rising, continue holding`);
             balance = usdtValue;
