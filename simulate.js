@@ -1,5 +1,3 @@
-// simulate.js
-
 function logWithTime(message) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
@@ -17,59 +15,54 @@ async function simulateCycle(cycleNumber) {
     let coin = await pickBestCoin();
     logWithTime(`Bought ${coin} with ${balance.toFixed(2)} USDT`);
 
-    let usdtValue = balance;
+    let lastValue = balance;
 
     // run 4 checks (≈2 minutes)
     for (let i = 1; i <= 4; i++) {
         await new Promise(resolve => setTimeout(resolve, 30000));
 
-        // re‑enquire coins.js every 30s
-        const coins = await getRisingCoins();
+        // re‑enquire coins.js every 30s (list of rising coins)
+        const risingCoins = await getRisingCoins();
+
+        // get 24h % change for current coin
+        const held24hChange = await get24hChange(coin); // must call Binance API
 
         // evaluate current coin
-        usdtValue = await evaluateCoin(coin, balance);
-        if (!usdtValue || isNaN(usdtValue)) {
-            usdtValue = balance;
+        let currentValue = await evaluateCoin(coin, lastValue);
+        if (!currentValue || isNaN(currentValue)) {
+            currentValue = lastValue;
         }
 
-        const diff = usdtValue - balance;
-        const profitPercent = (diff / balance) * 100;
+        const diff = currentValue - lastValue;
+        const profitPercent = (diff / lastValue) * 100;
 
-        // always show coin, price, profit/loss, %
-        logWithTime(`Coin: ${coin}, Current Value: ${usdtValue.toFixed(2)} USDT, Change: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+        // log coin status
+        logWithTime(`Coin: ${coin}, Current Value: ${currentValue.toFixed(2)} USDT, Change: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%), 24h %: ${held24hChange.toFixed(2)}%`);
 
-        // hop if coin is falling, else show "not changed"
-        if (profitPercent < 0) {
-            coin = coins[Math.floor(Math.random() * coins.length)];
-            logWithTime(`Switched to new coin: ${coin}`);
+        // decision: keep or hop
+        if (held24hChange < 0) {
+            // coin is falling → hop to one of the rising coins
+            coin = risingCoins[Math.floor(Math.random() * risingCoins.length)];
+            logWithTime(`Switched to new rising coin: ${coin}`);
         } else {
             logWithTime(`Coin not changed`);
         }
 
-        // profit/stop‑loss checks
-        if (profitPercent >= window.controls.profitTarget || profitPercent <= -window.controls.stopLoss) {
-            break;
-        }
-
-        balance = usdtValue;
+        lastValue = currentValue;
     }
 
-    // finish cycle summary
-    return stopWithSummary(usdtValue, reserve, cycleNumber);
+    return stopWithSummary(lastValue, reserve, cycleNumber, coin);
 }
 
-// run two cycles back‑to‑back (≈4 minutes total)
 async function runTwoCycles() {
     const result1 = await simulateCycle(1);
     const result2 = await simulateCycle(2);
 
-    // calculate cumulative profit/loss
     const startBalance = window.controls.startBalance;
     const finalBalance = result2 + (window.controls.investBalance - result2);
     const totalChange = finalBalance - startBalance;
     const percentChange = (totalChange / startBalance) * 100;
 
-    // update balances
     window.controls.startBalance = finalBalance;
     window.controls.investBalance = result2;
 
@@ -79,7 +72,7 @@ async function runTwoCycles() {
     logWithTime(`Total Profit/Loss across 2 cycles: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
 }
 
-function stopWithSummary(usdtValue, reserve, cycleNumber) {
+function stopWithSummary(usdtValue, reserve, cycleNumber, finalCoin) {
     window.controls.investBalance = usdtValue + reserve;
 
     const startBalance = window.controls.startBalance;
@@ -90,6 +83,7 @@ function stopWithSummary(usdtValue, reserve, cycleNumber) {
     const percentChange = (totalChange / startBalance) * 100;
 
     logWithTime(`Cycle ${cycleNumber} complete`);
+    logWithTime(`Ended holding coin: ${finalCoin}`);
     logWithTime(`Net Wallet: ${totalWallet.toFixed(2)} USDT`);
     logWithTime(`Profit/Loss: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
 
