@@ -12,21 +12,18 @@ async function simulateCycle(cycleNumber) {
     let cycleStart = Date.now();
 
     while (true) {
-        const holdTime = 120000; // 2 minutes
-        const interval = 30000;  // 30 seconds
-        const checks = holdTime / interval;
-
-        let lastValue = balance;
         let rising = false;
+        let lastValue = balance;
 
-        for (let i = 1; i <= checks; i++) {
-            await new Promise(resolve => setTimeout(resolve, interval));
+        // 2 minutes total, check every 30 seconds
+        for (let i = 1; i <= 4; i++) {
+            await new Promise(resolve => setTimeout(resolve, 30000));
             usdtValue = await evaluateCoin(coin, balance);
 
             const diff = usdtValue - balance;
             const profitPercent = (diff / balance) * 100;
 
-            logToPanel(`[CYCLE ${cycleNumber}] Hoping check ${i}: ${coin} value = ${usdtValue.toFixed(2)} USDT | Profit ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+            logToPanel(`[CYCLE ${cycleNumber}] Check ${i}: ${coin} value = ${usdtValue.toFixed(2)} USDT | Profit ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
 
             document.getElementById("investBalance").value = usdtValue.toFixed(2);
 
@@ -53,6 +50,7 @@ async function simulateCycle(cycleNumber) {
             return;
         }
 
+        // hop logic
         if (rising) {
             logToPanel(`[CYCLE ${cycleNumber}] Coin ${coin} is rising, continue holding`);
             balance = usdtValue;
@@ -84,7 +82,7 @@ function stopWithSummary(usdtValue, reserve) {
     logToPanel("Bot stopped");
     logToPanel("Final Start Balance: " + totalWallet.toFixed(2) + " USDT");
     logToPanel("Final Investment Balance: " + investBalance.toFixed(2) + " USDT");
-    logToPanel("Net Change: " + totalChange.toFixed(2)} USDT (" + percentChange.toFixed(2) + "%)");
+    logToPanel("Net Change: " + totalChange.toFixed(2) + " USDT (" + percentChange.toFixed(2) + "%)");
 
     window.stopBot();
 }
