@@ -1,25 +1,21 @@
 // main.js
 
 async function initBot(cycles) {
-    botRunning = true;
-
-    // Sync form values into controls.js
+    // sync values from form into controls
     window.controls.startBalance = parseFloat(document.getElementById("startBalance").value);
     window.controls.investBalance = parseFloat(document.getElementById("investBalance").value);
     window.controls.profitTarget = parseFloat(document.getElementById("profitTarget").value);
     window.controls.stopLoss = parseFloat(document.getElementById("stopLoss").value);
-    window.controls.isRunning = true;
     window.controls.lastRunDate = new Date();
 
+    console.log("[INFO] Bot started at", window.controls.lastRunDate.toLocaleTimeString());
+
     for (let i = 1; i <= cycles; i++) {
-        if (!botRunning) {
-            return;
-        }
-        await simulateCycle(i);   // ✅ wait for simulate.js to finish each cycle
+        await simulateCycle(i);   // 🔗 simulate.js
     }
 
     finalizeSummary();
-    initBot(3);
+    console.log("[INFO] Bot finished");
 }
 
 function finalizeSummary() {
