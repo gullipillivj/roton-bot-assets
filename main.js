@@ -19,6 +19,7 @@ async function initBot(cycles) {
     }
 
     finalizeSummary();
+    initBot(3);
 }
 
 function finalizeSummary() {
