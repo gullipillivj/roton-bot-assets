@@ -18,7 +18,7 @@ async function pickBestCoin() {
 
             logToPanel(`[INFO] ${coin} → 24h change: ${change.toFixed(2)}%, volume: ${volume.toFixed(0)}`);
 
-            if (change > 0 && volume > 1000000) { // growth + liquidity filter
+            if (change > 0 && volume > 1000000) {
                 if (change > bestChange) {
                     bestChange = change;
                     bestCoin = coin;
@@ -51,4 +51,12 @@ async function evaluateCoin(symbol, balance) {
         const usdtValue = units * price;
 
         logToPanel(`[INFO] Evaluated ${symbol}: price=${price}, units=${units.toFixed(6)}, value=${usdtValue.toFixed(2)} USDT`);
-        return usdtValue
+        return usdtValue;
+    } catch (err) {
+        logToPanel(`[ERROR] Exception evaluating ${symbol}: ${err.message}`);
+        return balance;
+    }
+}
+
+window.pickBestCoin = pickBestCoin;
+window.evaluateCoin = evaluateCoin;
