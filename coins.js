@@ -1,53 +1,38 @@
 // coins.js
 
-const BINANCE_API = "https://api.binance.com/api/v3";
-
-// fetch all 24hr stats and filter rising coins
-const getRisingCoins = async () => {
+async function getRisingCoins() {
     try {
-        const res = await fetch(`${BINANCE_API}/ticker/24hr`);
+        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
         const data = await res.json();
 
-        // filter only USDT pairs with positive 24h change
-        const rising = data.filter(item =>
+        // filter: USDT pairs, decent volume, meaningful % change
+        const filtered = data.filter(item =>
             item.symbol.endsWith("USDT") &&
-            parseFloat(item.priceChangePercent) > 0
+            parseFloat(item.quoteVolume) > 20000000 && // > $20M daily volume
+            Math.abs(parseFloat(item.priceChangePercent)) > 0.5
         );
 
         // sort by % gain descending
-        rising.sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
+        filtered.sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
 
-        // take top 10 rising coins
-        const topCoins = rising.slice(0, 10).map(item => item.symbol);
+        // Tier 1: large‑caps
+        const largeCaps = ["BTCUSDT","ETHUSDT","BNBUSDT","ADAUSDT","LINKUSDT","DOTUSDT","MATICUSDT"];
+        const tier1 = filtered.filter(item => largeCaps.includes(item.symbol));
 
-        logToPanel(`[INFO] Rising coins selected: ${topCoins.join(", ")}`);
-        return topCoins;
-    } catch (err) {
-        logToPanel(`[ERROR] Failed to fetch rising coins: ${err}`);
-        // fallback to default 4 coins
-        return ["BTCUSDT", "ETHUSDT", "ADAUSDT", "BNBUSDT"];
-    }
-};
+        // Tier 2: mid‑caps
+        const midCaps = ["SOLUSDT","AVAXUSDT","NEARUSDT","APTUSDT","SUIUSDT","ICPUSDT"];
+        const tier2 = filtered.filter(item => midCaps.includes(item.symbol));
 
-// randomly pick one of the rising coins
-const pickBestCoin = async () => {
-    const coins = await getRisingCoins();
-    const index = Math.floor(Math.random() * coins.length);
-    return coins[index];
-};
+        // Tier 3: short‑caps
+        const shortCaps = ["DOGEUSDT","SHIBUSDT","PEPEUSDT","FLOKIUSDT","BONKUSDT"];
+        const tier3 = filtered.filter(item => shortCaps.includes(item.symbol));
 
-// evaluate coin value based on current price
-const evaluateCoin = async (symbol, balance) => {
-    try {
-        const res = await fetch(`${BINANCE_API}/ticker/price?symbol=${symbol}`);
-        const data = await res.json();
-        const price = parseFloat(data.price);
+        // weighted pool: 40% large, 40% mid, 20% short
+        const pool = [];
+        for (let i = 0; i < 4 && i < tier1.length; i++) pool.push(tier1[i].symbol);
+        for (let i = 0; i < 4 && i < tier2.length; i++) pool.push(tier2[i].symbol);
+        for (let i = 0; i < 2 && i < tier3.length; i++) pool.push(tier3[i].symbol);
 
-        const quantity = balance / price;
-        const currentValue = quantity * price;
-        return currentValue;
-    } catch (err) {
-        logToPanel(`[ERROR] Failed to fetch price for ${symbol}: ${err}`);
-        return balance;
-    }
-};
+        // fallback if API returns junk
+        if (pool.length === 0) {
+            return ["BTCUSDT","ETH
