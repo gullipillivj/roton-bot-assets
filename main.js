@@ -1,6 +1,6 @@
 // main.js
 
-function initBot(cycles) {
+async function initBot(cycles) {
     botRunning = true;
 
     // Sync form values into controls.js
@@ -20,7 +20,7 @@ function initBot(cycles) {
             return;
         }
         logToPanel("Running cycle " + i);
-        simulateCycle(i);
+        await simulateCycle(i);   // ✅ wait for each cycle to finish
     }
 
     // ✅ Final summary after all cycles
