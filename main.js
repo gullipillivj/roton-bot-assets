@@ -1,7 +1,9 @@
+// main.js
+
 function initBot(cycles) {
     botRunning = true;
 
-    // Read values from HTML form and store in controls
+    // Sync form values into controls.js
     window.controls.startBalance = parseFloat(document.getElementById("startBalance").value);
     window.controls.investBalance = parseFloat(document.getElementById("investBalance").value);
     window.controls.profitTarget = parseFloat(document.getElementById("profitTarget").value);
@@ -18,8 +20,24 @@ function initBot(cycles) {
             return;
         }
         logToPanel("Running cycle " + i);
-        simulateCycle(i); // simulateCycle can now read from window.controls
+        simulateCycle(i);
     }
 
-    logToPanel("Bot finished");
+    // ✅ Final summary after all cycles
+    finalizeSummary();
+}
+
+function finalizeSummary() {
+    const startBalance = window.controls.startBalance;
+    const investBalance = window.controls.investBalance;
+
+    const totalChange = investBalance - startBalance;
+    const percentChange = (totalChange / startBalance) * 100;
+
+    logToPanel("=======================================");
+    logToPanel(`[SUMMARY] Bot run complete`);
+    logToPanel(`[SUMMARY] Final Start Balance: ${startBalance.toFixed(2)} USDT`);
+    logToPanel(`[SUMMARY] Final Investment Balance: ${investBalance.toFixed(2)} USDT`);
+    logToPanel(`[SUMMARY] Net Change: ${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
+    logToPanel("=======================================");
 }
