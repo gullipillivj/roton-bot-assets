@@ -5,65 +5,75 @@ async function simulateCycle(cycleNumber) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // pick first coin from coins.js
-    let coin = await pickBestCoin();
-
     logToPanel(`[INFO] Cycle ${cycleNumber} started`);
+
+    // initial coin
+    let coin = await pickBestCoin();
     logToPanel(`[DEBUG] First coin chosen: ${coin}`);
 
     let usdtValue = balance;
-    let cycleStart = Date.now();
 
-    while (true) {
-        let lastValue = balance;
+    // run 4 checks (≈2 minutes)
+    for (let i = 1; i <= 4; i++) {
+        await new Promise(resolve => setTimeout(resolve, 30000));
 
-        // 4 checks = 2 minutes total
-        for (let i = 1; i <= 4; i++) {
-            await new Promise(resolve => setTimeout(resolve, 30000));
+        // re‑enquire coins.js every 30s
+        const coins = await getRisingCoins();
+        logToPanel(`[DEBUG] Coins fetched from Binance: ${coins.join(", ")}`);
 
-            usdtValue = await evaluateCoin(coin, balance);
-
-            // fallback if evaluateCoin fails
-            if (!usdtValue || isNaN(usdtValue)) {
-                usdtValue = balance;
-                logToPanel(`[DEBUG] evaluateCoin returned invalid, using balance ${balance.toFixed(2)} USDT`);
-            }
-
-            const diff = usdtValue - balance;
-            const profitPercent = (diff / balance) * 100;
-
-            // always show coin + profit every 30s
-            logToPanel(`[DEBUG] Coin: ${coin}, Profit update: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
-
-            // hop to new coin if not rising (hidden logic, but log for debug)
-            if (profitPercent <= 0 && i === 4) {
-                coin = await pickBestCoin();
-                logToPanel(`[DEBUG] Hop to new coin: ${coin}`);
-            }
-
-            if (profitPercent >= window.controls.profitTarget) {
-                stopWithSummary(usdtValue, reserve, cycleNumber);
-                return;
-            }
-            if (profitPercent <= -window.controls.stopLoss) {
-                stopWithSummary(usdtValue, reserve, cycleNumber);
-                return;
-            }
-
-            if (usdtValue > lastValue) balance = usdtValue;
-            lastValue = usdtValue;
+        // evaluate current coin
+        usdtValue = await evaluateCoin(coin, balance);
+        if (!usdtValue || isNaN(usdtValue)) {
+            usdtValue = balance;
+            logToPanel(`[DEBUG] evaluateCoin invalid, fallback balance ${balance.toFixed(2)} USDT`);
         }
 
-        // stop after 4 minutes max
-        if (Date.now() - cycleStart >= 240000) {
-            stopWithSummary(usdtValue, reserve, cycleNumber);
-            return;
+        const diff = usdtValue - balance;
+        const profitPercent = (diff / balance) * 100;
+
+        // always log profit update
+        logToPanel(`[DEBUG] Coin: ${coin}, Profit update: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+
+        // hop if coin is falling
+        if (profitPercent < 0) {
+            coin = coins[Math.floor(Math.random() * coins.length)];
+            logToPanel(`[DEBUG] Hop to new coin: ${coin}`);
+        }
+
+        // profit/stop‑loss checks
+        if (profitPercent >= window.controls.profitTarget) {
+            return stopWithSummary(usdtValue, reserve, cycleNumber);
+        }
+        if (profitPercent <= -window.controls.stopLoss) {
+            return stopWithSummary(usdtValue, reserve, cycleNumber);
         }
 
         balance = usdtValue;
-        window.controls.investBalance = usdtValue + reserve;
-        document.getElementById("investBalance").value = window.controls.investBalance.toFixed(2);
     }
+
+    // after 4 hops, finish cycle
+    return stopWithSummary(usdtValue, reserve, cycleNumber);
+}
+
+// run two cycles back‑to‑back (≈4 minutes total)
+async function runTwoCycles() {
+    const result1 = await simulateCycle(1);
+    const result2 = await simulateCycle(2);
+
+    // calculate cumulative profit/loss
+    const startBalance = window.controls.startBalance;
+    const finalBalance = result2 + (window.controls.investBalance - result2);
+    const totalChange = finalBalance - startBalance;
+    const percentChange = (totalChange / startBalance) * 100;
+
+    // update balances
+    window.controls.startBalance = finalBalance;
+    window.controls.investBalance = result2;
+
+    logToPanel(`[INFO] Bot stopped after 2 cycles`);
+    logToPanel(`[INFO] Updated Initial Balance: ${window.controls.startBalance.toFixed(2)} USDT`);
+    logToPanel(`[INFO] Updated Investment Balance: ${window.controls.investBalance.toFixed(2)} USDT`);
+    logToPanel(`[INFO] Total Profit/Loss across 2 cycles: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
 }
 
 function stopWithSummary(usdtValue, reserve, cycleNumber) {
@@ -78,7 +88,7 @@ function stopWithSummary(usdtValue, reserve, cycleNumber) {
 
     logToPanel(`[INFO] Cycle ${cycleNumber} complete`);
     logToPanel(`[INFO] Net Wallet: ${totalWallet.toFixed(2)} USDT`);
-    logToPanel(`[INFO] Profit/Loss: ${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
+    logToPanel(`[INFO] Profit/Loss: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
 
-    window.stopBot();
+    return usdtValue;
 }
