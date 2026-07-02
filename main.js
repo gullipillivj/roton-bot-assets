@@ -1,5 +1,8 @@
 // main.js
 
+// make sure controls exists
+window.controls = {};
+
 async function initBot(cycles) {
     // sync values from form into controls
     window.controls.startBalance = parseFloat(document.getElementById("startBalance").value);
@@ -8,14 +11,14 @@ async function initBot(cycles) {
     window.controls.stopLoss = parseFloat(document.getElementById("stopLoss").value);
     window.controls.lastRunDate = new Date();
 
-    console.log("[INFO] Bot started at", window.controls.lastRunDate.toLocaleTimeString());
+    logToPanel("[INFO] Bot started at " + window.controls.lastRunDate.toLocaleTimeString());
 
     for (let i = 1; i <= cycles; i++) {
         await simulateCycle(i);   // 🔗 simulate.js
     }
 
     finalizeSummary();
-    console.log("[INFO] Bot finished");
+    logToPanel("[INFO] Bot finished");
 }
 
 function finalizeSummary() {
@@ -25,8 +28,14 @@ function finalizeSummary() {
     const totalChange = investBalance - startBalance;
     const percentChange = (totalChange / startBalance) * 100;
 
-    console.log("Bot run complete");
-    console.log("Final Start Balance:", startBalance.toFixed(2), "USDT");
-    console.log("Final Investment Balance:", investBalance.toFixed(2), "USDT");
-    console.log("Net Change:", totalChange.toFixed(2), "USDT", `(${percentChange.toFixed(2)}%)`);
+    logToPanel("Bot run complete");
+    logToPanel("Final Start Balance: " + startBalance.toFixed(2) + " USDT");
+    logToPanel("Final Investment Balance: " + investBalance.toFixed(2) + " USDT");
+    logToPanel("Net Change: " + totalChange.toFixed(2) + " USDT (" + percentChange.toFixed(2) + "%)");
 }
+
+// expose functions to window so HTML buttons can call them
+window.initBot = initBot;
+window.stopBot = function() {
+    logToPanel("[INFO] Bot stopped");
+};
