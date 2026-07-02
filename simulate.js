@@ -1,15 +1,21 @@
 // simulate.js
 
+function logWithTime(message) {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
+    logToPanel(`[INFO] ${timeStr} — ${message}`);
+}
+
 async function simulateCycle(cycleNumber) {
     let investBalance = window.controls.investBalance;
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    logToPanel(`[INFO] Cycle ${cycleNumber} started`);
+    logWithTime(`Cycle ${cycleNumber} started`);
 
     // pick one coin from coins.js
     let coin = await pickBestCoin();
-    logToPanel(`[INFO] Bought ${coin} with ${balance.toFixed(2)} USDT`);
+    logWithTime(`Bought ${coin} with ${balance.toFixed(2)} USDT`);
 
     let usdtValue = balance;
 
@@ -29,13 +35,15 @@ async function simulateCycle(cycleNumber) {
         const diff = usdtValue - balance;
         const profitPercent = (diff / balance) * 100;
 
-        // show coin, price, profit/loss, %
-        logToPanel(`[INFO] Coin: ${coin}, Current Value: ${usdtValue.toFixed(2)} USDT, Change: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
+        // always show coin, price, profit/loss, %
+        logWithTime(`Coin: ${coin}, Current Value: ${usdtValue.toFixed(2)} USDT, Change: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%)`);
 
-        // hop if coin is falling
+        // hop if coin is falling, else show "not changed"
         if (profitPercent < 0) {
             coin = coins[Math.floor(Math.random() * coins.length)];
-            logToPanel(`[INFO] Switched to new coin: ${coin}`);
+            logWithTime(`Switched to new coin: ${coin}`);
+        } else {
+            logWithTime(`Coin not changed`);
         }
 
         // profit/stop‑loss checks
@@ -65,10 +73,10 @@ async function runTwoCycles() {
     window.controls.startBalance = finalBalance;
     window.controls.investBalance = result2;
 
-    logToPanel(`[INFO] Bot stopped after 2 cycles`);
-    logToPanel(`[INFO] Updated Initial Balance: ${window.controls.startBalance.toFixed(2)} USDT`);
-    logToPanel(`[INFO] Updated Investment Balance: ${window.controls.investBalance.toFixed(2)} USDT`);
-    logToPanel(`[INFO] Total Profit/Loss across 2 cycles: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
+    logWithTime(`Bot stopped after 2 cycles`);
+    logWithTime(`Updated Initial Balance: ${window.controls.startBalance.toFixed(2)} USDT`);
+    logWithTime(`Updated Investment Balance: ${window.controls.investBalance.toFixed(2)} USDT`);
+    logWithTime(`Total Profit/Loss across 2 cycles: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
 }
 
 function stopWithSummary(usdtValue, reserve, cycleNumber) {
@@ -81,9 +89,9 @@ function stopWithSummary(usdtValue, reserve, cycleNumber) {
     const totalChange = totalWallet - startBalance;
     const percentChange = (totalChange / startBalance) * 100;
 
-    logToPanel(`[INFO] Cycle ${cycleNumber} complete`);
-    logToPanel(`[INFO] Net Wallet: ${totalWallet.toFixed(2)} USDT`);
-    logToPanel(`[INFO] Profit/Loss: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
+    logWithTime(`Cycle ${cycleNumber} complete`);
+    logWithTime(`Net Wallet: ${totalWallet.toFixed(2)} USDT`);
+    logWithTime(`Profit/Loss: ${totalChange >= 0 ? '+' : ''}${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
 
     return usdtValue;
 }
