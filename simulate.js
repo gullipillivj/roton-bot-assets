@@ -1,17 +1,35 @@
 // simulate.js
+
 async function simulateCycle(cycleNumber) {
     const investBalance = window.controls.investBalance;
     const reserve = investBalance * 0.1;
-    let balance = investBalance - reserve;
+    const balance = investBalance - reserve;
 
-    // 🔗 call into coins.js
     const coin = await pickBestCoin();
-    const usdtValue = await evaluateCoin(coin, balance);
 
-    // 🔥 force a buy log
+    // BUY step
     console.log(`[CYCLE ${cycleNumber}] Bought ${coin} with ${balance.toFixed(2)} USDT`);
-    console.log(`[CYCLE ${cycleNumber}] Current value: ${usdtValue.toFixed(2)} USDT`);
 
-    // update balance
+    // HOPING step: 2 minutes total, check every 30 seconds
+    const holdTime = 120000; // 2 minutes
+    const interval = 30000;  // 30 seconds
+    const checks = holdTime / interval;
+
+    let usdtValue = balance;
+    for (let i = 1; i <= checks; i++) {
+        await new Promise(resolve => setTimeout(resolve, interval));
+        usdtValue = await evaluateCoin(coin, balance);
+
+        console.log(`[CYCLE ${cycleNumber}] Hoping check ${i}: ${coin} value = ${usdtValue.toFixed(2)} USDT`);
+
+        // check profit target / stop loss
+        if (usdtValue >= window.controls.profitTarget || usdtValue <= window.controls.stopLoss) {
+            console.log(`[CYCLE ${cycleNumber}] Target/Stop triggered, exiting early`);
+            break;
+        }
+    }
+
+    console.log(`[CYCLE ${cycleNumber}] Final value after hoping: ${usdtValue.toFixed(2)} USDT`);
+
     window.controls.investBalance = usdtValue + reserve;
 }
