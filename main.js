@@ -20,10 +20,9 @@ async function initBot(cycles) {
             return;
         }
         logToPanel("Running cycle " + i);
-        await simulateCycle(i);   // ✅ wait for each cycle to finish
+        await simulateCycle(i);   // ✅ wait for simulate.js to finish
     }
 
-    // ✅ Final summary after all cycles
     finalizeSummary();
 }
 
