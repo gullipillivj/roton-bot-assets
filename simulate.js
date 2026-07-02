@@ -1,7 +1,8 @@
 // simulate.js
 
 async function simulateCycle(cycleNumber) {
-    logToPanel(`Simulating cycle ${cycleNumber}`);
+    // ✅ Debug entry log
+    logToPanel(`[DEBUG] Entered simulateCycle for cycle ${cycleNumber}`);
 
     const investBalance = window.controls.investBalance;
     const profitTarget = window.controls.profitTarget / 100;
@@ -12,6 +13,7 @@ async function simulateCycle(cycleNumber) {
 
     // First buy
     let currentCoin = await pickBestCoin();
+    logToPanel(`[DEBUG] pickBestCoin returned: ${currentCoin}`);
     let usdtValue = await evaluateCoin(currentCoin, balance);
     logToPanel(`Bought ${currentCoin} with ${balance} USDT`);
 
@@ -37,7 +39,8 @@ async function simulateCycle(cycleNumber) {
         }
 
         const newCoin = await pickBestCoin();
-        if (newCoin !== currentCoin) {
+        logToPanel(`[DEBUG] Hop ${hop}: pickBestCoin returned ${newCoin}`);
+        if (newCoin && newCoin !== currentCoin) {
             logToPanel(`[INFO] Hopping from ${currentCoin} to ${newCoin}`);
             currentCoin = newCoin;
             usdtValue = await evaluateCoin(currentCoin, balance);
