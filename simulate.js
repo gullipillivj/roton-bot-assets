@@ -29,10 +29,11 @@ async function simulateCycle(cycleNum) {
 
     logWithTime(`Cycle ${cycleNum}: Result after 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-    // ✅ Phase 3: Limit swaps to max 3, apply 0.01% fee
+    // ✅ Allow up to 3 hops per cycle
     const feeRate = 0.0001; // 0.01%
-    if (cycleNum <= 3) {
-        const totalFeeFactor = 1 - feeRate;
+    const totalFeeFactor = 1 - feeRate;
+
+    for (let hop = 1; hop <= 3; hop++) {
         balance = (coinUnits * currentPrice) * totalFeeFactor;
 
         startBox = parseFloat(document.getElementById("startBalance").value);
@@ -40,16 +41,16 @@ async function simulateCycle(cycleNum) {
         document.getElementById("startBalance").value = (startBox * totalFeeFactor).toFixed(2);
         document.getElementById("investBalance").value = (investBox * totalFeeFactor).toFixed(2);
 
-        const newIndex = (randIndex + 1) % allCoins.length;
+        const newIndex = (randIndex + hop) % allCoins.length;
         coin = allCoins[newIndex];
         entryPrice = await evaluateCoin(coin, 1);
         coinUnits = balance / entryPrice;
-        logWithTime(`[Latest] Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Entry=${entryPrice.toFixed(4)} USDT after 0.01% fee`);
+        logWithTime(`[Latest] Hop ${hop}: into ${coin}, Units=${coinUnits.toFixed(4)}, Entry=${entryPrice.toFixed(4)} USDT after 0.01% fee`);
 
         // Hold new coin for 30s
         await sleep(30000);
 
-        // Phase 4: Check new coin price
+        // Check new coin price
         currentPrice = await evaluateCoin(coin, 1);
         profit = (currentPrice - entryPrice) * coinUnits;
 
@@ -58,10 +59,10 @@ async function simulateCycle(cycleNum) {
         document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
         document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
 
-        logWithTime(`Cycle ${cycleNum}: Result after swap 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
+        logWithTime(`Cycle ${cycleNum}: Result after hop ${hop} — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
     }
 
-    // ✅ Update chart at the end of cycle
+    // ✅ Chart update at the end of cycle
     balanceHistory.push(parseFloat(document.getElementById("investBalance").value));
     updateChart();
 
