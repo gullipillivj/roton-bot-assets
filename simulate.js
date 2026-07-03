@@ -152,7 +152,8 @@ async function simulateCycle(cycleNum) {
         } else {
             logWithTime(`[INFO] Cycle ${cycleNum}: Swap skipped (criteria not met or not in eligible window)`);
         }
-
+balanceHistory.push(parseFloat(document.getElementById("investBalance").value));
+updateChart();
         logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
