@@ -18,13 +18,17 @@ function safeLog(msg) {
 
 async function getRisingCoins() {
     try {
-        const res = await fetch("https://binance.com");
+        safeLog(`[DEBUG] Fetching 24h ticker data from Binance...`);
+        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
         const data = await res.json();
+        safeLog(`[DEBUG] Total symbols fetched: ${data.length}`);
 
         const filtered = data.filter(item =>
             item.symbol.endsWith("USDT") &&
             Math.abs(parseFloat(item.priceChangePercent)) > 0.5
         );
+
+        safeLog(`[DEBUG] Filtered USDT coins count: ${filtered.length}`);
 
         filtered.sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
 
@@ -41,10 +45,11 @@ async function getRisingCoins() {
         const topCoins = [...highRange, ...midRange, ...lowRange].map(item => item.symbol);
 
         if (topCoins.length === 0) {
+            safeLog(`[WARN] No rising coins found, using fallback list.`);
             return fallbackCoins();
         }
 
-        safeLog(`[DEBUG] Coins fetched from Binance: ${topCoins.join(", ")}`);
+        safeLog(`[DEBUG] Top coins selected: ${topCoins.join(", ")}`);
         return topCoins;
     } catch (err) {
         safeLog(`[ERROR] Failed to fetch rising coins: ${err}`);
@@ -53,16 +58,20 @@ async function getRisingCoins() {
 }
 
 function fallbackCoins() {
+    safeLog(`[DEBUG] Returning fallback coins.`);
     return ["BTCUSDT","ETHUSDT","ADAUSDT","LINKUSDT","SOLUSDT","AVAXUSDT","DOGEUSDT","SHIBUSDT"];
 }
 
 async function pickBestCoin() {
+    safeLog(`[DEBUG] Picking best coin...`);
     const coins = await getRisingCoins();
-    if(!coins || coins.length === 0) return "BTCUSDT"; 
-    // Always returns the top performing coin string ending in USDT
+    if(!coins || coins.length === 0) {
+        safeLog(`[WARN] No coins returned, defaulting to BTCUSDT`);
+        return "BTCUSDT"; 
+    }
+    safeLog(`[DEBUG] Best coin chosen: ${coins[0]}`);
     return coins[0]; 
 }
 
 window.getRisingCoins = getRisingCoins;
 window.pickBestCoin = pickBestCoin;
-
