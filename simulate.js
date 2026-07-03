@@ -4,6 +4,14 @@ if (typeof window.logToPanel !== "function") {
     window.logToPanel = function(msg) { console.log(msg); };
 }
 
+function logWithTime(message) {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
+    window.logToPanel(`[INFO] ${timeStr} — ${message}`);
+}
+
+logWithTime("[DEBUG] simulate.js loaded successfully");
+
 async function evaluateCoin(symbol, units = 1) {
     try {
         const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
@@ -32,31 +40,35 @@ async function get24hChange(symbol) {
     }
 }
 
-function logWithTime(message) {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
-    window.logToPanel(`[INFO] ${timeStr} — ${message}`);
-}
-
 async function runBot(totalCycles = 2, checksPerCycle = 4) {
-    let investBalance = parseFloat(window.controls.investBalance);
+    logWithTime("[DEBUG] Entered runBot()");
+    // Load textbox values into window.controls
+    window.controls = {
+        startBalance: parseFloat(document.getElementById("startBalance").value),
+        investBalance: parseFloat(document.getElementById("investBalance").value),
+        profitTarget: parseFloat(document.getElementById("profitTarget").value),
+        stopLoss: parseFloat(document.getElementById("stopLoss").value)
+    };
+    logWithTime(`[DEBUG] window.controls = ${JSON.stringify(window.controls)}`);
+
+    let investBalance = window.controls.investBalance;
     if (isNaN(investBalance) || investBalance <= 0) {
-        logWithTime(`[ERROR] Invalid investment balance in textbox.`);
+        logWithTime("[ERROR] Invalid investment balance in textbox.");
         return;
     }
 
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
-
     logWithTime(`[DEBUG] Starting bot with investBalance=${investBalance}, reserve=${reserve}, balance=${balance}`);
 
+    logWithTime("[DEBUG] Calling pickBestCoin()");
     let coin = await window.pickBestCoin();       
     coin = coin.endsWith("USDT") ? coin : coin + "USDT"; 
     logWithTime(`[DEBUG] Initial coin chosen: ${coin}`);
 
     let coinPrice = await evaluateCoin(coin, 1);
     if(coinPrice === 0) {
-        logWithTime(`[ERROR] Could not price initial coin. Aborting.`);
+        logWithTime("[ERROR] Could not price initial coin. Aborting.");
         return;
     }
     
@@ -81,7 +93,7 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
         logWithTime(`Tick ${timer2Counter}: Holding ${coin}, Live Price = ${currentPriceInUsdt.toFixed(4)} USDT (Previous: ${lastPriceInUsdt.toFixed(4)} USDT), Holding Value = ${currentValue.toFixed(2)} USDT, 24h % = ${held24hChange}`);
 
         if (currentPriceInUsdt <= lastPriceInUsdt) {
-            logWithTime(`Coin price dropped or stagnated. Querying coins.js for a better option...`);
+            logWithTime("Coin price dropped or stagnated. Querying coins.js for a better option...");
             
             let bestCoin = await window.pickBestCoin();
             bestCoin = bestCoin.endsWith("USDT") ? bestCoin : bestCoin + "USDT";
@@ -102,20 +114,3 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
         } else {
             balance = currentValue;
             lastPriceInUsdt = currentPriceInUsdt;
-            logWithTime(`Coin price is climbing! Staying with ${coin}, Balance = ${balance.toFixed(2)} USDT`);
-        }
-
-        if (timer2Counter % checksPerCycle === 0) {
-            const cycleNum = timer2Counter / checksPerCycle;
-            logWithTime(`Cycle ${cycleNum} complete`);
-        }
-
-        if (timer2Counter >= (totalCycles * checksPerCycle)) {
-            clearInterval(interval);
-            clearTimeout(stopTimer);
-
-            window.controls.startBalance = balance + reserve;
-            window.controls.investBalance = balance;
-
-            const profit = balance - (investBalance - reserve);
-            logWithTime(`Bot stopped safely after completing ${total
