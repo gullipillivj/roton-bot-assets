@@ -36,7 +36,12 @@ async function get24hChange(symbol) {
     }
 }
 
-// ✅ This is what main.js expects
+// helper to pause
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// main cycle function called by main.js
 async function simulateCycle(cycleNum) {
     logWithTime(`[DEBUG] simulateCycle(${cycleNum}) started`);
 
@@ -60,14 +65,12 @@ async function simulateCycle(cycleNum) {
     let coinUnits = balance / coinPrice;
     logWithTime(`Cycle ${cycleNum}: Initial buy ${coin}, ${coinUnits.toFixed(4)} units at ${coinPrice.toFixed(4)} USDT`);
 
-    // Check performance
     const currentPrice = await evaluateCoin(coin, 1);
     const held24hChange = await get24hChange(coin);
     let currentValue = coinUnits * currentPrice;
 
     logWithTime(`Cycle ${cycleNum}: Holding ${coin}, Value=${currentValue.toFixed(2)} USDT, 24h%=${held24hChange}`);
 
-    // Swap if stagnant/down
     if (currentPrice <= coinPrice) {
         logWithTime(`Cycle ${cycleNum}: Price dropped/stagnated, checking for better coin...`);
         let bestCoin = await window.pickBestCoin();
@@ -84,10 +87,14 @@ async function simulateCycle(cycleNum) {
         logWithTime(`Cycle ${cycleNum}: Price rising, holding ${coin}`);
     }
 
-    // Update controls
+    // update balances
     window.controls.investBalance = balance;
     window.controls.startBalance = balance + reserve;
+
     logWithTime(`[DEBUG] simulateCycle(${cycleNum}) complete`);
+
+    // ⏱ wait 30s before next cycle
+    await sleep(30000);
 }
 
 window.simulateCycle = simulateCycle;
