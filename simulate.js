@@ -34,8 +34,9 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // ✅ FIRST BUY — dynamic best coin
-    let coin = (await pickBestCoin()) + "USDT"; 
+    // ✅ FIRST BUY — dynamic best coin only
+    let coin = await pickBestCoin();       // from coins.js
+    coin = coin.endsWith("USDT") ? coin : coin + "USDT"; // normalize
     let coinPrice = await evaluateCoin(coin, 1);
     let coinUnits = balance / coinPrice;
 
@@ -56,7 +57,7 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
 
         const held24hChange = await get24hChange(coin);
         const risingCoins = await getRisingCoins();
-        const bestCoin = risingCoins[0] + "USDT"; // normalize
+        const bestCoin = risingCoins[0].endsWith("USDT") ? risingCoins[0] : risingCoins[0] + "USDT";
         const bestChange = await get24hChange(bestCoin);
 
         logWithTime(`Tick ${timer2Counter + 1}: Holding ${coin}, Value = ${currentValue.toFixed(2)} USDT, 24h % = ${held24hChange.toFixed(2)}%`);
