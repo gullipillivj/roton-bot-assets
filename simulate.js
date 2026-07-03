@@ -47,7 +47,6 @@ async function simulateCycle(cycleNum) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // 🔁 Rotate through top coins
     let coins = await window.getRisingCoins();
     if (!coins || coins.length === 0) {
         logWithTime("[Latest] No rising coins found, using fallback list.");
@@ -71,7 +70,6 @@ async function simulateCycle(cycleNum) {
 
     logWithTime(`Cycle ${cycleNum}: Holding ${coin}, Value=${currentValue.toFixed(2)} USDT, 24h%=${held24hChange}`);
 
-    // 📈 Profit/Stop-loss logic
     const profitPercent = ((currentPrice - coinPrice) / coinPrice) * 100;
     if (profitPercent >= window.controls.profitTarget) {
         logWithTime(`[Latest] Profit target reached (${profitPercent.toFixed(2)}%). Taking profit.`);
@@ -80,11 +78,15 @@ async function simulateCycle(cycleNum) {
         logWithTime(`[Latest] Stop loss triggered (${profitPercent.toFixed(2)}%). Switching coin.`);
         let bestCoin = await window.pickBestCoin();
         if (bestCoin && bestCoin !== coin) {
-            balance = currentValue * 0.9975;
+            const changenowFee = 0.005;   // 0.5%
+            const pancakeFee = 0.0025;    // 0.25%
+            const totalFeeFactor = 1 - (changenowFee + pancakeFee); // 0.9925
+
+            balance = currentValue * totalFeeFactor; // deduct fees
             coin = bestCoin;
             coinPrice = await evaluateCoin(coin, 1);
             coinUnits = balance / coinPrice;
-            logWithTime(`[Latest] Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Balance=${balance.toFixed(2)} USDT`);
+            logWithTime(`[Latest] Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Balance=${balance.toFixed(2)} USDT after fees`);
         } else {
             logWithTime(`[Latest] Stayed with ${coin}`);
         }
@@ -92,14 +94,14 @@ async function simulateCycle(cycleNum) {
         logWithTime(`[Latest] No trigger hit, holding ${coin}`);
     }
 
-    // ✅ Update balances in controls and textboxes
-    window.controls.investBalance = balance;
-    window.controls.startBalance = balance + reserve;
-    document.getElementById("startBalance").value = window.controls.startBalance.toFixed(2);
-    document.getElementById("investBalance").value = window.controls.investBalance.toFixed(2);
+    // ✅ Update textboxes by ADDING profit/loss
+    const profit = balance - window.controls.startBalance;
+    let startBox = parseFloat(document.getElementById("startBalance").value);
+    let investBox = parseFloat(document.getElementById("investBalance").value);
 
-    // ✅ Show profit/loss
-    const profit = balance - (investBalance - reserve);
+    document.getElementById("startBalance").value = window.controls.startBalance.toFixed(2);
+    document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
+
     logWithTime(`Result: ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
     logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
