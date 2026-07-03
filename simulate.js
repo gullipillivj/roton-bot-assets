@@ -1,3 +1,5 @@
+// simulate.js
+
 function logWithTime(message) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
@@ -9,60 +11,66 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
+    // FIRST BUY — must happen before checking
     let coin = await pickBestCoin();
-    logWithTime(`Bot started`);
-    logWithTime(`Bought ${coin} with ${balance.toFixed(2)} USDT`);
+    let coinPrice = await evaluateCoin(coin, 1);
+    let coinUnits = balance / coinPrice;
 
-    let timer1Counter = 0; // counts ms up to 30000
-    let timer2Counter = 0; // counts ticks (total checks)
+    logWithTime(`Bot started`);
+    logWithTime(`Initial buy: ${coin}, ${coinUnits.toFixed(4)} units worth ${balance.toFixed(2)} USDT`);
+
+    let timer1Counter = 0;
+    let timer2Counter = 0;
 
     const interval = setInterval(async () => {
-        // simulate Timer1 reaching 30000
         timer1Counter = 30000;
 
-        const risingCoins = await getRisingCoins();
-        const held24hChange = await get24hChange(coin);
-
-        let currentValue = await evaluateCoin(coin, balance);
+        const heldPrice = await evaluateCoin(coin, 1);
+        let currentValue = coinUnits * heldPrice;
         if (!currentValue || isNaN(currentValue)) currentValue = balance;
+
+        const held24hChange = await get24hChange(coin);
+        const risingCoins = await getRisingCoins();
+        const bestCoin = risingCoins[0];
+        const bestChange = await get24hChange(bestCoin);
 
         const diff = currentValue - balance;
         const profitPercent = (diff / balance) * 100;
 
-        logWithTime(`Coin: ${coin}, Value: ${currentValue.toFixed(2)} USDT, Change: ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%), 24h %: ${held24hChange.toFixed(2)}%`);
+        logWithTime(`Tick ${timer2Counter + 1}: Holding ${coin}, Value = ${currentValue.toFixed(2)} USDT, Change = ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%), 24h % = ${held24hChange.toFixed(2)}%`);
 
-        if (held24hChange < 0) {
-            coin = risingCoins[Math.floor(Math.random() * risingCoins.length)];
-            logWithTime(`Switched to new rising coin: ${coin}`);
+        if (bestCoin !== coin && bestChange > held24hChange) {
+            // Swap into stronger coin
+            balance = currentValue * 0.9975; // apply 0.25% fee
+            coin = bestCoin;
+            coinPrice = await evaluateCoin(coin, 1);
+            coinUnits = balance / coinPrice;
+            logWithTime(`Swapped into stronger coin: ${coin}, Balance = ${balance.toFixed(2)} USDT`);
         } else {
-            logWithTime(`Coin not changed`);
+            balance = currentValue;
+            logWithTime(`No swap, holding ${coin}, Balance = ${balance.toFixed(2)} USDT`);
         }
 
-        // reset Timer1 back to 0 after firing
         timer1Counter = 0;
-
-        // increment Timer2
         timer2Counter++;
 
-        // cycle management
         if (timer2Counter % checksPerCycle === 0) {
             const cycleNum = timer2Counter / checksPerCycle;
             logWithTime(`Cycle ${cycleNum} complete`);
         }
 
-        // stop after 8 ticks (2 cycles × 4 checks)
         if (timer2Counter >= totalCycles * checksPerCycle) {
             clearInterval(interval);
             clearTimeout(stopTimer);
 
-            // update balances
-            window.controls.startBalance = currentValue + reserve;
-            window.controls.investBalance = currentValue;
+            window.controls.startBalance = balance + reserve;
+            window.controls.investBalance = balance;
 
+            const profit = balance - (investBalance - reserve);
             logWithTime(`Bot stopped after ${totalCycles} cycles`);
             logWithTime(`Final Balances: Start = ${window.controls.startBalance.toFixed(2)} USDT, Invest = ${window.controls.investBalance.toFixed(2)} USDT`);
+            logWithTime(`Result: ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-            // reset both counters
             timer1Counter = 0;
             timer2Counter = 0;
             logWithTime(`Timers reset: Timer1 = ${timer1Counter}, Timer2 = ${timer2Counter}`);
@@ -70,19 +78,16 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
         }
     }, 30000);
 
-    // Timer2: safety stop after full runtime
     const totalRuntimeMs = totalCycles * checksPerCycle * 30000;
     const stopTimer = setTimeout(() => {
         clearInterval(interval);
         logWithTime(`Bot stopped automatically after ${totalCycles} cycles`);
 
-        // balances update
         window.controls.startBalance = balance + reserve;
         window.controls.investBalance = balance;
 
         logWithTime(`Final Balances: Start = ${window.controls.startBalance.toFixed(2)} USDT, Invest = ${window.controls.investBalance.toFixed(2)} USDT`);
 
-        // reset both counters
         timer1Counter = 0;
         timer2Counter = 0;
         logWithTime(`Timers reset: Timer1 = ${timer1Counter}, Timer2 = ${timer2Counter}`);
