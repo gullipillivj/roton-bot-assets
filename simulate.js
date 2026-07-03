@@ -1,25 +1,23 @@
 // simulate.js
 
-// Fetch live price for a coin (USDT pair)
 async function evaluateCoin(symbol, units = 1) {
     try {
         const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
         const data = await res.json();
         return parseFloat(data.price) * units;
     } catch (err) {
-        logToPanel(`[ERROR] Failed to evaluate ${symbol}: ${err}`);
+        logWithTime(`[ERROR] ${symbol} price fetch failed: ${err}`);
         return 0;
     }
 }
 
-// Fetch 24h % change for a coin
 async function get24hChange(symbol) {
     try {
         const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
         const data = await res.json();
         return parseFloat(data.priceChangePercent);
     } catch (err) {
-        logToPanel(`[ERROR] Failed to fetch 24h change for ${symbol}: ${err}`);
+        logWithTime(`[ERROR] ${symbol} 24h change fetch failed: ${err}`);
         return 0;
     }
 }
@@ -35,8 +33,8 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // FIRST BUY
-    let coin = await pickBestCoin();
+    // FIRST BUY — dynamic best coin
+    let coin = (await pickBestCoin()) + "USDT"; 
     let coinPrice = await evaluateCoin(coin, 1);
     let coinUnits = balance / coinPrice;
 
@@ -47,30 +45,31 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
     let timer2Counter = 0;
 
     const interval = setInterval(async () => {
+        logWithTime(`DEBUG: Tick loop entered, Timer2 = ${timer2Counter + 1}`);
+
         timer1Counter = 30000;
 
-        // evaluate held coin
         const heldPrice = await evaluateCoin(coin, 1);
         let currentValue = coinUnits * heldPrice;
         if (!currentValue || isNaN(currentValue)) currentValue = balance;
 
         const held24hChange = await get24hChange(coin);
         const risingCoins = await getRisingCoins();
-        const bestCoin = risingCoins[0];
+        const bestCoin = risingCoins[0] + "USDT"; // normalize
         const bestChange = await get24hChange(bestCoin);
 
         logWithTime(`Tick ${timer2Counter + 1}: Holding ${coin}, Value = ${currentValue.toFixed(2)} USDT, 24h % = ${held24hChange.toFixed(2)}%`);
 
-        // swap only if another coin is stronger
-        if (bestCoin !== coin && bestChange > held24hChange) {
-            balance = currentValue * 0.9975; // apply 0.25% fee
+        // Swap if coin is weaker OR stagnant
+        if (bestCoin !== coin && bestChange >= held24hChange) {
+            balance = currentValue * 0.9975; // fee
             coin = bestCoin;
             coinPrice = await evaluateCoin(coin, 1);
             coinUnits = balance / coinPrice;
             logWithTime(`Swapped into stronger coin: ${coin}, Balance = ${balance.toFixed(2)} USDT`);
         } else {
             balance = currentValue;
-            logWithTime(`No swap, holding ${coin}, Balance = ${balance.toFixed(2)} USDT`);
+            logWithTime(`Stayed with ${coin}, Balance = ${balance.toFixed(2)} USDT`);
         }
 
         timer1Counter = 0;
