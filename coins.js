@@ -1,13 +1,5 @@
 // coins.js
 
-const reputedCoins = [
-  "BTCUSDT","ETHUSDT","BNBUSDT","ADAUSDT","XRPUSDT",
-  "SOLUSDT","DOTUSDT","MATICUSDT","LINKUSDT","LTCUSDT",
-  "AVAXUSDT","NEARUSDT","APTUSDT","SUIUSDT","ICPUSDT",
-  "ATOMUSDT","FILUSDT","TRXUSDT","ETCUSDT","EOSUSDT",
-  "DOGEUSDT","SHIBUSDT","PEPEUSDT","FLOKIUSDT","BONKUSDT"
-];
-
 function safeLog(msg) {
     if (typeof window.logToPanel === "function") {
         window.logToPanel(msg);
@@ -47,21 +39,16 @@ async function getRisingCoins() {
         const topCoins = [...highRange, ...midRange, ...lowRange].map(item => item.symbol);
 
         if (topCoins.length === 0) {
-            safeLog(`[WARN] No rising coins found, using fallback list.`);
-            return fallbackCoins();
+            safeLog(`[WARN] No rising coins found, returning empty list`);
+            return [];
         }
 
         safeLog(`[DEBUG] Top coins selected: ${topCoins.join(", ")}`);
         return topCoins;
     } catch (err) {
         safeLog(`[ERROR] Failed to fetch rising coins: ${err}`);
-        return fallbackCoins();
+        return [];
     }
-}
-
-function fallbackCoins() {
-    safeLog(`[DEBUG] Returning fallback coins.`);
-    return ["BTCUSDT","ETHUSDT","ADAUSDT","LINKUSDT","SOLUSDT","AVAXUSDT","DOGEUSDT","SHIBUSDT"];
 }
 
 async function pickBestCoin() {
@@ -69,8 +56,8 @@ async function pickBestCoin() {
     const coins = await getRisingCoins();
     safeLog(`[DEBUG] pickBestCoin got list: ${coins}`);
     if(!coins || coins.length === 0) {
-        safeLog(`[WARN] No coins returned, defaulting to BTCUSDT`);
-        return "BTCUSDT"; 
+        safeLog(`[WARN] No coins returned, cannot pick`);
+        return null; 
     }
     safeLog(`[DEBUG] Best coin chosen: ${coins[0]}`);
     return coins[0]; 
