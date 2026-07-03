@@ -13,7 +13,7 @@ async function initBot(cycles) {
 
     logToPanel("[INFO] Bot started at " + window.controls.lastRunDate.toLocaleTimeString());
 
-    for (let i = 1; i <= cycles; i++) {
+    for (let i = 1; i <= 10; i++) {
         await simulateCycle(i);   // 🔗 simulate.js
     }
 
