@@ -1,5 +1,29 @@
 // simulate.js
 
+// Fetch live price for a coin (USDT pair)
+async function evaluateCoin(symbol, units = 1) {
+    try {
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
+        const data = await res.json();
+        return parseFloat(data.price) * units;
+    } catch (err) {
+        logToPanel(`[ERROR] Failed to evaluate ${symbol}: ${err}`);
+        return 0;
+    }
+}
+
+// Fetch 24h % change for a coin
+async function get24hChange(symbol) {
+    try {
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbol}`);
+        const data = await res.json();
+        return parseFloat(data.priceChangePercent);
+    } catch (err) {
+        logToPanel(`[ERROR] Failed to fetch 24h change for ${symbol}: ${err}`);
+        return 0;
+    }
+}
+
 function logWithTime(message) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
@@ -35,10 +59,7 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
         const bestCoin = risingCoins[0];
         const bestChange = await get24hChange(bestCoin);
 
-        const diff = currentValue - balance;
-        const profitPercent = (diff / balance) * 100;
-
-        logWithTime(`Tick ${timer2Counter + 1}: Holding ${coin}, Value = ${currentValue.toFixed(2)} USDT, Change = ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%), 24h % = ${held24hChange.toFixed(2)}%`);
+        logWithTime(`Tick ${timer2Counter + 1}: Holding ${coin}, Value = ${currentValue.toFixed(2)} USDT, 24h % = ${held24hChange.toFixed(2)}%`);
 
         // swap only if another coin is stronger
         if (bestCoin !== coin && bestChange > held24hChange) {
