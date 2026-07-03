@@ -94,14 +94,14 @@ async function simulateCycle(cycleNum) {
         logWithTime(`[Latest] No trigger hit, holding ${coin}`);
     }
 
-    // ✅ Correct profit/loss calculation: (currentPrice - buyPrice) * units
+    // ✅ Correct profit/loss calculation: (currentPrice - buyPrice) × units
     const profit = (currentPrice - coinPrice) * coinUnits;
 
-    // ✅ Update textboxes by adding profit/loss
+    // ✅ Update BOTH textboxes by adding profit/loss
     let startBox = parseFloat(document.getElementById("startBalance").value);
     let investBox = parseFloat(document.getElementById("investBalance").value);
 
-    document.getElementById("startBalance").value = startBox.toFixed(2);
+    document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
     document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
 
     logWithTime(`Result: ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
