@@ -47,12 +47,14 @@ async function simulateCycle(cycleNum) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    let coin = await window.pickBestCoin();
-    if (!coin) {
-        logWithTime("[ERROR] No coin available from Binance.");
-        return;
+    // 🔁 Rotate through top coins
+    let coins = await window.getRisingCoins();
+    if (!coins || coins.length === 0) {
+        logWithTime("[Latest] No rising coins found, using fallback list.");
+        coins = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"];
     }
-    coin = coin.endsWith("USDT") ? coin : coin + "USDT";
+    let coin = coins[cycleNum % coins.length];
+    logWithTime(`[Latest] Selected coin for cycle ${cycleNum}: ${coin}`);
 
     let coinPrice = await evaluateCoin(coin, 1);
     if (coinPrice === 0) {
@@ -69,29 +71,34 @@ async function simulateCycle(cycleNum) {
 
     logWithTime(`Cycle ${cycleNum}: Holding ${coin}, Value=${currentValue.toFixed(2)} USDT, 24h%=${held24hChange}`);
 
-    if (currentPrice <= coinPrice) {
-        logWithTime(`Cycle ${cycleNum}: Price dropped/stagnated, checking for better coin...`);
+    // 📈 Profit/Stop-loss logic
+    const profitPercent = ((currentPrice - coinPrice) / coinPrice) * 100;
+    if (profitPercent >= window.controls.profitTarget) {
+        logWithTime(`[Latest] Profit target reached (${profitPercent.toFixed(2)}%). Taking profit.`);
+        balance = currentValue;
+    } else if (profitPercent <= -window.controls.stopLoss) {
+        logWithTime(`[Latest] Stop loss triggered (${profitPercent.toFixed(2)}%). Switching coin.`);
         let bestCoin = await window.pickBestCoin();
         if (bestCoin && bestCoin !== coin) {
             balance = currentValue * 0.9975;
             coin = bestCoin;
             coinPrice = await evaluateCoin(coin, 1);
             coinUnits = balance / coinPrice;
-            logWithTime(`Cycle ${cycleNum}: Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Balance=${balance.toFixed(2)} USDT`);
+            logWithTime(`[Latest] Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Balance=${balance.toFixed(2)} USDT`);
         } else {
-            logWithTime(`Cycle ${cycleNum}: Stayed with ${coin}`);
+            logWithTime(`[Latest] Stayed with ${coin}`);
         }
     } else {
-        logWithTime(`Cycle ${cycleNum}: Price rising, holding ${coin}`);
+        logWithTime(`[Latest] No trigger hit, holding ${coin}`);
     }
 
-    // ✅ update balances in controls and textboxes
+    // ✅ Update balances in controls and textboxes
     window.controls.investBalance = balance;
     window.controls.startBalance = balance + reserve;
     document.getElementById("startBalance").value = window.controls.startBalance.toFixed(2);
     document.getElementById("investBalance").value = window.controls.investBalance.toFixed(2);
 
-    // ✅ show profit/loss
+    // ✅ Show profit/loss
     const profit = balance - (investBalance - reserve);
     logWithTime(`Result: ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
