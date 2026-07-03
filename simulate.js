@@ -25,6 +25,7 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
     const interval = setInterval(async () => {
         timer1Counter = 30000;
 
+        // evaluate held coin
         const heldPrice = await evaluateCoin(coin, 1);
         let currentValue = coinUnits * heldPrice;
         if (!currentValue || isNaN(currentValue)) currentValue = balance;
@@ -39,8 +40,8 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
 
         logWithTime(`Tick ${timer2Counter + 1}: Holding ${coin}, Value = ${currentValue.toFixed(2)} USDT, Change = ${diff >= 0 ? '+' : ''}${diff.toFixed(2)} USDT (${profitPercent.toFixed(2)}%), 24h % = ${held24hChange.toFixed(2)}%`);
 
+        // swap only if another coin is stronger
         if (bestCoin !== coin && bestChange > held24hChange) {
-            // Swap into stronger coin
             balance = currentValue * 0.9975; // apply 0.25% fee
             coin = bestCoin;
             coinPrice = await evaluateCoin(coin, 1);
