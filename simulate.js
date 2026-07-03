@@ -7,9 +7,10 @@ if (typeof window.logToPanel !== "function") {
 async function evaluateCoin(symbol, units = 1) {
     try {
         const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
-        // ✅ Correct Binance endpoint
+        logWithTime(`[DEBUG] Fetching price for ${cleanSymbol}`);
         const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${cleanSymbol}`);
         const data = await res.json();
+        logWithTime(`[DEBUG] Price response for ${cleanSymbol}: ${JSON.stringify(data)}`);
         return parseFloat(data.price) * units;
     } catch (err) {
         logWithTime(`[ERROR] ${symbol} price fetch failed: ${err}`);
@@ -20,9 +21,10 @@ async function evaluateCoin(symbol, units = 1) {
 async function get24hChange(symbol) {
     try {
         const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
-        // ✅ Correct Binance endpoint
+        logWithTime(`[DEBUG] Fetching 24h change for ${cleanSymbol}`);
         const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${cleanSymbol}`);
         const data = await res.json();
+        logWithTime(`[DEBUG] 24h response for ${cleanSymbol}: ${JSON.stringify(data)}`);
         return parseFloat(data.priceChangePercent);
     } catch (err) {
         logWithTime(`[ERROR] ${symbol} 24h change fetch failed: ${err}`);
@@ -46,10 +48,12 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // ✅ First buy using best coin
+    logWithTime(`[DEBUG] Starting bot with investBalance=${investBalance}, reserve=${reserve}, balance=${balance}`);
+
     let coin = await window.pickBestCoin();       
     coin = coin.endsWith("USDT") ? coin : coin + "USDT"; 
-    
+    logWithTime(`[DEBUG] Initial coin chosen: ${coin}`);
+
     let coinPrice = await evaluateCoin(coin, 1);
     if(coinPrice === 0) {
         logWithTime(`[ERROR] Could not price initial coin. Aborting.`);
@@ -66,7 +70,7 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
 
     const interval = setInterval(async () => {
         timer2Counter++;
-        logWithTime(`DEBUG: Tick loop entered, Check = ${timer2Counter}`);
+        logWithTime(`[DEBUG] Tick loop entered, Check = ${timer2Counter}`);
 
         const currentPriceInUsdt = await evaluateCoin(coin, 1);
         let currentValue = coinUnits * currentPriceInUsdt;
@@ -74,14 +78,14 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
 
         const held24hChange = await get24hChange(coin);
         
-        logWithTime(`Tick ${timer2Counter}: Holding ${coin}, Live Price = ${currentPriceInUsdt.toFixed(4)} USDT (Previous: ${lastPriceInUsdt.toFixed(4)} USDT), Holding Value = ${currentValue.toFixed(2)} USDT`);
+        logWithTime(`Tick ${timer2Counter}: Holding ${coin}, Live Price = ${currentPriceInUsdt.toFixed(4)} USDT (Previous: ${lastPriceInUsdt.toFixed(4)} USDT), Holding Value = ${currentValue.toFixed(2)} USDT, 24h % = ${held24hChange}`);
 
-        // ✅ Swap if coin is down or stagnant
         if (currentPriceInUsdt <= lastPriceInUsdt) {
             logWithTime(`Coin price dropped or stagnated. Querying coins.js for a better option...`);
             
             let bestCoin = await window.pickBestCoin();
             bestCoin = bestCoin.endsWith("USDT") ? bestCoin : bestCoin + "USDT";
+            logWithTime(`[DEBUG] Best coin from coins.js: ${bestCoin}`);
             
             if (bestCoin !== coin) {
                 balance = currentValue * 0.9975; 
@@ -114,17 +118,4 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
             window.controls.investBalance = balance;
 
             const profit = balance - (investBalance - reserve);
-            logWithTime(`Bot stopped safely after completing ${totalCycles * checksPerCycle} iterations.`);
-            logWithTime(`Final Balances: Start = ${window.controls.startBalance.toFixed(2)} USDT, Invest = ${window.controls.investBalance.toFixed(2)} USDT`);
-            logWithTime(`Result: ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
-        }
-    }, 30000);
-
-    const totalRuntimeMs = totalCycles * checksPerCycle * 30000;
-    const stopTimer = setTimeout(() => {
-        clearInterval(interval);
-        logWithTime(`Bot safety-stopped automatically via timeout fallback`);
-    }, totalRuntimeMs + 2000); 
-}
-
-window.runBot = runBot;
+            logWithTime(`Bot stopped safely after completing ${total
