@@ -33,7 +33,6 @@ function updateChart() {
     window.balanceChart.update();
 }
 
-window.balanceHistory = [];
 
 if (typeof window.logToPanel !== "function") {
     window.logToPanel = function(msg) { console.log(msg); };
