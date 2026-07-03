@@ -16,12 +16,14 @@ function safeLog(msg) {
     }
 }
 
+safeLog("[DEBUG] coins.js loaded successfully");
+
 async function getRisingCoins() {
+    safeLog("[DEBUG] Entered getRisingCoins()");
     try {
-        safeLog(`[DEBUG] Fetching 24h ticker data from Binance...`);
         const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
         const data = await res.json();
-        safeLog(`[DEBUG] Total symbols fetched: ${data.length}`);
+        safeLog(`[DEBUG] getRisingCoins fetched ${data.length} symbols`);
 
         const filtered = data.filter(item =>
             item.symbol.endsWith("USDT") &&
@@ -63,8 +65,9 @@ function fallbackCoins() {
 }
 
 async function pickBestCoin() {
-    safeLog(`[DEBUG] Picking best coin...`);
+    safeLog("[DEBUG] Entered pickBestCoin()");
     const coins = await getRisingCoins();
+    safeLog(`[DEBUG] pickBestCoin got list: ${coins}`);
     if(!coins || coins.length === 0) {
         safeLog(`[WARN] No coins returned, defaulting to BTCUSDT`);
         return "BTCUSDT"; 
