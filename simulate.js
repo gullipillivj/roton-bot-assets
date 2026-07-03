@@ -1,5 +1,3 @@
-
-
 // simulate.js
 
 if (typeof window.logToPanel !== "function") {
@@ -14,6 +12,12 @@ function logWithTime(message) {
 
 logWithTime("[Latest] simulate.js loaded successfully");
 
+// helper: seeded random
+function seededRandom(seed) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+}
+
 async function evaluateCoin(symbol, units = 1) {
     try {
         const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
@@ -26,16 +30,12 @@ async function evaluateCoin(symbol, units = 1) {
     }
 }
 
-async function get24hChange(symbol) {
-    try {
-        const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${cleanSymbol}`);
-        const data = await res.json();
-        return parseFloat(data.priceChangePercent);
-    } catch (err) {
-        logWithTime(`[ERROR] ${symbol} 24h change fetch failed: ${err}`);
-        return 0;
-    }
+async function getDynamicCoins() {
+    const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
+    const data = await res.json();
+    const usdtPairs = data.filter(d => d.symbol.endsWith("USDT"));
+    usdtPairs.sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
+    return usdtPairs.slice(0, 20).map(d => d.symbol); // top 20 coins pool
 }
 
 function sleep(ms) {
@@ -49,76 +49,60 @@ async function simulateCycle(cycleNum) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    let coin = await window.pickBestCoin();
-    if (!coin) {
-        logWithTime("[ERROR] No coin available from Binance.");
-        return;
-    // 🔁 Rotate through top coins
-    let coins = await window.getRisingCoins();
-    if (!coins || coins.length === 0) {
-        logWithTime("[Latest] No rising coins found, using fallback list.");
-        coins = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "ADAUSDT"];
-    }
-    coin = coin.endsWith("USDT") ? coin : coin + "USDT";
-    let coin = coins[cycleNum % coins.length];
-    logWithTime(`[Latest] Selected coin for cycle ${cycleNum}: ${coin}`);
+    // 🔁 Get dynamic coin pool
+    const allCoins = await getDynamicCoins();
+    const randIndex = Math.floor(seededRandom(cycleNum) * allCoins.length);
+    let coin = allCoins[randIndex];
 
-    let coinPrice = await evaluateCoin(coin, 1);
-    if (coinPrice === 0) {
-        logWithTime("[ERROR] Could not price coin.");
-        return;
-    }
+    // Phase 1: Buy coin
+    let entryPrice = await evaluateCoin(coin, 1);
+    let coinUnits = balance / entryPrice;
+    logWithTime(`Cycle ${cycleNum}: Bought ${coin}, ${coinUnits.toFixed(4)} units at ${entryPrice.toFixed(4)} USDT`);
 
-    let coinUnits = balance / coinPrice;
-    logWithTime(`Cycle ${cycleNum}: Initial buy ${coin}, ${coinUnits.toFixed(4)} units at ${coinPrice.toFixed(4)} USDT`);
+    // Hold for 30s
+    await sleep(30000);
 
-    const currentPrice = await evaluateCoin(coin, 1);
-    const held24hChange = await get24hChange(coin);
-    let currentValue = coinUnits * currentPrice;
+    // Phase 2: Check price after 30s
+    let currentPrice = await evaluateCoin(coin, 1);
+    let profit = (currentPrice - entryPrice) * coinUnits;
 
-    logWithTime(`Cycle ${cycleNum}: Holding ${coin}, Value=${currentValue.toFixed(2)} USDT, 24h%=${held24hChange}`);
+    let startBox = parseFloat(document.getElementById("startBalance").value);
+    let investBox = parseFloat(document.getElementById("investBalance").value);
+    document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
+    document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
 
-    if (currentPrice <= coinPrice) {
-        logWithTime(`Cycle ${cycleNum}: Price dropped/stagnated, checking for better coin...`);
-    // 📈 Profit/Stop-loss logic
-    const profitPercent = ((currentPrice - coinPrice) / coinPrice) * 100;
-    if (profitPercent >= window.controls.profitTarget) {
-        logWithTime(`[Latest] Profit target reached (${profitPercent.toFixed(2)}%). Taking profit.`);
-        balance = currentValue;
-    } else if (profitPercent <= -window.controls.stopLoss) {
-        logWithTime(`[Latest] Stop loss triggered (${profitPercent.toFixed(2)}%). Switching coin.`);
-        let bestCoin = await window.pickBestCoin();
-        if (bestCoin && bestCoin !== coin) {
-            balance = currentValue * 0.9975;
-            coin = bestCoin;
-            coinPrice = await evaluateCoin(coin, 1);
-            coinUnits = balance / coinPrice;
-            logWithTime(`Cycle ${cycleNum}: Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Balance=${balance.toFixed(2)} USDT`);
-            logWithTime(`[Latest] Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Balance=${balance.toFixed(2)} USDT`);
-        } else {
-            logWithTime(`Cycle ${cycleNum}: Stayed with ${coin}`);
-            logWithTime(`[Latest] Stayed with ${coin}`);
-        }
-    } else {
-        logWithTime(`Cycle ${cycleNum}: Price rising, holding ${coin}`);
-        logWithTime(`[Latest] No trigger hit, holding ${coin}`);
-    }
+    logWithTime(`Cycle ${cycleNum}: Result after 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-    // ✅ update balances in controls and textboxes
-    // ✅ Update balances in controls and textboxes
-    window.controls.investBalance = balance;
-    window.controls.startBalance = balance + reserve;
-    document.getElementById("startBalance").value = window.controls.startBalance.toFixed(2);
-    document.getElementById("investBalance").value = window.controls.investBalance.toFixed(2);
+    // Phase 3: Swap to new coin with fees
+    const totalFeeFactor = 0.9925; // 0.75% fees
+    balance = (coinUnits * currentPrice) * totalFeeFactor;
 
-    // ✅ show profit/loss
-    // ✅ Show profit/loss
-    const profit = balance - (investBalance - reserve);
-    logWithTime(`Result: ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
+    startBox = parseFloat(document.getElementById("startBalance").value);
+    investBox = parseFloat(document.getElementById("investBalance").value);
+    document.getElementById("startBalance").value = (startBox * totalFeeFactor).toFixed(2);
+    document.getElementById("investBalance").value = (investBox * totalFeeFactor).toFixed(2);
+
+    const newIndex = (randIndex + 1) % allCoins.length;
+    coin = allCoins[newIndex];
+    entryPrice = await evaluateCoin(coin, 1);
+    coinUnits = balance / entryPrice;
+    logWithTime(`[Latest] Swapped into ${coin}, Units=${coinUnits.toFixed(4)}, Entry=${entryPrice.toFixed(4)} USDT after fees`);
+
+    // Hold new coin for 30s
+    await sleep(30000);
+
+    // Phase 4: Check new coin price
+    currentPrice = await evaluateCoin(coin, 1);
+    profit = (currentPrice - entryPrice) * coinUnits;
+
+    startBox = parseFloat(document.getElementById("startBalance").value);
+    investBox = parseFloat(document.getElementById("investBalance").value);
+    document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
+    document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
+
+    logWithTime(`Cycle ${cycleNum}: Result after swap 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
     logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
-
-    await sleep(30000); // ⏱ wait 30s before next cycle
 }
 
 window.simulateCycle = simulateCycle;
