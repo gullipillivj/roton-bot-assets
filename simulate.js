@@ -104,8 +104,7 @@ async function simulateCycle(cycleNum) {
 
     logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
 
-    balanceHistory.push(parseFloat(document.getElementById("investBalance").value));
-    updateChart();
+    
 }
 
 window.simulateCycle = simulateCycle;
