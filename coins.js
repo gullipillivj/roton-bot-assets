@@ -18,8 +18,7 @@ function safeLog(msg) {
 
 async function getRisingCoins() {
     try {
-        // ✅ Correct Binance endpoint
-        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
+        const res = await fetch("https://binance.com");
         const data = await res.json();
 
         const filtered = data.filter(item =>
@@ -59,10 +58,11 @@ function fallbackCoins() {
 
 async function pickBestCoin() {
     const coins = await getRisingCoins();
-    if (!coins || coins.length === 0) return "BTCUSDT"; 
+    if(!coins || coins.length === 0) return "BTCUSDT"; 
     // Always returns the top performing coin string ending in USDT
     return coins[0]; 
 }
 
 window.getRisingCoins = getRisingCoins;
 window.pickBestCoin = pickBestCoin;
+
