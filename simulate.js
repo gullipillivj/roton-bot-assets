@@ -29,11 +29,12 @@ function logWithTime(message) {
 }
 
 async function runBot(totalCycles = 2, checksPerCycle = 4) {
+    // ✅ Use textbox investment amount
     let investBalance = window.controls.investBalance;
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // FIRST BUY — dynamic best coin
+    // ✅ FIRST BUY — dynamic best coin
     let coin = (await pickBestCoin()) + "USDT"; 
     let coinPrice = await evaluateCoin(coin, 1);
     let coinUnits = balance / coinPrice;
@@ -60,7 +61,7 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
 
         logWithTime(`Tick ${timer2Counter + 1}: Holding ${coin}, Value = ${currentValue.toFixed(2)} USDT, 24h % = ${held24hChange.toFixed(2)}%`);
 
-        // Swap if coin is weaker OR stagnant
+        // ✅ Swap if coin is weaker OR stagnant
         if (bestCoin !== coin && bestChange >= held24hChange) {
             balance = currentValue * 0.9975; // fee
             coin = bestCoin;
