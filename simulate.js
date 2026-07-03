@@ -26,7 +26,7 @@ async function evaluateCoin(symbol, units = 1) {
         return parseFloat(data.price) * units;
     } catch (err) {
         logWithTime(`[ERROR] ${symbol} price fetch failed: ${err}`);
-        return 0;
+        return 0; // ✅ return 0 instead of crashing
     }
 }
 
@@ -62,7 +62,7 @@ async function simulateCycle(cycleNum) {
         // Phase 1: Buy coin
         let entryPrice = await evaluateCoin(coin, 1);
         if (!entryPrice || entryPrice <= 0) {
-            logWithTime(`[ERROR] Entry price fetch failed for ${coin}`);
+            logWithTime(`[WARN] Cycle ${cycleNum}: Entry price fetch failed, skipping cycle`);
             return;
         }
 
@@ -73,6 +73,11 @@ async function simulateCycle(cycleNum) {
 
         // Phase 2: Check price after 30s
         let currentPrice = await evaluateCoin(coin, 1);
+        if (!currentPrice || currentPrice <= 0) {
+            logWithTime(`[WARN] Cycle ${cycleNum}: Price fetch failed, skipping profit/loss update`);
+            return; // ✅ skip balance update to avoid phantom loss
+        }
+
         let profit = (currentPrice - entryPrice) * coinUnits;
 
         let startBox = parseFloat(document.getElementById("startBalance").value);
@@ -82,58 +87,70 @@ async function simulateCycle(cycleNum) {
 
         logWithTime(`Cycle ${cycleNum}: Result after 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-        // Phase 3: Conditional swap logic
+        // Phase 3: Adaptive swap allocation
+        // Spread swaps across cycles: allow in 1–3, 4–6, 7–10
+        const eligibleSwapWindows = [
+            [1, 2, 3],
+            [4, 5, 6],
+            [7, 8, 9, 10]
+        ];
+
+        let shouldSwap = false;
         if (window.totalSwaps < 3) {
-            const profitTargetAbs = (window.controls.profitTarget / 100) * investBalance;
-            const stopLossAbs = (window.controls.stopLoss / 100) * investBalance;
+            // Check if current cycle is in an eligible window
+            const windowIndex = window.totalSwaps; // 0,1,2
+            if (eligibleSwapWindows[windowIndex].includes(cycleNum)) {
+                // Criteria: profit below target OR loss beyond stop-loss
+                const profitTargetAbs = (window.controls.profitTarget / 100) * investBalance;
+                const stopLossAbs = (window.controls.stopLoss / 100) * investBalance;
 
-            let shouldSwap = false;
+                if (profit < profitTargetAbs || profit < -stopLossAbs) {
+                    shouldSwap = true;
+                }
+            }
+        }
 
-            // Rule 1: swap only if profit is below target
-            if (profit < profitTargetAbs) {
-                shouldSwap = true;
+        if (shouldSwap) {
+            const totalFeeFactor = 0.9999; // 0.01% fee
+            balance = (coinUnits * currentPrice) * totalFeeFactor;
+
+            // ✅ Apply fee only when swap happens
+            startBox = parseFloat(document.getElementById("startBalance").value);
+            investBox = parseFloat(document.getElementById("investBalance").value);
+            document.getElementById("startBalance").value = (startBox * totalFeeFactor).toFixed(2);
+            document.getElementById("investBalance").value = (investBox * totalFeeFactor).toFixed(2);
+
+            const newIndex = (randIndex + 1) % allCoins.length;
+            coin = allCoins[newIndex];
+            entryPrice = await evaluateCoin(coin, 1);
+            if (!entryPrice || entryPrice <= 0) {
+                logWithTime(`[WARN] Cycle ${cycleNum}: Swap entry price fetch failed, skipping swap`);
+                return;
             }
 
-            // Rule 2: stop-loss override
-            if (profit < -stopLossAbs) {
-                shouldSwap = true;
+            coinUnits = balance / entryPrice;
+            logWithTime(`[Latest] Swap triggered in cycle ${cycleNum}: into ${coin}, Units=${coinUnits.toFixed(4)}, Entry=${entryPrice.toFixed(4)} USDT`);
+
+            await sleep(30000);
+
+            currentPrice = await evaluateCoin(coin, 1);
+            if (!currentPrice || currentPrice <= 0) {
+                logWithTime(`[WARN] Cycle ${cycleNum}: Swap price fetch failed, skipping profit/loss update`);
+                return;
             }
 
-            if (shouldSwap) {
-                const totalFeeFactor = 0.9999; // 0.01% fee
-                balance = (coinUnits * currentPrice) * totalFeeFactor;
+            profit = (currentPrice - entryPrice) * coinUnits;
 
-                // ✅ Apply fee only when swap happens
-                startBox = parseFloat(document.getElementById("startBalance").value);
-                investBox = parseFloat(document.getElementById("investBalance").value);
-                document.getElementById("startBalance").value = (startBox * totalFeeFactor).toFixed(2);
-                document.getElementById("investBalance").value = (investBox * totalFeeFactor).toFixed(2);
+            startBox = parseFloat(document.getElementById("startBalance").value);
+            investBox = parseFloat(document.getElementById("investBalance").value);
+            document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
+            document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
 
-                const newIndex = (randIndex + 1) % allCoins.length;
-                coin = allCoins[newIndex];
-                entryPrice = await evaluateCoin(coin, 1);
-                coinUnits = balance / entryPrice;
+            logWithTime(`Cycle ${cycleNum}: Result after swap — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-                logWithTime(`[Latest] Swap triggered in cycle ${cycleNum}: into ${coin}, Units=${coinUnits.toFixed(4)}, Entry=${entryPrice.toFixed(4)} USDT`);
-
-                await sleep(30000);
-
-                currentPrice = await evaluateCoin(coin, 1);
-                profit = (currentPrice - entryPrice) * coinUnits;
-
-                startBox = parseFloat(document.getElementById("startBalance").value);
-                investBox = parseFloat(document.getElementById("investBalance").value);
-                document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
-                document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
-
-                logWithTime(`Cycle ${cycleNum}: Result after swap — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
-
-                window.totalSwaps++;
-            } else {
-                logWithTime(`[INFO] Cycle ${cycleNum}: Swap skipped (criteria not met)`);
-            }
+            window.totalSwaps++;
         } else {
-            logWithTime(`[INFO] Cycle ${cycleNum}: Swap skipped (3 swaps already used)`);
+            logWithTime(`[INFO] Cycle ${cycleNum}: Swap skipped (criteria not met or not in eligible window)`);
         }
 
         logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
