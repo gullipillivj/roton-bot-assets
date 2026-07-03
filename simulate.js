@@ -42,7 +42,6 @@ async function get24hChange(symbol) {
 
 async function runBot(totalCycles = 2, checksPerCycle = 4) {
     logWithTime("[DEBUG] Entered runBot()");
-    // Load textbox values into window.controls
     window.controls = {
         startBalance: parseFloat(document.getElementById("startBalance").value),
         investBalance: parseFloat(document.getElementById("investBalance").value),
@@ -63,6 +62,10 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
 
     logWithTime("[DEBUG] Calling pickBestCoin()");
     let coin = await window.pickBestCoin();       
+    if (!coin) {
+        logWithTime("[ERROR] No coin available from Binance. Aborting.");
+        return;
+    }
     coin = coin.endsWith("USDT") ? coin : coin + "USDT"; 
     logWithTime(`[DEBUG] Initial coin chosen: ${coin}`);
 
@@ -96,21 +99,36 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
             logWithTime("Coin price dropped or stagnated. Querying coins.js for a better option...");
             
             let bestCoin = await window.pickBestCoin();
-            bestCoin = bestCoin.endsWith("USDT") ? bestCoin : bestCoin + "USDT";
-            logWithTime(`[DEBUG] Best coin from coins.js: ${bestCoin}`);
-            
-            if (bestCoin !== coin) {
-                balance = currentValue * 0.9975; 
-                coin = bestCoin;
-                coinPrice = await evaluateCoin(coin, 1);
-                coinUnits = balance / coinPrice;
-                lastPriceInUsdt = coinPrice;
-                logWithTime(`Swapped into: ${coin}, Units: ${coinUnits.toFixed(4)}, New Balance: ${balance.toFixed(2)} USDT`);
-            } else {
+            if (!bestCoin) {
+                logWithTime("[WARN] No better coin found, staying with current.");
                 balance = currentValue;
                 lastPriceInUsdt = currentPriceInUsdt;
-                logWithTime(`Already holding Binance's highest performing asset: ${coin}. Staying put.`);
+            } else {
+                bestCoin = bestCoin.endsWith("USDT") ? bestCoin : bestCoin + "USDT";
+                logWithTime(`[DEBUG] Best coin from coins.js: ${bestCoin}`);
+                
+                if (bestCoin !== coin) {
+                    balance = currentValue * 0.9975; 
+                    coin = bestCoin;
+                    coinPrice = await evaluateCoin(coin, 1);
+                    coinUnits = balance / coinPrice;
+                    lastPriceInUsdt = coinPrice;
+                    logWithTime(`Swapped into: ${coin}, Units: ${coinUnits.toFixed(4)}, New Balance: ${balance.toFixed(2)} USDT`);
+                } else {
+                    balance = currentValue;
+                    lastPriceInUsdt = currentPriceInUsdt;
+                    logWithTime(`Already holding Binance's highest performing asset: ${coin}. Staying put.`);
+                }
             }
         } else {
             balance = currentValue;
             lastPriceInUsdt = currentPriceInUsdt;
+            logWithTime(`Coin price is climbing! Staying with ${coin}, Balance = ${balance.toFixed(2)} USDT`);
+        }
+
+        if (timer2Counter % checksPerCycle === 0) {
+            const cycleNum = timer2Counter / checksPerCycle;
+            logWithTime(`Cycle ${cycleNum} complete`);
+        }
+
+        if (timer2Counter >= (totalCycles * checksPerCycle
