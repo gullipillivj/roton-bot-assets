@@ -74,7 +74,7 @@ async function simulateCycle(cycleNum) {
     logWithTime(`Cycle ${cycleNum}: Result after 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
     // Phase 3: Swap to new coin with fees
-    const totalFeeFactor = 0.9925; // 0.75% fees
+    const totalFeeFactor =   0.9999; // 0.75% fees
     balance = (coinUnits * currentPrice) * totalFeeFactor;
 
     startBox = parseFloat(document.getElementById("startBalance").value);
@@ -103,6 +103,9 @@ async function simulateCycle(cycleNum) {
     logWithTime(`Cycle ${cycleNum}: Result after swap 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
     logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
+
+    balanceHistory.push(parseFloat(document.getElementById("investBalance").value));
+    updateChart();
 }
 
 window.simulateCycle = simulateCycle;
