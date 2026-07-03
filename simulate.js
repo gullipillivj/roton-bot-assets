@@ -84,13 +84,12 @@ async function simulateCycle(cycleNum) {
 
         // Phase 3: Conditional swap logic
         if (window.totalSwaps < 3) {
-            // stricter criteria
             const profitTargetAbs = (window.controls.profitTarget / 100) * investBalance;
             const stopLossAbs = (window.controls.stopLoss / 100) * investBalance;
 
             let shouldSwap = false;
 
-            // Rule 1: swap only if profit is significantly better than holding
+            // Rule 1: swap only if profit is below target
             if (profit < profitTargetAbs) {
                 shouldSwap = true;
             }
@@ -103,6 +102,12 @@ async function simulateCycle(cycleNum) {
             if (shouldSwap) {
                 const totalFeeFactor = 0.9999; // 0.01% fee
                 balance = (coinUnits * currentPrice) * totalFeeFactor;
+
+                // ✅ Apply fee only when swap happens
+                startBox = parseFloat(document.getElementById("startBalance").value);
+                investBox = parseFloat(document.getElementById("investBalance").value);
+                document.getElementById("startBalance").value = (startBox * totalFeeFactor).toFixed(2);
+                document.getElementById("investBalance").value = (investBox * totalFeeFactor).toFixed(2);
 
                 const newIndex = (randIndex + 1) % allCoins.length;
                 coin = allCoins[newIndex];
