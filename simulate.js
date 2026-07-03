@@ -11,7 +11,7 @@ async function runBot(totalCycles = 2, checksPerCycle = 4) {
     const reserve = investBalance * 0.1;
     let balance = investBalance - reserve;
 
-    // FIRST BUY — must happen before checking
+    // FIRST BUY
     let coin = await pickBestCoin();
     let coinPrice = await evaluateCoin(coin, 1);
     let coinUnits = balance / coinPrice;
