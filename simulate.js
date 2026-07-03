@@ -4,8 +4,7 @@
 // global history array
 window.balanceHistory = [];
 
-// initialize chart only once
-if (typeof window.balanceChart === "undefined") {
+document.addEventListener("DOMContentLoaded", function () {
     const ctx = document.getElementById('balanceChart').getContext('2d');
     window.balanceChart = new Chart(ctx, {
         type: 'line',
@@ -25,14 +24,13 @@ if (typeof window.balanceChart === "undefined") {
             plugins: { legend: { display: true } }
         }
     });
-}
+});
 
 function updateChart() {
     window.balanceChart.data.labels.push(`Cycle ${window.balanceChart.data.labels.length + 1}`);
     window.balanceChart.data.datasets[0].data.push(window.balanceHistory[window.balanceHistory.length - 1]);
     window.balanceChart.update();
 }
-
 
 if (typeof window.logToPanel !== "function") {
     window.logToPanel = function(msg) { console.log(msg); };
