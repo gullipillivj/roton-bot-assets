@@ -99,10 +99,12 @@ async function simulateCycle(cycleNum) {
     investBox = parseFloat(document.getElementById("investBalance").value);
     document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
     document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
-
+balanceHistory.push(parseFloat(document.getElementById("investBalance").value));
+updateChart();
     logWithTime(`Cycle ${cycleNum}: Result after swap 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
     logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
+    
 }
 
 window.simulateCycle = simulateCycle;
