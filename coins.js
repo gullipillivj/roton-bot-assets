@@ -8,8 +8,17 @@ const reputedCoins = [
   "DOGEUSDT","SHIBUSDT","PEPEUSDT","FLOKIUSDT","BONKUSDT"
 ];
 
+function safeLog(msg) {
+    if (typeof window.logToPanel === "function") {
+        window.logToPanel(msg);
+    } else {
+        console.log(msg);
+    }
+}
+
 async function getRisingCoins() {
     try {
+        // ✅ Correct Binance endpoint
         const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
         const data = await res.json();
 
@@ -33,21 +42,27 @@ async function getRisingCoins() {
         const topCoins = [...highRange, ...midRange, ...lowRange].map(item => item.symbol);
 
         if (topCoins.length === 0) {
-            return ["BTCUSDT","ETHUSDT","ADAUSDT","LINKUSDT","SOLUSDT","AVAXUSDT","DOGEUSDT","SHIBUSDT"];
+            return fallbackCoins();
         }
 
-        // DEBUG: show all coins selected
-        logToPanel(`[DEBUG] Coins fetched from Binance: ${topCoins.join(", ")}`);
-
+        safeLog(`[DEBUG] Coins fetched from Binance: ${topCoins.join(", ")}`);
         return topCoins;
     } catch (err) {
-        logToPanel(`[ERROR] Failed to fetch rising coins: ${err}`);
-        return ["BTCUSDT","ETHUSDT","ADAUSDT","LINKUSDT","SOLUSDT","AVAXUSDT","DOGEUSDT","SHIBUSDT"];
+        safeLog(`[ERROR] Failed to fetch rising coins: ${err}`);
+        return fallbackCoins();
     }
+}
+
+function fallbackCoins() {
+    return ["BTCUSDT","ETHUSDT","ADAUSDT","LINKUSDT","SOLUSDT","AVAXUSDT","DOGEUSDT","SHIBUSDT"];
 }
 
 async function pickBestCoin() {
     const coins = await getRisingCoins();
-    const index = Math.floor(Math.random() * coins.length);
-    return coins[index];
+    if (!coins || coins.length === 0) return "BTCUSDT"; 
+    // Always returns the top performing coin string ending in USDT
+    return coins[0]; 
 }
+
+window.getRisingCoins = getRisingCoins;
+window.pickBestCoin = pickBestCoin;
