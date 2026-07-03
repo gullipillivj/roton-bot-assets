@@ -29,7 +29,7 @@ async function simulateCycle(cycleNum) {
 
     logWithTime(`Cycle ${cycleNum}: Result after 30s — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-    // ✅ Allow up to 3 hops per cycle
+    // ✅ Allow up to 3 hops per cycle with 0.01% fee
     const feeRate = 0.0001; // 0.01%
     const totalFeeFactor = 1 - feeRate;
 
@@ -61,10 +61,6 @@ async function simulateCycle(cycleNum) {
 
         logWithTime(`Cycle ${cycleNum}: Result after hop ${hop} — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
     }
-
-    // ✅ Chart update at the end of cycle
-    balanceHistory.push(parseFloat(document.getElementById("investBalance").value));
-    updateChart();
 
     logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
 }
