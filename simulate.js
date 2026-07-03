@@ -10,7 +10,7 @@ function logWithTime(message) {
     window.logToPanel(`[INFO] ${timeStr} — ${message}`);
 }
 
-logWithTime("[DEBUG] simulate.js loaded successfully");
+logWithTime("[Latest] simulate.js loaded successfully");
 
 async function evaluateCoin(symbol, units = 1) {
     try {
@@ -36,14 +36,12 @@ async function get24hChange(symbol) {
     }
 }
 
-// helper to pause
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// main cycle function called by main.js
 async function simulateCycle(cycleNum) {
-    logWithTime(`[DEBUG] simulateCycle(${cycleNum}) started`);
+    logWithTime(`[Latest] simulateCycle(${cycleNum}) started`);
 
     let investBalance = window.controls.investBalance;
     const reserve = investBalance * 0.1;
@@ -87,14 +85,19 @@ async function simulateCycle(cycleNum) {
         logWithTime(`Cycle ${cycleNum}: Price rising, holding ${coin}`);
     }
 
-    // update balances
+    // ✅ update balances in controls and textboxes
     window.controls.investBalance = balance;
     window.controls.startBalance = balance + reserve;
+    document.getElementById("startBalance").value = window.controls.startBalance.toFixed(2);
+    document.getElementById("investBalance").value = window.controls.investBalance.toFixed(2);
 
-    logWithTime(`[DEBUG] simulateCycle(${cycleNum}) complete`);
+    // ✅ show profit/loss
+    const profit = balance - (investBalance - reserve);
+    logWithTime(`Result: ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-    // ⏱ wait 30s before next cycle
-    await sleep(30000);
+    logWithTime(`[Latest] simulateCycle(${cycleNum}) complete`);
+
+    await sleep(30000); // ⏱ wait 30s before next cycle
 }
 
 window.simulateCycle = simulateCycle;
