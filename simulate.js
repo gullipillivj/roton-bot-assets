@@ -1,5 +1,8 @@
 // simulate.js
 
+// initialize chart data array globally
+window.balanceHistory = [];
+
 if (typeof window.logToPanel !== "function") {
     window.logToPanel = function(msg) { console.log(msg); };
 }
