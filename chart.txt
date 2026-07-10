@@ -8,20 +8,13 @@ function updateChart(balance, profit = null) {
     }
 
     const chart = window.balanceChart;
-
-    // Ensure datasets exist
-    if (!chart.data.datasets || chart.data.datasets.length === 0) {
-        logToPanel("ERROR: No datasets found in balanceChart");
-        return;
-    }
-
     const cycle = chart.data.labels.length + 1;
     chart.data.labels.push(`Cycle ${cycle}`);
 
-    // Update balance dataset (first dataset)
+    // Balance dataset
     chart.data.datasets[0].data.push(balance);
 
-    // Update profit dataset (second dataset if present)
+    // Profit dataset if present
     if (profit !== null && chart.data.datasets[1]) {
         chart.data.datasets[1].data.push(profit);
     }
