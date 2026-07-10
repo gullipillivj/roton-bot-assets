@@ -1,4 +1,4 @@
-// coins.js
+// coins.txt — Market scanning helpers
 
 function safeLog(msg) {
     if (typeof window.logToPanel === "function") {
@@ -8,8 +8,9 @@ function safeLog(msg) {
     }
 }
 
-safeLog("[DEBUG] coins.js loaded successfully");
+safeLog("[DEBUG] coins.txt loaded successfully");
 
+// Fetch coins with >0.5% price change
 async function getRisingCoins() {
     try {
         const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
@@ -28,11 +29,13 @@ async function getRisingCoins() {
     }
 }
 
+// Pick the best coin from rising list
 async function pickBestCoin() {
     const coins = await getRisingCoins();
     if (!coins || coins.length === 0) return null;
     return coins[0];
 }
 
+// Expose globally
 window.getRisingCoins = getRisingCoins;
 window.pickBestCoin = pickBestCoin;
