@@ -1,41 +1,25 @@
-// coins.txt — Market scanning helpers
-logToPanel("coins.txt loaded");
-function safeLog(msg) {
-    if (typeof window.logToPanel === "function") {
-        window.logToPanel(msg);
-    } else {
-        console.log(msg);
+// chart.txt — Chart.js balance visualization helpers
+logToPanel("chart.txt loaded");
+
+function updateChart(balance, profit = null) {
+    const chart = window.balanceChart;
+    if (!chart) {
+        logToPanel("ERROR: balanceChart not found — chart must be initialized in HTML");
+        return;
     }
-}
 
-safeLog("[DEBUG] coins.txt loaded successfully");
+    // Add next cycle label
+    const cycle = chart.data.labels.length + 1;
+    chart.data.labels.push(`Cycle ${cycle}`);
 
-// Fetch coins with >0.5% price change
-async function getRisingCoins() {
-    try {
-        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
-        const data = await res.json();
-        const filtered = data.filter(item =>
-            item.symbol.endsWith("USDT") &&
-            Math.abs(parseFloat(item.priceChangePercent)) > 0.5
-        );
-        filtered.sort((a, b) => parseFloat(b.priceChangePercent) - parseFloat(a.priceChangePercent));
-        const topCoins = filtered.slice(0, 5).map(item => item.symbol);
-        safeLog(`[DEBUG] Top coins: ${topCoins.join(", ")}`);
-        return topCoins;
-    } catch (err) {
-        safeLog(`[ERROR] getRisingCoins failed: ${err}`);
-        return [];
+    // Append new data points cumulatively
+    chart.data.datasets[0].data.push(balance);
+    if (profit !== null && chart.data.datasets[1]) {
+        chart.data.datasets[1].data.push(profit);
     }
+
+    // Update chart without resetting animation
+    chart.update('none');
 }
 
-// Pick the best coin from rising list
-async function pickBestCoin() {
-    const coins = await getRisingCoins();
-    if (!coins || coins.length === 0) return null;
-    return coins[0];
-}
-
-// Expose globally
-window.getRisingCoins = getRisingCoins;
-window.pickBestCoin = pickBestCoin;
+window.updateChart = updateChart;
