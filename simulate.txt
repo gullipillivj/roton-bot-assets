@@ -1,5 +1,9 @@
 // simulate.txt — Trading loop + Binance helpers
+// simulate.txt — Trading loop + Binance helpers
+logToPanel("simulate.txt loaded");
 
+// ... rest of your simulate.txt code ...
+window.simulateCycle = simulateCycle;
 // Global balance history
 window.balanceHistory = [];
 
