@@ -50,11 +50,6 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Global swap counter
-if (typeof window.totalSwaps === "undefined") {
-    window.totalSwaps = 0;
-}
-
 // Main trading cycle
 async function simulateCycle(cycleNum) {
     try {
@@ -72,7 +67,7 @@ async function simulateCycle(cycleNum) {
 
         logWithTime(`Cycle ${cycleNum}: Bought ${coin} at ${entryPrice.toFixed(2)} USDT (fee applied)`);
 
-        await sleep(30000); // 30 sec lapse
+        await sleep(3000); // shorter wait for testing
 
         const currentPrice = await evaluateCoin(coin, 1);
         const profit = currentPrice - entryPrice;
@@ -83,18 +78,9 @@ async function simulateCycle(cycleNum) {
 
         logWithTime(`Cycle ${cycleNum}: Result ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-        // Update chart datasets directly
-        if (window.balanceChart) {
-            const chart = window.balanceChart;
-            const cycle = chart.data.labels.length + 1;
-            chart.data.labels.push(`Cycle ${cycle}`);
-            chart.data.datasets[0].data.push(investBalance); // balance dataset
-            if (chart.data.datasets[1]) {
-                chart.data.datasets[1].data.push(profit); // profit dataset if present
-            }
-            chart.update();
-        } else {
-            logWithTime("ERROR: balanceChart not found");
+        // Update chart datasets
+        if (window.updateChart) {
+            updateChart(investBalance, profit);
         }
 
         logWithTime(`simulateCycle(${cycleNum}) complete`);
@@ -103,5 +89,26 @@ async function simulateCycle(cycleNum) {
     }
 }
 
-// Expose globally
+// Bot control functions
+function initBot(cycles = 10) {
+    logWithTime(`initBot started for ${cycles} cycles`);
+    let i = 1;
+    async function runNext() {
+        if (i > cycles) {
+            logWithTime("Simulation complete");
+            return;
+        }
+        await simulateCycle(i);
+        i++;
+        runNext();
+    }
+    runNext();
+}
+
+function stopBot() {
+    logWithTime("Trading stopped manually (testing mode — loop continues)");
+}
+
 window.simulateCycle = simulateCycle;
+window.initBot = initBot;
+window.stopBot = stopBot;
