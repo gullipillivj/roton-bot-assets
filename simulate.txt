@@ -4,6 +4,11 @@ logToPanel("simulate.txt loaded");
 // Global balance history
 window.balanceHistory = [];
 
+// Ensure chart is initialized once DOM is loaded
+document.addEventListener("DOMContentLoaded", initChart);
+
+
+
 // Initialize Chart.js once DOM is ready
 function initChart() {
     const canvas = document.getElementById("balanceChart");
@@ -40,8 +45,6 @@ function initChart() {
 }
 window.initChart = initChart;
 
-// Ensure chart is initialized once DOM is loaded
-document.addEventListener("DOMContentLoaded", initChart);
 
 // Chart update helper
 function updateChart(balance) {
