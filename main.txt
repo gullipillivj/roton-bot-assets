@@ -14,8 +14,8 @@ function finalizeSummary() {
 async function initBot(cycles) {
     logToPanel("Bot started");
     for (let i = 1; i <= cycles; i++) {
-        if (typeof simulateCycle === "function") {
-            await simulateCycle(i);
+        if (typeof window.simulateCycle === "function") {
+            await window.simulateCycle(i);   // ✅ explicit window reference
         } else {
             logToPanel("ERROR: simulateCycle not found");
         }
@@ -32,3 +32,6 @@ function stopBot() {
 window.initBot = initBot;
 window.stopBot = stopBot;
 window.finalizeSummary = finalizeSummary;
+
+// Debug marker
+logToPanel("main.txt loaded and lifecycle functions attached");
