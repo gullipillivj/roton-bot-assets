@@ -25,12 +25,19 @@ document.addEventListener("DOMContentLoaded", function () {
                 tension: 0.3
             }]
         },
-        options: { responsive: true, plugins: { legend: { display: true } } }
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true } },
+            scales: {
+                x: { title: { display: true, text: "Cycle" } },
+                y: { title: { display: true, text: "Balance (USDT)" } }
+            }
+        }
     });
     logWithTime("Chart initialized successfully");
 });
 
-// Chart update helper (no parameter, uses balanceHistory)
+// Chart update helper
 function updateChart() {
     if (!window.balanceChart) {
         logWithTime("Chart not initialized yet");
@@ -53,7 +60,48 @@ function logWithTime(message) {
     }
 }
 
-// … keep your seededRandom, evaluateCoin, getDynamicCoins, sleep, etc. unchanged …
+// Seeded random for reproducibility
+function seededRandom(seed) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+}
+
+// Binance price fetch
+async function evaluateCoin(symbol, units = 1) {
+    try {
+        const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
+        const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${cleanSymbol}`);
+        const data = await res.json();
+        return parseFloat(data.price) * units;
+    } catch (err) {
+        logWithTime(`[ERROR] ${symbol} price fetch failed: ${err}`);
+        return 0;
+    }
+}
+
+// Top 20 USDT pairs by volume
+async function getDynamicCoins() {
+    try {
+        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
+        const data = await res.json();
+        const usdtPairs = data.filter(d => d.symbol.endsWith("USDT"));
+        usdtPairs.sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
+        return usdtPairs.slice(0, 20).map(d => d.symbol);
+    } catch (err) {
+        logWithTime(`[ERROR] getDynamicCoins failed: ${err}`);
+        return ["BTCUSDT","ETHUSDT"]; // fallback
+    }
+}
+
+// Sleep helper
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Global swap counter
+if (typeof window.totalSwaps === "undefined") {
+    window.totalSwaps = 0;
+}
 
 // Main trading cycle
 async function simulateCycle(cycleNum) {
@@ -84,7 +132,7 @@ async function simulateCycle(cycleNum) {
         logWithTime(`Cycle ${cycleNum}: Result ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
         window.balanceHistory.push(investBalance);
-        updateChart();  // <-- no argument
+        updateChart();
         logWithTime(`simulateCycle(${cycleNum}) complete`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
