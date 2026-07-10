@@ -1,5 +1,5 @@
 // main.txt — Lifecycle glue
-
+logToPanel("main .txt loaded");
 function finalizeSummary() {
     const startBalance = parseFloat(document.getElementById("startBalance").value);
     const investBalance = parseFloat(document.getElementById("investBalance").value);
