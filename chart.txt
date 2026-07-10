@@ -1,77 +1,32 @@
-// chart.txt — Chart.js balance visualization
+// chart.txt — Chart.js balance visualization helpers
 logToPanel("chart.txt loaded");
 
-function initChart() {
-    const canvas = document.getElementById("balanceChart");
-    if (!canvas) {
-        logToPanel("ERROR: balanceChart canvas not found");
-        return;
-    }
-
-    const ctx = canvas.getContext("2d");
-
-    // Seed chart with dummy data so it's visible immediately
-    const startBalance = parseFloat(document.getElementById("investBalance").value) || 500;
-
-    window.balanceChart = new Chart(ctx, {
-        type: "line",
-        data: {
-            labels: ["Init"],
-            datasets: [{
-                label: "Investment Balance",
-                data: [startBalance], // seed with current invest balance
-                borderColor: "#f3ba2f",
-                backgroundColor: "rgba(243,186,47,0.2)",
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: {
-            responsive: false,
-            scales: {
-                x: { title: { display: true, text: "Cycle" } },
-                y: { title: { display: true, text: "Balance (USDT)" } }
-            },
-            plugins: {
-                legend: { labels: { color: "white" } }
-            }
-        }
-    });
-
-    logToPanel("Chart initialized successfully with dummy seed");
-}
-
-function updateChart(balance) {
+function updateChart(balance, profit = null) {
     if (!window.balanceChart) {
-        logToPanel("Chart not initialized — calling initChart()");
-        initChart();
+        logToPanel("ERROR: balanceChart not found — chart must be initialized in HTML");
+        return;
     }
 
     const chart = window.balanceChart;
 
-    // Ensure dataset exists
+    // Ensure datasets exist
     if (!chart.data.datasets || chart.data.datasets.length === 0) {
-        chart.data.datasets = [{
-            label: "Investment Balance",
-            data: [],
-            borderColor: "#f3ba2f",
-            backgroundColor: "rgba(243,186,47,0.2)",
-            fill: true,
-            tension: 0.3
-        }];
+        logToPanel("ERROR: No datasets found in balanceChart");
+        return;
     }
 
     const cycle = chart.data.labels.length + 1;
     chart.data.labels.push(`Cycle ${cycle}`);
+
+    // Update balance dataset (first dataset)
     chart.data.datasets[0].data.push(balance);
+
+    // Update profit dataset (second dataset if present)
+    if (profit !== null && chart.data.datasets[1]) {
+        chart.data.datasets[1].data.push(profit);
+    }
+
     chart.update();
 }
 
-window.initChart = initChart;
 window.updateChart = updateChart;
-
-// Initialize chart once window is fully loaded
-window.addEventListener("load", () => {
-    logToPanel("initChart triggered on window load");
-    initChart();
-});
