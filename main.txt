@@ -1,18 +1,18 @@
 // main.txt — Lifecycle glue
 
-// Ensure controls object exists
-window.controls = {};
+function finalizeSummary() {
+    const startBalance = parseFloat(document.getElementById("startBalance").value);
+    const investBalance = parseFloat(document.getElementById("investBalance").value);
+    const totalChange = investBalance - startBalance;
+    const percentChange = (totalChange / startBalance) * 100;
 
-// Bot initializer
+    logToPanel(`Final Start Balance: ${startBalance.toFixed(2)} USDT`);
+    logToPanel(`Final Investment Balance: ${investBalance.toFixed(2)} USDT`);
+    logToPanel(`Net Change: ${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
+}
+
 async function initBot(cycles) {
-    window.controls.startBalance = parseFloat(document.getElementById("startBalance").value);
-    window.controls.investBalance = parseFloat(document.getElementById("investBalance").value);
-    window.controls.profitTarget = parseFloat(document.getElementById("profitTarget").value);
-    window.controls.stopLoss = parseFloat(document.getElementById("stopLoss").value);
-    window.controls.lastRunDate = new Date();
-
-    logToPanel("[INFO] Bot started at " + window.controls.lastRunDate.toLocaleTimeString());
-
+    logToPanel("Bot started");
     for (let i = 1; i <= cycles; i++) {
         if (typeof simulateCycle === "function") {
             await simulateCycle(i);
@@ -20,28 +20,12 @@ async function initBot(cycles) {
             logToPanel("ERROR: simulateCycle not found");
         }
     }
-
     finalizeSummary();
-    logToPanel("[INFO] Bot finished");
+    logToPanel("Bot finished");
 }
 
-// Summary after all cycles
-function finalizeSummary() {
-    const startBalance = parseFloat(document.getElementById("startBalance").value);
-    const investBalance = parseFloat(document.getElementById("investBalance").value);
-
-    const totalChange = investBalance - startBalance;
-    const percentChange = (totalChange / startBalance) * 100;
-
-    logToPanel("Bot run complete");
-    logToPanel("Final Start Balance: " + startBalance.toFixed(2) + " USDT");
-    logToPanel("Final Investment Balance: " + investBalance.toFixed(2) + " USDT");
-    logToPanel("Net Change: " + totalChange.toFixed(2) + " USDT (" + percentChange.toFixed(2) + "%)");
-}
-
-// Stop bot
 function stopBot() {
-    logToPanel("[INFO] Bot stopped");
+    logToPanel("Bot stopped");
 }
 
 // Expose globally
