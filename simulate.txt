@@ -133,8 +133,13 @@ async function simulateCycle(cycleNum) {
 
         logWithTime(`Cycle ${cycleNum}: Result ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-        window.balanceHistory.push(investBalance);
-        updateChart();
+       // Ensure balanceHistory exists before pushing
+if (!window.balanceHistory) {
+    window.balanceHistory = [];
+}
+
+window.balanceHistory.push(investBalance);
+updateChart();
         logWithTime(`simulateCycle(${cycleNum}) complete`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
