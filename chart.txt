@@ -40,6 +40,7 @@ function initChart() {
 }
 
 function updateChart(balance) {
+    // Ensure chart exists
     if (!window.balanceChart) {
         logToPanel("Chart not initialized — calling initChart()");
         initChart();
@@ -69,4 +70,7 @@ window.initChart = initChart;
 window.updateChart = updateChart;
 
 // Initialize chart once window is fully loaded
-window.addEventListener("load", initChart);
+window.addEventListener("load", () => {
+    logToPanel("initChart triggered on window load");
+    initChart();
+});
