@@ -4,11 +4,11 @@ logToPanel("simulate.txt loaded");
 // Global balance history
 window.balanceHistory = [];
 
-// Initialize Chart.js once
+// Initialize Chart.js once DOM is ready
 function initChart() {
     const canvas = document.getElementById("balanceChart");
     if (!canvas) {
-        logToPanel("ERROR: balanceChart canvas not found");
+        logWithTime("ERROR: balanceChart canvas not found");
         return;
     }
     const ctx = canvas.getContext("2d");
@@ -36,14 +36,17 @@ function initChart() {
             }
         }
     });
-    logToPanel("Chart initialized successfully");
+    logWithTime("Chart initialized successfully");
 }
 window.initChart = initChart;
 
-// Chart update helper (called at end of each cycle)
+// Ensure chart is initialized once DOM is loaded
+document.addEventListener("DOMContentLoaded", initChart);
+
+// Chart update helper
 function updateChart(balance) {
     if (!window.balanceChart) {
-        logToPanel("Chart not initialized — calling initChart()");
+        logWithTime("Chart not initialized — calling initChart()");
         initChart();
     }
     const chart = window.balanceChart;
@@ -141,6 +144,3 @@ async function simulateCycle(cycleNum) {
 
 // Expose globally
 window.simulateCycle = simulateCycle;
-
-// Initialize chart once DOM is ready
-document.addEventListener("DOMContentLoaded", initChart);
