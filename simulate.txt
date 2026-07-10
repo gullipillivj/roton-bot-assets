@@ -66,46 +66,31 @@ async function simulateCycle(cycleNum) {
     try {
         logWithTime(`simulateCycle(${cycleNum}) started`);
 
-        let investBalance = parseFloat(document.getElementById("investBalance").value);
-        const reserve = investBalance * 0.1;
-        let balance = investBalance - reserve;
-
         const allCoins = await getDynamicCoins();
         const randIndex = Math.floor(seededRandom(cycleNum) * allCoins.length);
-        let coin = allCoins[randIndex];
+        const coin = allCoins[randIndex];
+        const entryPrice = await evaluateCoin(coin, 1);
 
-        // Phase 1: Buy coin
-        let entryPrice = await evaluateCoin(coin, 1);
-        if (!entryPrice || entryPrice <= 0) {
-            logWithTime(`Cycle ${cycleNum}: Entry price fetch failed, skipping`);
-            return;
-        }
+        // Deduct fee
+        let investBalance = parseFloat(document.getElementById("investBalance").value);
+        investBalance -= 0.10;
+        document.getElementById("investBalance").value = investBalance.toFixed(2);
 
-        let coinUnits = balance / entryPrice;
-        logWithTime(`Cycle ${cycleNum}: Bought ${coin}, ${coinUnits.toFixed(4)} units at ${entryPrice.toFixed(4)} USDT`);
+        logWithTime(`Cycle ${cycleNum}: Bought ${coin} at ${entryPrice.toFixed(2)} USDT (fee applied)`);
 
-        await sleep(30000);
+        await sleep(30000); // 30 sec lapse
 
-        // Phase 2: Check price after 30s
-        let currentPrice = await evaluateCoin(coin, 1);
-        if (!currentPrice || currentPrice <= 0) {
-            logWithTime(`Cycle ${cycleNum}: Price fetch failed, skipping update`);
-            return;
-        }
+        const currentPrice = await evaluateCoin(coin, 1);
+        const profit = currentPrice - entryPrice;
 
-        let profit = (currentPrice - entryPrice) * coinUnits;
+        const profitElem = document.getElementById("liveProfitValue");
+        profitElem.textContent = profit.toFixed(2) + " USDT";
+        profitElem.style.color = profit >= 0 ? "#00FF00" : "#FF3333";
 
-        let startBox = parseFloat(document.getElementById("startBalance").value);
-        let investBox = parseFloat(document.getElementById("investBalance").value);
-        document.getElementById("startBalance").value = (startBox + profit).toFixed(2);
-        document.getElementById("investBalance").value = (investBox + profit).toFixed(2);
+        logWithTime(`Cycle ${cycleNum}: Result ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-        logWithTime(`Cycle ${cycleNum}: Result — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
-
-        // Track balance history + update chart
         window.balanceHistory.push(parseFloat(document.getElementById("investBalance").value));
         updateChart();
-
         logWithTime(`simulateCycle(${cycleNum}) complete`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
