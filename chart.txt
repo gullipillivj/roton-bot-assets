@@ -10,14 +10,14 @@ function initChart() {
 
     const ctx = canvas.getContext("2d");
 
-    // Always define at least one dataset
+    // Seed with dummy data so chart is visible immediately
     window.balanceChart = new Chart(ctx, {
         type: "line",
         data: {
-            labels: [],
+            labels: ["Init"],
             datasets: [{
                 label: "Investment Balance",
-                data: [],
+                data: [500], // dummy starting balance
                 borderColor: "#f3ba2f",
                 backgroundColor: "rgba(243,186,47,0.2)",
                 fill: true,
@@ -36,11 +36,10 @@ function initChart() {
         }
     });
 
-    logToPanel("Chart initialized successfully");
+    logToPanel("Chart initialized successfully with dummy data");
 }
 
 function updateChart(balance) {
-    // Ensure chart exists
     if (!window.balanceChart) {
         logToPanel("Chart not initialized — calling initChart()");
         initChart();
