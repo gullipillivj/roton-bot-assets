@@ -39,13 +39,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // Chart update helper
 function updateChart() {
-    if (!window.balanceChart) {
+    if (!window.balanceChart || !window.balanceChart.data.datasets[0]) {
         logWithTime("Chart not initialized yet");
         return;
     }
-    window.balanceChart.data.labels.push(`Cycle ${window.balanceChart.data.labels.length + 1}`);
-    window.balanceChart.data.datasets[0].data.push(window.balanceHistory[window.balanceHistory.length - 1]);
-    window.balanceChart.update();
+    const chart = window.balanceChart;
+    const cycle = chart.data.labels.length + 1;
+    chart.data.labels.push(`Cycle ${cycle}`);
+    chart.data.datasets[0].data.push(window.balanceHistory[window.balanceHistory.length - 1]);
+    chart.update();
 }
 window.updateChart = updateChart;
 
