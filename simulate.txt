@@ -4,13 +4,8 @@ logToPanel("simulate.txt loaded");
 // Global balance history
 window.balanceHistory = [];
 
-// Ensure chart is initialized once DOM is loaded
-document.addEventListener("DOMContentLoaded", initChart);
-
-
-
 // Initialize Chart.js once DOM is ready
-function initChart() {
+document.addEventListener("DOMContentLoaded", function () {
     const canvas = document.getElementById("balanceChart");
     if (!canvas) {
         logWithTime("ERROR: balanceChart canvas not found");
@@ -30,33 +25,20 @@ function initChart() {
                 tension: 0.3
             }]
         },
-        options: {
-            responsive: false,
-            scales: {
-                x: { title: { display: true, text: "Cycle" } },
-                y: { title: { display: true, text: "Balance (USDT)" } }
-            },
-            plugins: {
-                legend: { labels: { color: "white" } }
-            }
-        }
+        options: { responsive: true, plugins: { legend: { display: true } } }
     });
     logWithTime("Chart initialized successfully");
-}
-window.initChart = initChart;
+});
 
-
-// Chart update helper
-function updateChart(balance) {
+// Chart update helper (no parameter, uses balanceHistory)
+function updateChart() {
     if (!window.balanceChart) {
-        logWithTime("Chart not initialized — calling initChart()");
-        initChart();
+        logWithTime("Chart not initialized yet");
+        return;
     }
-    const chart = window.balanceChart;
-    const cycle = chart.data.labels.length + 1;
-    chart.data.labels.push(`Cycle ${cycle}`);
-    chart.data.datasets[0].data.push(balance);
-    chart.update();
+    window.balanceChart.data.labels.push(`Cycle ${window.balanceChart.data.labels.length + 1}`);
+    window.balanceChart.data.datasets[0].data.push(window.balanceHistory[window.balanceHistory.length - 1]);
+    window.balanceChart.update();
 }
 window.updateChart = updateChart;
 
@@ -71,43 +53,7 @@ function logWithTime(message) {
     }
 }
 
-// Seeded random for reproducibility
-function seededRandom(seed) {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-}
-
-// Binance price fetch
-async function evaluateCoin(symbol, units = 1) {
-    try {
-        const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${cleanSymbol}`);
-        const data = await res.json();
-        return parseFloat(data.price) * units;
-    } catch (err) {
-        logWithTime(`[ERROR] ${symbol} price fetch failed: ${err}`);
-        return 0;
-    }
-}
-
-// Top 20 USDT pairs by volume
-async function getDynamicCoins() {
-    const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
-    const data = await res.json();
-    const usdtPairs = data.filter(d => d.symbol.endsWith("USDT"));
-    usdtPairs.sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
-    return usdtPairs.slice(0, 20).map(d => d.symbol);
-}
-
-// Sleep helper
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Global swap counter
-if (typeof window.totalSwaps === "undefined") {
-    window.totalSwaps = 0;
-}
+// … keep your seededRandom, evaluateCoin, getDynamicCoins, sleep, etc. unchanged …
 
 // Main trading cycle
 async function simulateCycle(cycleNum) {
@@ -138,7 +84,7 @@ async function simulateCycle(cycleNum) {
         logWithTime(`Cycle ${cycleNum}: Result ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
         window.balanceHistory.push(investBalance);
-        updateChart(investBalance);
+        updateChart();  // <-- no argument
         logWithTime(`simulateCycle(${cycleNum}) complete`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
