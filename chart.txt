@@ -1,27 +1,39 @@
-let balanceHistory = []; // simulate.js will push values here
+// chart.txt — Chart rendering
 
-const ctx = document.getElementById('balanceChart').getContext('2d');
-const balanceChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: [],
-        datasets: [{
-            label: 'Investment Balance',
-            data: [],
-            borderColor: '#f3ba2f',
-            backgroundColor: 'rgba(243,186,47,0.2)',
-            fill: true,
-            tension: 0.3
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: { legend: { display: true } }
-    }
+// Global balance history (simulate.txt will push values here)
+window.balanceHistory = [];
+
+// Initialize chart once DOM is ready
+document.addEventListener("DOMContentLoaded", function () {
+    const ctx = document.getElementById('balanceChart').getContext('2d');
+    window.balanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Investment Balance',
+                data: [],
+                borderColor: '#f3ba2f',
+                backgroundColor: 'rgba(243,186,47,0.2)',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true } }
+        }
+    });
 });
 
+// Update chart with latest balance
 function updateChart() {
-    balanceChart.data.labels.push(`Cycle ${balanceChart.data.labels.length + 1}`);
-    balanceChart.data.datasets[0].data.push(balanceHistory[balanceHistory.length - 1]);
-    balanceChart.update();
+    if (window.balanceChart && window.balanceHistory.length > 0) {
+        window.balanceChart.data.labels.push(`Cycle ${window.balanceChart.data.labels.length + 1}`);
+        window.balanceChart.data.datasets[0].data.push(window.balanceHistory[window.balanceHistory.length - 1]);
+        window.balanceChart.update();
+    }
 }
+
+// Expose globally
+window.updateChart = updateChart;
