@@ -1,9 +1,6 @@
 // chart.txt — Chart rendering with profit/loss colors
 // chart.txt — Chart rendering with profit/loss colors
 logToPanel("chart.txt loaded");
-
-// ... rest of your chart.txt code ...
-window.updateChart = updateChart;
 // Global balance history (simulate.txt will push values here)
 window.balanceHistory = [];
 
