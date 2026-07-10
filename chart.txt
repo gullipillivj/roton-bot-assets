@@ -1,67 +1,44 @@
-// chart.txt — Chart rendering with profit/loss colors
-// chart.txt — Chart rendering with profit/loss colors
+// chart.txt — Chart.js balance visualization
 logToPanel("chart.txt loaded");
-// Global balance history (simulate.txt will push values here)
-window.balanceHistory = [];
 
-// Initialize chart once DOM is ready
-document.addEventListener("DOMContentLoaded", function () {
-    const ctx = document.getElementById('balanceChart').getContext('2d');
-    window.balanceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Investment Balance',
-                data: [],
-                borderColor: '#00FF00', // default green
-                backgroundColor: 'rgba(0,255,0,0.2)',
-                fill: true,
-                tension: 0.3,
-                pointBackgroundColor: [], // dynamic colors per point
-                pointBorderColor: []
-            }]
+const ctx = document.getElementById("balanceChart").getContext("2d");
+
+// Initialize chart safely
+window.balanceChart = new Chart(ctx, {
+    type: "line",
+    data: {
+        labels: [],
+        datasets: [{
+            label: "Investment Balance",
+            data: [],
+            borderColor: "#f3ba2f",
+            backgroundColor: "rgba(243,186,47,0.2)",
+            fill: true,
+            tension: 0.3
+        }]
+    },
+    options: {
+        responsive: false,
+        scales: {
+            x: { title: { display: true, text: "Cycle" } },
+            y: { title: { display: true, text: "Balance (USDT)" } }
         },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: { display: true },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const value = context.parsed.y;
-                            return value >= 0 ? `Profit: ${value}` : `Loss: ${value}`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: { ticks: { color: '#FFF' } },
-                x: { ticks: { color: '#FFF' } }
-            }
+        plugins: {
+            legend: { labels: { color: "white" } }
         }
-    });
+    }
 });
 
-// Update chart with latest balance and color coding
-function updateChart() {
-    if (window.balanceChart && window.balanceHistory.length > 0) {
-        const latest = window.balanceHistory[window.balanceHistory.length - 1];
-        const cycleLabel = `Cycle ${window.balanceChart.data.labels.length + 1}`;
-        window.balanceChart.data.labels.push(cycleLabel);
-        window.balanceChart.data.datasets[0].data.push(latest);
-
-        // Apply multi-color styling
-        const color = latest >= 0 ? "#00FF00" : "#FF3333";
-        const bgColor = latest >= 0 ? "rgba(0,255,0,0.2)" : "rgba(255,0,0,0.2)";
-        window.balanceChart.data.datasets[0].borderColor = color;
-        window.balanceChart.data.datasets[0].backgroundColor = bgColor;
-        window.balanceChart.data.datasets[0].pointBackgroundColor.push(color);
-        window.balanceChart.data.datasets[0].pointBorderColor.push(color);
-
-        window.balanceChart.update();
+// Update chart each cycle
+function updateChart(balance) {
+    if (!window.balanceChart) {
+        logToPanel("ERROR: Chart not initialized");
+        return;
     }
+    const cycle = window.balanceChart.data.labels.length + 1;
+    window.balanceChart.data.labels.push(`Cycle ${cycle}`);
+    window.balanceChart.data.datasets[0].data.push(balance);
+    window.balanceChart.update();
 }
 
-// Expose globally
 window.updateChart = updateChart;
