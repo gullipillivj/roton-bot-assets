@@ -1,37 +1,30 @@
-// main.txt — Lifecycle glue
-logToPanel("main .txt loaded");
-function finalizeSummary() {
-    const startBalance = parseFloat(document.getElementById("startBalance").value);
-    const investBalance = parseFloat(document.getElementById("investBalance").value);
-    const totalChange = investBalance - startBalance;
-    const percentChange = (totalChange / startBalance) * 100;
+// main.txt — UI glue
+logToPanel("main.txt loaded");
 
-    logToPanel(`Final Start Balance: ${startBalance.toFixed(2)} USDT`);
-    logToPanel(`Final Investment Balance: ${investBalance.toFixed(2)} USDT`);
-    logToPanel(`Net Change: ${totalChange.toFixed(2)} USDT (${percentChange.toFixed(2)}%)`);
-}
+document.addEventListener("DOMContentLoaded", () => {
+    logToPanel("UI ready");
 
-async function initBot(cycles) {
-    logToPanel("Bot started");
-    for (let i = 1; i <= cycles; i++) {
-        if (typeof window.simulateCycle === "function") {
-            await window.simulateCycle(i);   // ✅ explicit window reference
-        } else {
-            logToPanel("ERROR: simulateCycle not found");
-        }
+    // Start Trading button
+    const startBtn = document.getElementById("startBtn");
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            if (typeof window.initBot === "function") {
+                window.initBot(10); // always run 10 cycles
+            } else {
+                logToPanel("ERROR: initBot not found");
+            }
+        });
     }
-    finalizeSummary();
-    logToPanel("Bot finished");
-}
 
-function stopBot() {
-    logToPanel("Bot stopped");
-}
-
-// Expose globally
-window.initBot = initBot;
-window.stopBot = stopBot;
-window.finalizeSummary = finalizeSummary;
-
-// Debug marker
-logToPanel("main.txt loaded and lifecycle functions attached");
+    // Stop Trading button
+    const stopBtn = document.getElementById("stopBtn");
+    if (stopBtn) {
+        stopBtn.addEventListener("click", () => {
+            if (typeof window.stopBot === "function") {
+                window.stopBot();
+            } else {
+                logToPanel("ERROR: stopBot not found");
+            }
+        });
+    }
+});
