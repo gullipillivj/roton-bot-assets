@@ -1,68 +1,5 @@
-// simulate.txt — Trading loop + Binance helpers + Chart initialization
+// simulate.txt — Trading loop + Binance helpers
 logToPanel("simulate.txt loaded");
-
-// Global balance history (safe init)
-window.balanceHistory = window.balanceHistory || [];
-
-// Initialize Chart.js once DOM is ready
-document.addEventListener("DOMContentLoaded", function () {
-    const canvas = document.getElementById("balanceChart");
-    if (!canvas) {
-        logWithTime("ERROR: balanceChart canvas not found");
-        return;
-    }
-    const ctx = canvas.getContext("2d");
-    window.balanceChart = new Chart(ctx, {
-        type: "line",
-        data: {
-            labels: [],
-            datasets: [{
-                label: "Investment Balance",
-                data: [],
-                borderColor: "#f3ba2f",
-                backgroundColor: "rgba(243,186,47,0.2)",
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true } },
-            scales: {
-                x: { title: { display: true, text: "Cycle" } },
-                y: { title: { display: true, text: "Balance (USDT)" } }
-            }
-        }
-    });
-    logWithTime("Chart initialized successfully");
-});
-
-// Chart update helper
-function updateChart() {
-    if (!window.balanceChart) {
-        logWithTime("Chart not initialized — calling initChart()");
-        initChart();
-    }
-    const chart = window.balanceChart;
-
-    // Ensure dataset exists
-    if (!chart.data.datasets || chart.data.datasets.length === 0) {
-        chart.data.datasets = [{
-            label: "Investment Balance",
-            data: [],
-            borderColor: "#f3ba2f",
-            backgroundColor: "rgba(243,186,47,0.2)",
-            fill: true,
-            tension: 0.3
-        }];
-    }
-
-    const cycle = chart.data.labels.length + 1;
-    chart.data.labels.push(`Cycle ${cycle}`);
-    chart.data.datasets[0].data.push(window.balanceHistory[window.balanceHistory.length - 1]);
-    chart.update();
-}
-window.updateChart = updateChart;
 
 // Logging helper with timestamp
 function logWithTime(message) {
@@ -146,13 +83,20 @@ async function simulateCycle(cycleNum) {
 
         logWithTime(`Cycle ${cycleNum}: Result ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
 
-        // Safe balanceHistory push
-        if (!window.balanceHistory) {
-            window.balanceHistory = [];
+        // Update chart datasets directly
+        if (window.balanceChart) {
+            const chart = window.balanceChart;
+            const cycle = chart.data.labels.length + 1;
+            chart.data.labels.push(`Cycle ${cycle}`);
+            chart.data.datasets[0].data.push(investBalance); // balance dataset
+            if (chart.data.datasets[1]) {
+                chart.data.datasets[1].data.push(profit); // profit dataset if present
+            }
+            chart.update();
+        } else {
+            logWithTime("ERROR: balanceChart not found");
         }
-        window.balanceHistory.push(investBalance);
 
-        updateChart();
         logWithTime(`simulateCycle(${cycleNum}) complete`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
