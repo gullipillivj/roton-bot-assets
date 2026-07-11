@@ -1,4 +1,4 @@
-// main.txt — UI glue
+// main_run.txt — UI glue
 logToPanel("main_run.txt loaded");
 
 document.addEventListener("DOMContentLoaded", () => {
