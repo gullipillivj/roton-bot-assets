@@ -2,24 +2,33 @@
 logToPanel("chart.txt loaded");
 
 function updateChart(balance, profit = null) {
-    if (!window.balanceChart) {
+    const chart = window.balanceChart;
+    if (!chart) {
         logToPanel("ERROR: balanceChart not found — chart must be initialized in HTML");
         return;
     }
 
-    const chart = window.balanceChart;
+    // Add next cycle label
     const cycle = chart.data.labels.length + 1;
     chart.data.labels.push(`Cycle ${cycle}`);
 
-    // Balance dataset
+    // Append new data points cumulatively
     chart.data.datasets[0].data.push(balance);
-
-    // Profit dataset if present
     if (profit !== null && chart.data.datasets[1]) {
         chart.data.datasets[1].data.push(profit);
     }
 
-    chart.update();
+    // Update chart without resetting animation
+    chart.update('none');
+}
+
+// Apply smoothing to datasets
+if (window.balanceChart) {
+    window.balanceChart.data.datasets.forEach(ds => {
+        ds.tension = 0.4;   // curve factor (0 = straight, 1 = max curve)
+        ds.fill = false;    // keep it as a line, not filled area
+    });
+    window.balanceChart.update();
 }
 
 window.updateChart = updateChart;
