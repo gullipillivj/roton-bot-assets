@@ -5,25 +5,42 @@ window.balanceHistory = [];
 document.addEventListener("DOMContentLoaded", () => {
     const ctx = document.getElementById("balanceChart").getContext("2d");
     window.balanceChart = new Chart(ctx, {
-        type: "line",
+        type: "bar",
         data: {
             labels: [],
-            datasets: [{
-                label: "Investment Balance",
-                data: [],
-                borderColor: "#f3ba2f",
-                backgroundColor: "rgba(243,186,47,0.2)",
-                fill: true,
-                tension: 0.3
-            }]
+            datasets: [
+                {
+                    label: "Investment Balance",
+                    data: [],
+                    backgroundColor: "rgba(243,186,47,0.6)",
+                    borderColor: "#f3ba2f",
+                    borderWidth: 1
+                },
+                {
+                    label: "Profit/Loss",
+                    data: [],
+                    backgroundColor: "rgba(0,255,0,0.4)",
+                    borderColor: "#00FF00",
+                    borderWidth: 1
+                }
+            ]
         },
-        options: { responsive: true, plugins: { legend: { display: true } } }
+        options: {
+            responsive: true,
+            plugins: { legend: { display: true } },
+            scales: {
+                x: { title: { display: true, text: "Cycle" } },
+                y: { title: { display: true, text: "USDT" } }
+            }
+        }
     });
 });
 
-function updateChart() {
-    window.balanceChart.data.labels.push(`Cycle ${window.balanceChart.data.labels.length + 1}`);
+function updateChart(profit) {
+    const cycleLabel = `Cycle ${window.balanceChart.data.labels.length + 1}`;
+    window.balanceChart.data.labels.push(cycleLabel);
     window.balanceChart.data.datasets[0].data.push(window.balanceHistory[window.balanceHistory.length - 1]);
+    window.balanceChart.data.datasets[1].data.push(profit);
     window.balanceChart.update();
 }
 
@@ -48,17 +65,15 @@ async function simulateCycle(cycleNum) {
         const reserve = investBalance * 0.1;
         let balance = investBalance - reserve;
 
-        // Mock PancakeSwap buy/swap
         logWithTime(`[Trade] Buying token on PancakeSwap...`);
         await new Promise(r => setTimeout(r, 3000));
         logWithTime(`[Trade] Swap complete for cycle ${cycleNum}`);
 
-        // Mock profit/loss
-        const profit = (Math.random() - 0.4) * 10;
+        const profit = (Math.random() - 0.4) * 10; // random profit/loss
         investBalance += profit;
         document.getElementById("investBalance").value = investBalance.toFixed(2);
         window.balanceHistory.push(investBalance);
-        updateChart();
+        updateChart(profit);
 
         logWithTime(`[Cycle] ${cycleNum} complete — Profit ${profit.toFixed(2)} USDT`);
     } catch (err) {
@@ -71,7 +86,7 @@ let runTimer = null;
 let currentCycle = 1;
 
 function initBot_run(totalCycles = 10) {
-    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (15‑second interval)`);
+    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (15‑second interval)`);
 
     currentCycle = 1;
     simulateCycle(currentCycle);
@@ -85,7 +100,7 @@ function initBot_run(totalCycles = 10) {
         }
         await simulateCycle(currentCycle);
         currentCycle++;
-    }, 15000); // 15 seconds
+    }, 15000); // 15 seconds
 }
 
 function stopBot_run() {
