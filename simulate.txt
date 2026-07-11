@@ -28,13 +28,13 @@ function simulateCycle(cycle) {
 
 // Start simulation with 1‑minute cycle interval
 function startSimulation(totalCycles) {
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
+    logToPanel(`[INFO] Simulation started for ${totalCycles} cycles (1‑minute interval)`);
 
     currentCycle = 1;
     cycleTimer = setInterval(() => {
         if (currentCycle > totalCycles) {
             clearInterval(cycleTimer);
-            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
+            logToPanel("[INFO] Simulation complete");
             return;
         }
 
@@ -55,10 +55,11 @@ function getMockPrice(coin) {
 }
 
 function getMockResult(price) {
-    // Random profit/loss around ±5%
-    const change = (Math.random() - 0.5) * 0.1; // ±10%
+    // Random profit/loss around ±10%
+    const change = (Math.random() - 0.5) * 0.2;
     return price * change;
 }
 
+// Expose functions globally
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
