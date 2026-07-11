@@ -59,7 +59,7 @@ async function executeTrade(tokenAddr, amount) {
 }
 
 // --- Simulation cycle ---
-async function simulateCyclerun(cycleNum) {
+async function simulateCycle(cycleNum) {
     try {
         logWithTime(`[Cycle] ${cycleNum} started`);
 
@@ -109,4 +109,4 @@ async function simulateCyclerun(cycleNum) {
     }
 }
 
-window.simulateCyclerun = simulateCyclerun;
+window.simulateCycle = simulateCycle;
