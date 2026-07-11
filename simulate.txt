@@ -28,19 +28,24 @@ function simulateCycle(cycle) {
 
 // Start simulation with 1‑minute cycle interval
 function startSimulation(totalCycles) {
-    logToPanel(`[INFO] Simulation started for ${totalCycles} cycles (1‑minute interval)`);
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
     currentCycle = 1;
     cycleTimer = setInterval(() => {
         if (currentCycle > totalCycles) {
             clearInterval(cycleTimer);
-            logToPanel("[INFO] Simulation complete");
+            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
             return;
         }
 
         simulateCycle(currentCycle);
         currentCycle++;
     }, 60000); // 60000 ms = 1 minute
+}
+
+// Wrapper so main.txt can call initBot()
+function initBot(totalCycles = 10) {
+    startSimulation(totalCycles);
 }
 
 // Helpers (mock logic for now)
@@ -63,3 +68,4 @@ function getMockResult(price) {
 // Expose functions globally
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
+window.initBot = initBot;
