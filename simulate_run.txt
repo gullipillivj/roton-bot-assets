@@ -42,7 +42,7 @@ function logWithTime(message) {
 const web3 = new Web3("http://127.0.0.1:8545");
 
 // Load ABI + contract
-import solidarityAbi from './abi/SolidarityFund.json' assert { type: 'json' };
+//import solidarityAbi from './abi/SolidarityFund.json' assert { type: 'json' };
 const solidarityAddress = "0xYourDeployedSolidarityFund"; // replace with actual address
 const solidarity = new web3.eth.Contract(solidarityAbi, solidarityAddress);
 
