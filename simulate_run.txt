@@ -1,25 +1,12 @@
-// simulate_run.js
-// Chart + logging setup
-
 logToPanel("simulate_run.txt loaded");
 
 window.balanceHistory = [];
-document.addEventListener("DOMContentLoaded", function () {
-    const ctx = document.getElementById('balanceChart').getContext('2d');
+document.addEventListener("DOMContentLoaded", () => {
+    const ctx = document.getElementById("balanceChart").getContext("2d");
     window.balanceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Investment Balance',
-                data: [],
-                borderColor: '#f3ba2f',
-                backgroundColor: 'rgba(243,186,47,0.2)',
-                fill: true,
-                tension: 0.3
-            }]
-        },
-        options: { responsive: true, plugins: { legend: { display: true } } }
+        type: "line",
+        data: { labels: [], datasets: [{ label: "Investment Balance", data: [], borderColor: "#f3ba2f" }] },
+        options: { responsive: true }
     });
 });
 
@@ -29,102 +16,51 @@ function updateChart() {
     window.balanceChart.update();
 }
 
-if (typeof window.logToPanel !== "function") {
-    window.logToPanel = function(msg) { console.log(msg); };
-}
+if (typeof window.logToPanel !== "function") window.logToPanel = console.log;
 function logWithTime(message) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
     window.logToPanel(`[INFO] ${timeStr} — ${message}`);
 }
 
-// --- Web3.js integration ---
-const web3 = new Web3("http://127.0.0.1:8545");
-
-// Load ABI + contract
-//import solidarityAbi from './abi/SolidarityFund.json' assert { type: 'json' };
-const solidarityAddress = "0xYourDeployedSolidarityFund"; // replace with actual address
-const solidarity = new web3.eth.Contract(solidarityAbi, solidarityAddress);
-
-// Helper: execute trade on contract
-async function executeTrade(tokenAddr, amount) {
-    try {
-        const accounts = await web3.eth.getAccounts();
-        const user = accounts[0];
-
-        const receipt = await solidarity.methods.depositFunds(tokenAddr, amount)
-            .send({ from: user, gas: 3000000 });
-        logWithTime(`[Trade] Deposit executed. Gas=${receipt.gasUsed}, Tx=${receipt.transactionHash}`);
-
-        const payout = await solidarity.methods.executeSolidarityPayout(tokenAddr, amount)
-            .send({ from: user, gas: 3000000 });
-        logWithTime(`[Trade] Payout executed. Gas=${payout.gasUsed}, Tx=${payout.transactionHash}`);
-    } catch (err) {
-        logWithTime(`[ERROR] Trade failed: ${err.message}`);
-    }
-}
+// --- Web3 setup ---
+const web3 = new Web3("https://bsc-dataseed.binance.org/");
 
 // --- Simulation cycle ---
 async function simulateCycle(cycleNum) {
     try {
         logWithTime(`[Cycle] ${cycleNum} started`);
-
-        let investBalance = window.controls.investBalance;
+        let investBalance = parseFloat(document.getElementById("investBalance").value);
         const reserve = investBalance * 0.1;
         let balance = investBalance - reserve;
 
-        // Pick coin
-        const allCoins = await getDynamicCoins();
-        const randIndex = Math.floor(Math.random() * allCoins.length);
-        let coin = allCoins[randIndex];
+        // Mock buy/swap
+        logWithTime(`[Trade] Buying token on PancakeSwap...`);
+        await new Promise(r => setTimeout(r, 3000));
+        logWithTime(`[Trade] Swap complete for cycle ${cycleNum}`);
 
-        // Evaluate entry price
-        let entryPrice = await evaluateCoin(coin, 1);
-        if (!entryPrice || entryPrice <= 0) {
-            logWithTime(`[WARN] Cycle ${cycleNum}: Entry price fetch failed`);
-            return;
-        }
-
-        let coinUnits = balance / entryPrice;
-        logWithTime(`Cycle ${cycleNum}: Bought ${coin}, ${coinUnits.toFixed(4)} units at ${entryPrice.toFixed(4)} USDT`);
-
-        // Execute trade on contract
-        await executeTrade("0xMockTokenAddress", Math.floor(balance));
-
-        // Wait 30s
-        await new Promise(resolve => setTimeout(resolve, 30000));
-
-        // Evaluate new price
-        let currentPrice = await evaluateCoin(coin, 1);
-        if (!currentPrice || currentPrice <= 0) {
-            logWithTime(`[WARN] Cycle ${cycleNum}: Price fetch failed`);
-            return;
-        }
-
-        let profit = (currentPrice - entryPrice) * coinUnits;
-        window.controls.investBalance += profit;
-
-        logWithTime(`Cycle ${cycleNum}: Result — ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
-
-        balanceHistory.push(window.controls.investBalance);
+        // Mock profit
+        const profit = (Math.random() - 0.4) * 10;
+        investBalance += profit;
+        document.getElementById("investBalance").value = investBalance.toFixed(2);
+        window.balanceHistory.push(investBalance);
         updateChart();
 
-        logWithTime(`[Cycle] ${cycleNum} complete`);
+        logWithTime(`[Cycle] ${cycleNum} complete — Profit ${profit.toFixed(2)} USDT`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
     }
 }
 
-window.simulateCycle = simulateCycle;
-
-// --- Bot orchestration ---
 let runTimer = null;
 let currentCycle = 1;
 
 function initBot_run(totalCycles = 10) {
-    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (1‑minute interval)`);
-
+    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (15‑second interval)`);
     currentCycle = 1;
+    simulateCycle(currentCycle);
+    currentCycle++;
+
     runTimer = setInterval(async () => {
         if (currentCycle > totalCycles) {
             clearInterval(runTimer);
@@ -133,16 +69,10 @@ function initBot_run(totalCycles = 10) {
         }
         await simulateCycle(currentCycle);
         currentCycle++;
-    }, 60000); // 1 minute per cycle
+    }, 15000);
 }
 
 function stopBot_run() {
     if (runTimer) {
         clearInterval(runTimer);
-        logWithTime("[Bot] Run stopped manually");
-    }
-}
-
-// Expose globally for main_run.txt
-window.initBot_run = initBot_run;
-window.stopBot_run = stopBot_run;
+        logWith
