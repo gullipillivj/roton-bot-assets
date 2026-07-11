@@ -1,18 +1,23 @@
-// simulate_run.js                                          
+// simulate_run.js
 // Chart + logging setup
 
-                                                            window.balanceHistory = [];                                 document.addEventListener("DOMContentLoaded", function () {
+window.balanceHistory = [];
+document.addEventListener("DOMContentLoaded", function () {
     const ctx = document.getElementById('balanceChart').getContext('2d');
     window.balanceChart = new Chart(ctx, {
         type: 'line',
-        data: {                                                         labels: [],
+        data: {
+            labels: [],
             datasets: [{
                 label: 'Investment Balance',
                 data: [],
-                borderColor: '#f3ba2f',                                     backgroundColor: 'rgba(243,186,47,0.2)',
+                borderColor: '#f3ba2f',
+                backgroundColor: 'rgba(243,186,47,0.2)',
                 fill: true,
-                tension: 0.3                                            }]
-        },                                                          options: { responsive: true, plugins: { legend: { display: true } } }
+                tension: 0.3
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: true } } }
     });
 });
 
@@ -35,7 +40,6 @@ function logWithTime(message) {
 const web3 = new Web3("http://127.0.0.1:8545");
 
 // Load ABI + contract
-// Place ABI JSON files in roton-bot-assets-main/abi/
 import solidarityAbi from './abi/SolidarityFund.json' assert { type: 'json' };
 const solidarityAddress = "0xYourDeployedSolidarityFund"; // replace with actual address
 const solidarity = new web3.eth.Contract(solidarityAbi, solidarityAddress);
@@ -110,3 +114,33 @@ async function simulateCycle(cycleNum) {
 }
 
 window.simulateCycle = simulateCycle;
+
+// --- Bot orchestration ---
+let runTimer = null;
+let currentCycle = 1;
+
+function initBot_run(totalCycles = 10) {
+    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (1‑minute interval)`);
+
+    currentCycle = 1;
+    runTimer = setInterval(async () => {
+        if (currentCycle > totalCycles) {
+            clearInterval(runTimer);
+            logWithTime("[Bot] Production run complete");
+            return;
+        }
+        await simulateCycle(currentCycle);
+        currentCycle++;
+    }, 60000); // 1 minute per cycle
+}
+
+function stopBot_run() {
+    if (runTimer) {
+        clearInterval(runTimer);
+        logWithTime("[Bot] Run stopped manually");
+    }
+}
+
+// Expose globally for main_run.txt
+window.initBot_run = initBot_run;
+window.stopBot_run = stopBot_run;
