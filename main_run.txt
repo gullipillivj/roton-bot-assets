@@ -1,4 +1,3 @@
-// main_run.txt — UI glue
 logToPanel("main_run.txt loaded");
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -9,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (startBtn) {
         startBtn.addEventListener("click", () => {
             if (typeof window.initBot_run === "function") {
-                window.initBotrun(10); // always run 10 cycles
+                window.initBot_run(10); // always run 10 cycles
             } else {
                 logToPanel("ERROR: initBot not found");
             }
@@ -20,8 +19,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
-            if (typeof window.stopBotrun === "function") {
-                window.stopBotrun();
+            if (typeof window.stopBot_run === "function") {
+                window.stopBot_run();
             } else {
                 logToPanel("ERROR: stopBot not found");
             }
