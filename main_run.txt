@@ -1,42 +1,30 @@
-// main_run.js
+// main.txt — UI glue
+logToPanel("main_run.txt loaded");
 
-// make sure controls exists
-window.controls = {};
+document.addEventListener("DOMContentLoaded", () => {
+    logToPanel("UI ready");
 
-
-async function initBotrun(cycles) {
-    // sync values from form into controls
-    window.controls.startBalance = parseFloat(document.getElementById("startBalance").value);
-    window.controls.investBalance = parseFloat(document.getElementById("investBalance").value);
-    window.controls.profitTarget = parseFloat(document.getElementById("profitTarget").value);
-    window.controls.stopLoss = parseFloat(document.getElementById("stopLoss").value);
-    window.controls.lastRunDate = new Date();
-
-    logToPanel("[INFO] Bot started at " + window.controls.lastRunDate.toLocaleTimeString());
-
-    for (let i = 1; i <= 10; i++) {
-        await simulateCycle(i);   // 🔗 simulate.js
+    // Start Trading button
+    const startBtn = document.getElementById("startBtn");
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            if (typeof window.initBot_run === "function") {
+                window.initBotrun(10); // always run 10 cycles
+            } else {
+                logToPanel("ERROR: initBot not found");
+            }
+        });
     }
 
-    finalizeSummary();
-    logToPanel("[INFO] Bot finished");
-}
-
-function finalizeSummary() {
-    const startBalance = window.controls.startBalance;
-    const investBalance = window.controls.investBalance;
-
-    const totalChange = investBalance - startBalance;
-    const percentChange = (totalChange / startBalance) * 100;
-
-    logToPanel("Bot run complete");
-    logToPanel("Final Start Balance: " + startBalance.toFixed(2) + " USDT");
-    logToPanel("Final Investment Balance: " + investBalance.toFixed(2) + " USDT");
-    logToPanel("Net Change: " + totalChange.toFixed(2) + " USDT (" + percentChange.toFixed(2) + "%)");
-}
-
-// expose functions to window so HTML buttons can call them
-window.initBotrun = initBotrun;
-window.stopBotrun = function() {
-    logToPanel("[INFO] Bot stopped");
-};
+    // Stop Trading button
+    const stopBtn = document.getElementById("stopBtn");
+    if (stopBtn) {
+        stopBtn.addEventListener("click", () => {
+            if (typeof window.stopBotrun === "function") {
+                window.stopBotrun();
+            } else {
+                logToPanel("ERROR: stopBot not found");
+            }
+        });
+    }
+});
