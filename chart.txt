@@ -1,4 +1,4 @@
-// chart.txt — Chart.js balance visualization helpers
+// chart.txt — Chart.js balance visualization helpers (Bar Graph)
 logToPanel("chart.txt loaded");
 
 function updateChart(balance, profit = null) {
@@ -18,18 +18,16 @@ function updateChart(balance, profit = null) {
         chart.data.datasets[1].data.push(profit);
     }
 
-    // Force redraw only up to current cycle
-    chart.options.animation = { duration: 300 };   // smooth transition
     chart.update();
 }
 
-// Apply smoothing to datasets once
+// Switch chart type to bar and style datasets
 if (window.balanceChart) {
-    window.balanceChart.data.datasets.forEach(ds => {
-        ds.tension = 0.4;   // curve factor (wave‑like)
-        ds.fill = false;
-        ds.borderWidth = 2;
-    });
+    window.balanceChart.config.type = "bar";
+    window.balanceChart.data.datasets[0].backgroundColor = "rgba(243, 186, 47, 0.7)"; // yellow bars
+    window.balanceChart.data.datasets[1].backgroundColor = "rgba(0, 255, 0, 0.7)";   // green bars
+    window.balanceChart.data.datasets[0].borderWidth = 1;
+    window.balanceChart.data.datasets[1].borderWidth = 1;
     window.balanceChart.update();
 }
 
