@@ -1,114 +1,64 @@
-// simulate.txt — Trading loop + Binance helpers
+// simulate.txt — Trading simulation logic
 logToPanel("simulate.txt loaded");
 
-// Logging helper with timestamp
-function logWithTime(message) {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
-    if (typeof window.logToPanel === "function") {
-        window.logToPanel(`[INFO] ${timeStr} — ${message}`);
+let currentCycle = 1;
+let cycleTimer = null;
+
+function simulateCycle(cycle) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
+
+    // Pick a coin (replace with smarter logic later)
+    const coin = pickRandomCoin(); 
+    const buyPrice = getMockPrice(coin);
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT (fee applied)`);
+
+    // Mock profit/loss calculation
+    const result = getMockResult(buyPrice);
+    if (result >= 0) {
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Result Profit (${result.toFixed(2)} USDT)`);
     } else {
-        console.log(`[INFO] ${timeStr} — ${message}`);
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Result Loss (${result.toFixed(2)} USDT)`);
     }
+
+    // Update chart with balance + profit/loss
+    updateChart(buyPrice, result);
+
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
 }
 
-// Seeded random for reproducibility
-function seededRandom(seed) {
-    const x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
-}
+// Start simulation with 1‑minute cycle interval
+function startSimulation(totalCycles) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
-// Binance price fetch
-async function evaluateCoin(symbol, units = 1) {
-    try {
-        const cleanSymbol = symbol.endsWith("USDT") ? symbol : symbol + "USDT";
-        const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${cleanSymbol}`);
-        const data = await res.json();
-        return parseFloat(data.price) * units;
-    } catch (err) {
-        logWithTime(`[ERROR] ${symbol} price fetch failed: ${err}`);
-        return 0;
-    }
-}
-
-// Top 20 USDT pairs by volume
-async function getDynamicCoins() {
-    try {
-        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
-        const data = await res.json();
-        const usdtPairs = data.filter(d => d.symbol.endsWith("USDT"));
-        usdtPairs.sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
-        return usdtPairs.slice(0, 20).map(d => d.symbol);
-    } catch (err) {
-        logWithTime(`[ERROR] getDynamicCoins failed: ${err}`);
-        return ["BTCUSDT","ETHUSDT"]; // fallback
-    }
-}
-
-// Sleep helper
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Main trading cycle
-async function simulateCycle(cycleNum) {
-    try {
-        logWithTime(`simulateCycle(${cycleNum}) started`);
-
-        const allCoins = await getDynamicCoins();
-        const randIndex = Math.floor(seededRandom(cycleNum) * allCoins.length);
-        const coin = allCoins[randIndex];
-        const entryPrice = await evaluateCoin(coin, 1);
-
-        // Deduct fee
-        let investBalance = parseFloat(document.getElementById("investBalance").value);
-        investBalance -= 0.10;
-        document.getElementById("investBalance").value = investBalance.toFixed(2);
-
-        logWithTime(`Cycle ${cycleNum}: Bought ${coin} at ${entryPrice.toFixed(2)} USDT (fee applied)`);
-
-        await sleep(3000); // shorter wait for testing
-
-        const currentPrice = await evaluateCoin(coin, 1);
-        const profit = currentPrice - entryPrice;
-
-        const profitElem = document.getElementById("liveProfitValue");
-        profitElem.textContent = profit.toFixed(2) + " USDT";
-        profitElem.style.color = profit >= 0 ? "#00FF00" : "#FF3333";
-
-        logWithTime(`Cycle ${cycleNum}: Result ${profit >= 0 ? "Profit" : "Loss"} (${profit.toFixed(2)} USDT)`);
-
-        // Update chart datasets
-        if (window.updateChart) {
-            updateChart(investBalance, profit);
-        }
-
-        logWithTime(`simulateCycle(${cycleNum}) complete`);
-    } catch (err) {
-        logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
-    }
-}
-
-// Bot control functions
-function initBot(cycles = 10) {
-    logWithTime(`initBot started for ${cycles} cycles`);
-    let i = 1;
-    async function runNext() {
-        if (i > cycles) {
-            logWithTime("Simulation complete");
+    currentCycle = 1;
+    cycleTimer = setInterval(() => {
+        if (currentCycle > totalCycles) {
+            clearInterval(cycleTimer);
+            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
             return;
         }
-        await simulateCycle(i);
-        i++;
-        runNext();
-    }
-    runNext();
+
+        simulateCycle(currentCycle);
+        currentCycle++;
+    }, 60000); // 60000 ms = 1 minute
 }
 
-function stopBot() {
-    logWithTime("Trading stopped manually (testing mode — loop continues)");
+// Helpers (mock logic for now)
+function pickRandomCoin() {
+    const coins = ["BTCUSDT", "ETHUSDT", "ADAUSDT", "UNIUSDT", "XLMUSDT", "PEPEUSDT"];
+    return coins[Math.floor(Math.random() * coins.length)];
 }
 
+function getMockPrice(coin) {
+    // Simple mock price generator
+    return (Math.random() * 200).toFixed(2);
+}
+
+function getMockResult(price) {
+    // Random profit/loss around ±5%
+    const change = (Math.random() - 0.5) * 0.1; // ±10%
+    return price * change;
+}
+
+window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
-window.initBot = initBot;
-window.stopBot = stopBot;
