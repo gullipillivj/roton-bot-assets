@@ -1,6 +1,8 @@
 // simulate_run.js
 // Chart + logging setup
 
+logToPanel("simulate_run.txt loaded");
+
 window.balanceHistory = [];
 document.addEventListener("DOMContentLoaded", function () {
     const ctx = document.getElementById('balanceChart').getContext('2d');
