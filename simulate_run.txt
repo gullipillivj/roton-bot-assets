@@ -1,12 +1,23 @@
 logToPanel("simulate_run.txt loaded");
 
 window.balanceHistory = [];
+
 document.addEventListener("DOMContentLoaded", () => {
     const ctx = document.getElementById("balanceChart").getContext("2d");
     window.balanceChart = new Chart(ctx, {
         type: "line",
-        data: { labels: [], datasets: [{ label: "Investment Balance", data: [], borderColor: "#f3ba2f" }] },
-        options: { responsive: true }
+        data: {
+            labels: [],
+            datasets: [{
+                label: "Investment Balance",
+                data: [],
+                borderColor: "#f3ba2f",
+                backgroundColor: "rgba(243,186,47,0.2)",
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { display: true } } }
     });
 });
 
@@ -16,7 +27,10 @@ function updateChart() {
     window.balanceChart.update();
 }
 
-if (typeof window.logToPanel !== "function") window.logToPanel = console.log;
+if (typeof window.logToPanel !== "function") {
+    window.logToPanel = function (msg) { console.log(msg); };
+}
+
 function logWithTime(message) {
     const now = new Date();
     const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
@@ -34,29 +48,31 @@ async function simulateCycle(cycleNum) {
         const reserve = investBalance * 0.1;
         let balance = investBalance - reserve;
 
-        // Mock buy/swap
+        // Mock PancakeSwap buy/swap
         logWithTime(`[Trade] Buying token on PancakeSwap...`);
         await new Promise(r => setTimeout(r, 3000));
         logWithTime(`[Trade] Swap complete for cycle ${cycleNum}`);
 
-        // Mock profit
+        // Mock profit/loss
         const profit = (Math.random() - 0.4) * 10;
         investBalance += profit;
         document.getElementById("investBalance").value = investBalance.toFixed(2);
         window.balanceHistory.push(investBalance);
         updateChart();
 
-        logWithTime(`[Cycle] ${cycleNum} complete — Profit ${profit.toFixed(2)} USDT`);
+        logWithTime(`[Cycle] ${cycleNum} complete — Profit ${profit.toFixed(2)} USDT`);
     } catch (err) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
     }
 }
 
+// --- Bot orchestration ---
 let runTimer = null;
 let currentCycle = 1;
 
 function initBot_run(totalCycles = 10) {
-    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (15‑second interval)`);
+    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (15‑second interval)`);
+
     currentCycle = 1;
     simulateCycle(currentCycle);
     currentCycle++;
@@ -69,10 +85,16 @@ function initBot_run(totalCycles = 10) {
         }
         await simulateCycle(currentCycle);
         currentCycle++;
-    }, 15000);
+    }, 15000); // 15 seconds
 }
 
 function stopBot_run() {
     if (runTimer) {
         clearInterval(runTimer);
-        logWith
+        logWithTime("[Bot] Run stopped manually");
+    }
+}
+
+// Expose globally
+window.initBot_run = initBot_run;
+window.stopBot_run = stopBot_run;
