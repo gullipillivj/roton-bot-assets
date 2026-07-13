@@ -1,25 +1,112 @@
-// chart.txt — Chart.js balance visualization helpers
-logToPanel("chart.txt loaded");
+import requests
+import statistics
 
-function updateChart(balance, profit = null) {
-    const chart = window.balanceChart;
-    if (!chart) {
-        logToPanel("ERROR: balanceChart not found — chart must be initialized in HTML");
-        return;
+# === API endpoints ===
+BINANCE_INFO = "https://api.binance.com/api/v3/exchangeInfo"
+BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/24hr"
+BINANCE_KLINES = "https://api.binance.com/api/v3/klines"
+COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price"
+CHANGENOW_API = "https://api.changenow.io/v1/currencies"
+KRAKEN_API = "https://api.kraken.com/0/public/Ticker"
+
+# === Helpers ===
+def get_binance_pairs():
+    """Fetch all USDT trading pairs from Binance"""
+    try:
+        res = requests.get(BINANCE_INFO).json()
+        return [s["symbol"] for s in res["symbols"] if s["quoteAsset"] == "USDT"]
+    except Exception as e:
+        print("[WARN] Binance pairs fetch failed:", e)
+        return ["BTCUSDT","ETHUSDT","BNBUSDT"]
+
+def get_binance_stats(symbol):
+    try:
+        res = requests.get(BINANCE_TICKER, params={"symbol": symbol})
+        d = res.json()
+        return {
+            "symbol": symbol,
+            "lastPrice": float(d["lastPrice"]),
+            "priceChangePercent": float(d["priceChangePercent"]),
+            "volume": float(d["volume"])
+        }
+    except Exception as e:
+        print("[WARN] Binance stats failed:", e)
+        return None
+
+def get_binance_history(symbol, interval="1h", limit=200):
+    try:
+        res = requests.get(BINANCE_KLINES, params={"symbol": symbol, "interval": interval, "limit": limit})
+        klines = res.json()
+        return [float(k[4]) for k in klines]  # closing prices
+    except Exception as e:
+        print("[WARN] Binance history failed:", e)
+        return []
+
+def moving_average(closes, window):
+    if len(closes) < window:
+        return None
+    return statistics.mean(closes[-window:])
+
+def evaluate_coin(symbol):
+    stats = get_binance_stats(symbol)
+    closes = get_binance_history(symbol, "1h", 200)
+
+    ma20 = moving_average(closes, 20)
+    ma50 = moving_average(closes, 50)
+    ma100 = moving_average(closes, 100)
+
+    upward = ma20 and ma50 and ma20 > ma50
+
+    return {
+        "symbol": symbol,
+        "lastPrice": stats["lastPrice"] if stats else None,
+        "24hr%": stats["priceChangePercent"] if stats else None,
+        "volume": stats["volume"] if stats else None,
+        "ma20": ma20,
+        "ma50": ma50,
+        "ma100": ma100,
+        "upward_trend": upward
     }
 
-    // Add next cycle label
-    const cycle = chart.data.labels.length + 1;
-    chart.data.labels.push(`Cycle ${cycle}`);
+def categorize_coins():
+    """Auto‑scan all Binance USDT pairs and split into categories"""
+    symbols = get_binance_pairs()
+    results = [evaluate_coin(s) for s in symbols]
 
-    // Append new data points cumulatively
-    chart.data.datasets[0].data.push(balance);
-    if (profit !== null && chart.data.datasets[1]) {
-        chart.data.datasets[1].data.push(profit);
-    }
+    long_term  = sorted(results, key=lambda x: x["ma100"] or 0, reverse=True)[:10]
+    mid_term   = sorted(results, key=lambda x: x["ma50"] or 0, reverse=True)[:10]
+    short_term = sorted(results, key=lambda x: x["ma20"] or 0, reverse=True)[:10]
 
-    // Update chart without resetting animation
-    chart.update('none');
-}
+    return {"long_term": long_term, "mid_term": mid_term, "short_term": short_term}
 
-window.updateChart = updateChart;
+# === Other APIs for redundancy ===
+def get_coingecko(ids="bitcoin", vs="usd"):
+    try:
+        res = requests.get(COINGECKO_API, params={"ids": ids, "vs_currencies": vs})
+        d = res.json()
+        return {"symbol": ids, "lastPrice": d[ids][vs]}
+    except Exception as e:
+        print("[WARN] CoinGecko failed:", e)
+        return None
+
+def get_changenow():
+    try:
+        return requests.get(CHANGENOW_API).json()
+    except Exception as e:
+        print("[WARN] ChangeNOW failed:", e)
+        return []
+
+def get_kraken(pair="XBTUSD"):
+    try:
+        res = requests.get(KRAKEN_API, params={"pair": pair})
+        d = res.json()["result"][pair]
+        return {"symbol": pair, "lastPrice": float(d["c"][0])}
+    except Exception as e:
+        print("[WARN] Kraken failed:", e)
+        return None
+
+if __name__ == "__main__":
+    categories = categorize_coins()
+    print("Long term:", [c["symbol"] for c in categories["long_term"]])
+    print("Mid term:", [c["symbol"] for c in categories["mid_term"]])
+    print("Short term:", [c["symbol"] for c in categories["short_term"]])
