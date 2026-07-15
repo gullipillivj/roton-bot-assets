@@ -1,33 +1,49 @@
+// simulate_run.txt — orchestrator
+logToPanel("simulate_run.txt loaded");
+
+// Run a single trading cycle
 async function simulateCycle(userid, cycleNum) {
-    try {
-        logWithTime(`[Cycle] ${cycleNum} started for ${userid}`);
+    logWithTime(`[Cycle ${cycleNum}] started`);
 
-        let investBalance = parseFloat(document.getElementById("investBalance").value);
-        const reserve = investBalance * 0.1;
-        let balance = investBalance - reserve;
+    // Example: load config and execute trade
+    const cfg = loadConfigFromUI();
+    const result = await executeTrade(userid, cfg);
 
-        logWithTime(`[Trade] Buying token on PancakeSwap...`);
-        await new Promise(r => setTimeout(r, 3000));
-        logWithTime(`[Trade] Swap complete for cycle ${cycleNum}`);
+    if (result && result.profit !== undefined) {
+        logWithTime(`[Cycle ${cycleNum}] Profit: ${result.profit.toFixed(2)} USDT`);
+        await updateClientBalance(userid, result.newBalance.toFixed(2));
+        updateChart(cycleNum, result.newBalance);
+    } else {
+        logWithTime(`[Cycle ${cycleNum}] Trade failed`);
+    }
 
-        // --- Delegate to trade_logic.txt ---
-        const profit = await executeTrade(userid, cycleNum);
+    logWithTime(`[Cycle ${cycleNum}] completed`);
+}
 
-        // Apply profit/loss
-        investBalance += profit;
-        document.getElementById("investBalance").value = investBalance.toFixed(2);
+// Start bot for N cycles
+function initBot_run(cycles) {
+    logWithTime(`[Bot] Starting for ${cycles} cycles`);
+    let userid = "demoUser"; // replace with actual user ID
+    let cycleNum = 1;
 
-        // Update cumulative profit
-        window.totalProfit = (window.totalProfit || 0) + profit;
-        const profitBox = document.getElementById("liveProfitValue");
-        profitBox.textContent = `${window.totalProfit.toFixed(2)} USDT`;
-        profitBox.style.color = window.totalProfit >= 0 ? "#00FF00" : "#FF3333";
+    window.botInterval = setInterval(async () => {
+        if (cycleNum > cycles) {
+            stopBot_run();
+            return;
+        }
+        await simulateCycle(userid, cycleNum);
+        cycleNum++;
+    }, CONFIG.cycleInterval || 15000);
+}
 
-        window.balanceHistory.push(investBalance);
-        updateChart(profit);
-
-        logWithTime(`[Cycle] ${cycleNum} complete — Profit ${profit.toFixed(2)} USDT`);
-    } catch (err) {
-        logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
+// Stop bot
+function stopBot_run() {
+    if (window.botInterval) {
+        clearInterval(window.botInterval);
+        logWithTime("[Bot] Stopped");
     }
 }
+
+// Expose globally so main_run.txt can call them
+window.initBot_run = initBot_run;
+window.stopBot_run = stopBot_run;
