@@ -28,7 +28,8 @@ document.getElementById("withdrawBtn").addEventListener("click", async () => {
         return;
     }
 
-    if (amount > currentUserData.current_balance) {
+    const clientBefore = await getClientInfo(activeUserId);
+    if (!clientBefore || amount > clientBefore.current_balance) {
         logWithTime("[Withdraw] Amount exceeds current balance");
         return;
     }
