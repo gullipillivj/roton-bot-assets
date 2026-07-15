@@ -1,26 +1,13 @@
-// db_access.txt — Client DB access (debug version)
-logToPanel("db_access.txt loaded");
+const API_BASE = "http://localhost:5003"; // or your ngrok URL
 
 async function getClientInfo(userid) {
     try {
-        const res = await fetch(`/api/client/${userid}`);
-        const text = await res.text();   // raw response
-        console.log("Raw response from /api/client:", text);
-
-        // Try parsing safely
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (parseErr) {
-            logWithTime(`[ERROR] JSON parse failed for ${userid}: ${parseErr}`);
-            return null;
-        }
-
+        const res = await fetch(`${API_BASE}/api/client/${userid}`);
+        const data = await res.json();   // no manual parse needed
         if (data.error) {
             logWithTime(`[ERROR] Client ${userid} not found`);
             return null;
         }
-
         logWithTime(`[DB] Client ${userid} info loaded`);
         return data;
     } catch (err) {
@@ -28,33 +15,3 @@ async function getClientInfo(userid) {
         return null;
     }
 }
-
-async function updateClientBalance(userid, newBalance) {
-    try {
-        const res = await fetch(`/api/update_balance/${userid}/${newBalance}`);
-        const text = await res.text();   // raw response
-        console.log("Raw response from /api/update_balance:", text);
-
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch (parseErr) {
-            logWithTime(`[ERROR] JSON parse failed for balance update: ${parseErr}`);
-            return null;
-        }
-
-        if (data.error) {
-            logWithTime(`[ERROR] Balance update failed for ${userid}`);
-            return null;
-        }
-
-        logWithTime(`[DB] Balance updated for ${userid}: ${newBalance}`);
-        return data;
-    } catch (err) {
-        logWithTime(`[ERROR] updateClientBalance(${userid}) failed: ${err}`);
-        return null;
-    }
-}
-
-window.getClientInfo = getClientInfo;
-window.updateClientBalance = updateClientBalance;
