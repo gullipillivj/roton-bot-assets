@@ -8,15 +8,13 @@ document.getElementById("depositBtn").addEventListener("click", async () => {
         return;
     }
 
-    const result = await deposit(activeUserId, amount);
-    if (result && !result.error) {
-        const client = await getClientInfo(activeUserId);
+    const result = await deposit("mockuser1", amount); // force mockuser1
+    if (result) {
+        const client = await parseClient("mockuser1");
         if (client) {
-            setActiveUser(client.userid, client.name);
+            setActiveUser(client.userid, client.name); // update label/user name
             logWithTime(`[Deposit] ${amount} USDT deposited. New balance: ${client.current_balance} USDT`);
         }
-    } else {
-        logWithTime("[Deposit] Failed to record deposit");
     }
 });
 
@@ -28,20 +26,18 @@ document.getElementById("withdrawBtn").addEventListener("click", async () => {
         return;
     }
 
-    const clientBefore = await getClientInfo(activeUserId);
+    const clientBefore = await parseClient("mockuser1");
     if (!clientBefore || amount > clientBefore.current_balance) {
         logWithTime("[Withdraw] Amount exceeds current balance");
         return;
     }
 
-    const result = await withdraw(activeUserId, amount);
-    if (result && !result.error) {
-        const client = await getClientInfo(activeUserId);
+    const result = await withdraw("mockuser1", amount); // force mockuser1
+    if (result) {
+        const client = await parseClient("mockuser1");
         if (client) {
-            setActiveUser(client.userid, client.name);
+            setActiveUser(client.userid, client.name); // update label/user name
             logWithTime(`[Withdraw] ${amount} USDT withdrawn. New balance: ${client.current_balance} USDT`);
         }
-    } else {
-        logWithTime("[Withdraw] Failed to record withdrawal");
     }
 });
