@@ -1,0 +1,30 @@
+// db_access.txt — API helpers for clients.db
+logToPanel("db_access.txt loaded");
+
+// Update client balance via Flask API
+async function updateClientBalance(userid, newBalance) {
+    try {
+        const res = await fetch(`/api/update_balance/${userid}/${newBalance}`);
+        const data = await res.json();
+        logWithTime(`[DB] Balance updated for ${data.userid}: ${data.new_balance} USDT`);
+    } catch (err) {
+        logWithTime(`[ERROR] updateClientBalance(${userid}) failed: ${err}`);
+    }
+}
+
+// Fetch client info from Flask API
+async function getClientInfo(userid) {
+    try {
+        const res = await fetch(`/api/client/${userid}`);
+        const data = await res.json();
+        logWithTime(`[DB] Client ${userid} info loaded`);
+        return data;
+    } catch (err) {
+        logWithTime(`[ERROR] getClientInfo(${userid}) failed: ${err}`);
+        return null;
+    }
+}
+
+// Expose globally so simulate_run.txt can call them
+window.updateClientBalance = updateClientBalance;
+window.getClientInfo = getClientInfo;
