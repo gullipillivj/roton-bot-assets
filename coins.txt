@@ -1,82 +1,19 @@
 import requests
 
-BINANCE_INFO = "https://api.binance.com/api/v3/exchangeInfo"
-BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/24hr"
-BINANCE_KLINES = "https://api.binance.com/api/v3/klines"
+BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/price"
 
-def get_binance_pairs():
-    """Fetch all USDT trading pairs from Binance"""
+def get_btc_price():
     try:
-        res = requests.get(BINANCE_INFO, timeout=10).json()
-        return [s["symbol"] for s in res["symbols"] if s["quoteAsset"] == "USDT"]
-    except Exception as e:
-        print("[WARN] Binance pairs fetch failed:", e)
-        return ["BTCUSDT","ETHUSDT","BNBUSDT"]
-
-def get_binance_stats(symbol):
-    try:
-        res = requests.get(BINANCE_TICKER, params={"symbol": symbol}, timeout=10)
+        res = requests.get(BINANCE_TICKER, params={"symbol": "BTCUSDT"}, timeout=10)
         d = res.json()
-        return {
-            "symbol": symbol,
-            "lastPrice": float(d["lastPrice"]),
-            "priceChangePercent": float(d["priceChangePercent"]),
-            "volume": float(d["volume"])
-        }
+        return float(d["price"])
     except Exception as e:
-        print(f"[WARN] Stats failed for {symbol}:", e)
+        print("[ERROR] Failed to fetch BTC price:", e)
         return None
 
-def get_binance_history(symbol, interval="1h", limit=20):
-    try:
-        res = requests.get(BINANCE_KLINES, params={"symbol": symbol, "interval": interval, "limit": limit}, timeout=10)
-        klines = res.json()
-        return [float(k[4]) for k in klines]  # closing prices
-    except Exception as e:
-        print(f"[WARN] History failed for {symbol}:", e)
-        return []
-
-def filter_coins():
-    """Return up to 30 coins with 24hr% between 0.5–1.5 and rising trend"""
-    symbols = get_binance_pairs()
-    results = []
-
-    for s in symbols:
-        stats = get_binance_stats(s)
-        if not stats:
-            print(f"Skip {s}: no stats")
-            continue
-
-        pct = stats["priceChangePercent"]
-        if pct is None or not (0.5 <= pct <= 1.5):
-            print(f"Skip {s}: 24hr%={pct}")
-            continue
-
-        closes = get_binance_history(s, "1h", 20)
-        if len(closes) < 5:
-            print(f"Skip {s}: not enough history")
-            continue
-
-        rising = closes[-1] > closes[-5]
-        if not rising:
-            print(f"Skip {s}: not rising (last={closes[-1]}, prev={closes[-5]})")
-            continue
-
-        print(f"Include {s}: 24hr%={pct}, rising trend confirmed")
-        results.append({
-            "symbol": s,
-            "lastPrice": stats["lastPrice"],
-            "24hr%": pct,
-            "volume": stats["volume"]
-        })
-
-        if len(results) >= 30:
-            break
-
-    return results
-
 if __name__ == "__main__":
-    coins = filter_coins()
-    print("Total coins returned:", len(coins))
-    for c in coins:
-        print(f"{c['symbol']} | Price: {c['lastPrice']} | 24hr%: {c['24hr%']} | Volume: {c['volume']}")
+    price = get_btc_price()
+    if price:
+        print(f"Current BTCUSDT price: {price}")
+    else:
+        print("DEBUG: No price returned from Binance")
