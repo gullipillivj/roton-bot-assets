@@ -1,13 +1,42 @@
+// buttons.txt
+
+// --- Deposit button ---
 document.getElementById("depositBtn").addEventListener("click", async () => {
     const amount = parseFloat(document.getElementById("amountBox").value);
     if (!amount || amount <= 0) {
         logWithTime("[Deposit] Invalid amount");
         return;
     }
-    await updateClientBalance(activeUserId, amount);
-    const client = await getClientInfo(activeUserId);
-    if (client) {
-        setActiveUser(client.userid, client.name);
-        logWithTime(`[Deposit] Balance updated: ${client.current_balance} USDT`);
+
+    const result = await deposit(activeUserId, amount);
+    if (result) {
+        const client = await getClientInfo(activeUserId);
+        if (client) {
+            setActiveUser(client.userid, client.name);
+            logWithTime(`[Deposit] ${amount} USDT deposited. New balance: ${client.current_balance} USDT`);
+        }
+    }
+});
+
+// --- Withdraw button ---
+document.getElementById("withdrawBtn").addEventListener("click", async () => {
+    const amount = parseFloat(document.getElementById("amountBox").value);
+    if (!amount || amount <= 0) {
+        logWithTime("[Withdraw] Invalid amount");
+        return;
+    }
+
+    if (amount > currentUserData.current_balance) {
+        logWithTime("[Withdraw] Amount exceeds current balance");
+        return;
+    }
+
+    const result = await withdraw(activeUserId, amount);
+    if (result) {
+        const client = await getClientInfo(activeUserId);
+        if (client) {
+            setActiveUser(client.userid, client.name);
+            logWithTime(`[Withdraw] ${amount} USDT withdrawn. New balance: ${client.current_balance} USDT`);
+        }
     }
 });
