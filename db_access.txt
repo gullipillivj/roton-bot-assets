@@ -1,85 +1,26 @@
 // db_access.txt
 
-// IMPORTANT: use your ngrok URL, not localhost
-const API_BASE = "https://almanac-sierra-rundown.ngrok-free.dev";
+const CLIENTS_URL = "https://almanac-sierra-rundown.ngrok-free.dev/clients";
 
-// --- Fetch one client ---
-async function getClientInfo(userid) {
-    try {
-        const res = await fetch(`${API_BASE}/api/client/${userid}`);
-        const data = await res.json();
-        if (data.error) {
-            logWithTime(`[ERROR] Client ${userid} not found`);
-            return null;
-        }
-        logWithTime(`[DB] Client ${userid} info loaded`);
-        return data;
-    } catch (err) {
-        logWithTime(`[ERROR] getClientInfo(${userid}) failed: ${err}`);
-        return null;
-    }
-}
-
-// --- Fetch all clients ---
+// --- Fetch all clients (debug: show raw response only) ---
 async function getAllClients() {
     try {
-        const res = await fetch(`${API_BASE}/api/clients`);
-        const data = await res.json();
-        logWithTime(`[DB] All clients loaded (${data.clients.length})`);
-        return data.clients;
+        const res = await fetch(CLIENTS_URL);
+        const text = await res.text(); // get raw response as plain text
+        logWithTime("[DEBUG] Raw response from /clients:");
+        logWithTime(text);             // dump raw JSON/HTML string into log panel
+        // Do NOT parse for now
+        return text;
     } catch (err) {
         logWithTime(`[ERROR] getAllClients() failed: ${err}`);
-        return [];
-    }
-}
-
-// --- Update balance ---
-async function updateClientBalance(userid, newBalance) {
-    try {
-        const res = await fetch(`${API_BASE}/api/update_balance/${userid}/${newBalance}`);
-        const data = await res.json();
-        if (data.error) {
-            logWithTime(`[ERROR] Balance update failed for ${userid}`);
-            return null;
-        }
-        logWithTime(`[DB] Balance updated for ${userid}: ${newBalance}`);
-        return data;
-    } catch (err) {
-        logWithTime(`[ERROR] updateClientBalance(${userid}) failed: ${err}`);
         return null;
     }
 }
 
-// --- Deposit ---
-async function deposit(userid, amount) {
-    try {
-        const res = await fetch(`${API_BASE}/api/deposit/${userid}/${amount}`);
-        const data = await res.json();
-        if (data.error) {
-            logWithTime(`[ERROR] Deposit failed for ${userid}`);
-            return null;
-        }
-        logWithTime(`[DB] Deposit recorded for ${userid}: ${amount}`);
-        return data;
-    } catch (err) {
-        logWithTime(`[ERROR] deposit(${userid}) failed: ${err}`);
-        return null;
-    }
-}
-
-// --- Withdraw ---
-async function withdraw(userid, amount) {
-    try {
-        const res = await fetch(`${API_BASE}/api/withdraw/${userid}/${amount}`);
-        const data = await res.json();
-        if (data.error) {
-            logWithTime(`[ERROR] Withdraw failed for ${userid}`);
-            return null;
-        }
-        logWithTime(`[DB] Withdraw recorded for ${userid}: ${amount}`);
-        return data;
-    } catch (err) {
-        logWithTime(`[ERROR] withdraw(${userid}) failed: ${err}`);
-        return null;
-    }
+// --- Fetch one client by userid or name (debug: just show all) ---
+async function getClientInfo(userid) {
+    const raw = await getAllClients();
+    logWithTime(`[DEBUG] getClientInfo called for ${userid}`);
+    // No parsing yet — just return raw string
+    return raw;
 }
