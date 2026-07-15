@@ -3,23 +3,42 @@ logToPanel("simulate_run.txt loaded");
 
 const { spawn } = require("child_process");
 
-let initialBalance = 0;
+let initialBalance = 0; // store starting balance
 
 // --- Helper: run coins.txt directly ---
-async function getBTCPrice() {
+async function getCoins() {
     return new Promise((resolve, reject) => {
         const process = spawn("python3", ["coins.txt"]);
         let output = "";
         process.stdout.on("data", data => output += data.toString());
         process.on("close", code => {
             if (code === 0) {
+                // coins.txt prints "Current BTCUSDT price: 30215.45"
                 const match = output.match(/([\d.]+)/);
-                resolve(match ? parseFloat(match[1]) : null);
+                if (match) {
+                    resolve([{ symbol: "BTCUSDT", address: "BTCUSDT", price: parseFloat(match[1]) }]);
+                } else {
+                    resolve([]);
+                }
             } else {
                 reject(new Error("coins.txt failed"));
             }
         });
     });
+}
+
+// --- Randomize with seed (still here if you add more coins later) ---
+function pickRandomCoin(coins, seed) {
+    if (!coins || coins.length === 0) return null;
+    const rng = Math.abs(Math.sin(seed)) % 1;
+    const idx = Math.floor(rng * coins.length);
+    return coins[idx];
+}
+
+// --- PancakeSwap buy (placeholder for now) ---
+async function pancakeBuy(tokenAddress, amount) {
+    logWithTime(`[PancakeSwap] Simulated trade: ${amount} USDT -> ${tokenAddress}`);
+    return { status: "success", spent: amount, gas: 0 };
 }
 
 // --- Single trading cycle ---
@@ -34,32 +53,31 @@ async function simulateCycle(cycleNum) {
         return;
     }
 
-    const price = await getBTCPrice();
-    if (!price) {
-        logWithTime(`[Cycle ${cycleNum}] No BTC price available`);
+    const coins = await getCoins();
+    const chosenCoin = pickRandomCoin(coins, cycleNum);
+    if (!chosenCoin) {
+        logWithTime(`[Cycle ${cycleNum}] No coin available`);
         return;
     }
 
-    logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Bought BTCUSDT at ${price} USDT`);
+    logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Bought ${chosenCoin.symbol} at ${chosenCoin.price} USDT`);
 
-    // Simple profit/loss mock
-    const change = (Math.random() - 0.5) * 0.2;
-    const result = price * change;
+    const result = await pancakeBuy(chosenCoin.address, balance);
+    if (result.status === "success") {
+        balance -= (result.spent + result.gas);
+        balanceBox.value = balance;
 
-    if (result >= 0) {
-        logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Result Profit (${result.toFixed(2)} USDT)`);
-    } else {
-        logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Result Loss (${result.toFixed(2)} USDT)`);
+        const profit = balance - initialBalance;
+        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT | Profit: ${profit.toFixed(2)} USDT`);
+
+        updateChart(cycleNum, balance);
     }
-
-    balanceBox.value = balance + result;
-    updateChart(cycleNum, balanceBox.value);
 
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
 // --- Start bot ---
-function initBot(cycles) {
+function initBot_run(cycles) {
     let balanceBox = document.getElementById("amountBox");
     initialBalance = parseFloat(balanceBox.value) || 0;
 
@@ -68,7 +86,7 @@ function initBot(cycles) {
 
     window.botInterval = setInterval(async () => {
         if (cycleNum > cycles) {
-            stopBot();
+            stopBot_run();
             return;
         }
         await simulateCycle(cycleNum);
@@ -77,7 +95,7 @@ function initBot(cycles) {
 }
 
 // --- Stop bot ---
-function stopBot() {
+function stopBot_run() {
     if (window.botInterval) {
         clearInterval(window.botInterval);
         logWithTime("[Bot] Stopped");
@@ -85,5 +103,5 @@ function stopBot() {
 }
 
 // Expose globally
-window.initBot = initBot;
-window.stopBot = stopBot;
+window.initBot_run = initBot_run;
+window.stopBot_run = stopBot_run;
