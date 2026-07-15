@@ -4,7 +4,11 @@ logToPanel("db_access.txt loaded");
 async function getClientInfo(userid) {
     try {
         const res = await fetch(`/api/client/${userid}`);
-        const data = await res.json(); // no JSON.parse needed
+        const data = await res.json();   // ✅ no JSON.parse
+        if (data.error) {
+            logWithTime(`[ERROR] Client ${userid} not found`);
+            return null;
+        }
         logWithTime(`[DB] Client ${userid} info loaded`);
         return data;
     } catch (err) {
@@ -16,7 +20,11 @@ async function getClientInfo(userid) {
 async function updateClientBalance(userid, newBalance) {
     try {
         const res = await fetch(`/api/update_balance/${userid}/${newBalance}`);
-        const data = await res.json();
+        const data = await res.json();   // ✅ no JSON.parse
+        if (data.error) {
+            logWithTime(`[ERROR] Balance update failed for ${userid}`);
+            return null;
+        }
         logWithTime(`[DB] Balance updated for ${userid}: ${newBalance}`);
         return data;
     } catch (err) {
