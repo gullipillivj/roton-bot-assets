@@ -1,12 +1,13 @@
 // db_access.txt
 
-const API_BASE = "http://localhost:5003"; // or your ngrok URL pointing to port 5003
+// IMPORTANT: use your ngrok URL, not localhost
+const API_BASE = "https://almanac-sierra-rundown.ngrok-free.dev";
 
 // --- Fetch one client ---
 async function getClientInfo(userid) {
     try {
         const res = await fetch(`${API_BASE}/api/client/${userid}`);
-        const data = await res.json();   // no manual JSON.parse needed
+        const data = await res.json();
         if (data.error) {
             logWithTime(`[ERROR] Client ${userid} not found`);
             return null;
