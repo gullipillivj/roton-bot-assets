@@ -1,5 +1,15 @@
 // buttons.txt
 
+// --- Helper: update UI labels from client data ---
+function updateUIFromClient(client) {
+    if (!client) return;
+    // Update user label
+    document.getElementById("currentUserLabel").textContent = `Current User: ${client.name}`;
+    // Optionally show balance or amount
+    document.getElementById("amountBox").value = client.current_balance;
+    logWithTime(`[UI] Updated label and amount for ${client.name}`);
+}
+
 // --- Deposit button ---
 document.getElementById("depositBtn").addEventListener("click", async () => {
     const amount = parseFloat(document.getElementById("amountBox").value);
@@ -8,11 +18,12 @@ document.getElementById("depositBtn").addEventListener("click", async () => {
         return;
     }
 
-    const result = await deposit("mockuser1", amount); // force mockuser1
+    const result = await deposit("mockuser1", amount);
     if (result) {
         const client = await parseClient("mockuser1");
         if (client) {
-            setActiveUser(client.userid, client.name); // update label/user name
+            setActiveUser(client.userid, client.name);
+            updateUIFromClient(client); // update label + amount box
             logWithTime(`[Deposit] ${amount} USDT deposited. New balance: ${client.current_balance} USDT`);
         }
     }
@@ -32,11 +43,12 @@ document.getElementById("withdrawBtn").addEventListener("click", async () => {
         return;
     }
 
-    const result = await withdraw("mockuser1", amount); // force mockuser1
+    const result = await withdraw("mockuser1", amount);
     if (result) {
         const client = await parseClient("mockuser1");
         if (client) {
-            setActiveUser(client.userid, client.name); // update label/user name
+            setActiveUser(client.userid, client.name);
+            updateUIFromClient(client); // update label + amount box
             logWithTime(`[Withdraw] ${amount} USDT withdrawn. New balance: ${client.current_balance} USDT`);
         }
     }
