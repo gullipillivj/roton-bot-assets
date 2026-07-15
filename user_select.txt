@@ -1,0 +1,31 @@
+<!-- User Selector Dropdown -->
+<label style="color:white">Select User:</label><br>
+<select id="userSelect" class="rounded-textbox" style="background-color:#0F172A;color:yellow">
+    <option value="mockuser1">mockuser1</option>
+    <option value="mockuser2">mockuser2</option>
+    <option value="mockuser3">mockuser3</option>
+</select><br><br>
+
+<script>
+// Default to mockuser1 on load
+window.onload = async () => {
+    const client = await getClientInfo("mockuser1");
+    if (client) {
+        setActiveUser(client.userid, client.name);
+        document.getElementById("userSelect").value = client.userid;
+    } else {
+        logWithTime("[ERROR] Could not load mockuser1 from DB");
+    }
+};
+
+// Handle dropdown change
+document.getElementById("userSelect").addEventListener("change", async (e) => {
+    const userid = e.target.value;
+    const client = await getClientInfo(userid);
+    if (client) {
+        setActiveUser(client.userid, client.name);
+    } else {
+        logWithTime(`[ERROR] Could not load ${userid} from DB`);
+    }
+});
+</script>
