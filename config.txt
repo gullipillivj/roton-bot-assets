@@ -1,0 +1,25 @@
+// config.txt — Trading configuration parameters
+logToPanel("config.txt loaded");
+
+// Default configuration values
+const CONFIG = {
+    profitTarget: 1.0,   // % profit target
+    stopLoss: 0.5,       // % stop loss
+    cycleInterval: 15000 // milliseconds (15 seconds)
+};
+
+// Helper to read values from UI inputs if present
+function loadConfigFromUI() {
+    const profitTargetInput = document.getElementById("profitTarget");
+    const stopLossInput = document.getElementById("stopLoss");
+
+    if (profitTargetInput) CONFIG.profitTarget = parseFloat(profitTargetInput.value);
+    if (stopLossInput) CONFIG.stopLoss = parseFloat(stopLossInput.value);
+
+    logWithTime(`[Config] ProfitTarget=${CONFIG.profitTarget}% StopLoss=${CONFIG.stopLoss}%`);
+    return CONFIG;
+}
+
+// Expose globally so simulate_run.txt can use it
+window.CONFIG = CONFIG;
+window.loadConfigFromUI = loadConfigFromUI;
