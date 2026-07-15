@@ -1,4 +1,17 @@
+// main_run.txt — central loader
 logToPanel("main_run.txt loaded");
+
+// Load child modules in order so globals are ready
+(async () => {
+    await import("./logger.txt");
+    await import("./contracts.txt");
+    await import("./coins.txt");
+    await import("./config.txt");
+    await import("./trade_logic.txt");
+    await import("./db_access.txt");
+    await import("./chart.txt");
+    await import("./simulate_run.txt");
+})();
 
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
