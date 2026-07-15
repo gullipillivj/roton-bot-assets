@@ -24,7 +24,7 @@ def get_binance_stats(symbol):
             "volume": float(d["volume"])
         }
     except Exception as e:
-        print("[WARN] Binance stats failed:", e)
+        print(f"[WARN] Stats failed for {symbol}:", e)
         return None
 
 def get_binance_history(symbol, interval="1h", limit=20):
@@ -33,7 +33,7 @@ def get_binance_history(symbol, interval="1h", limit=20):
         klines = res.json()
         return [float(k[4]) for k in klines]  # closing prices
     except Exception as e:
-        print("[WARN] Binance history failed:", e)
+        print(f"[WARN] History failed for {symbol}:", e)
         return []
 
 def filter_coins():
@@ -44,24 +44,31 @@ def filter_coins():
     for s in symbols:
         stats = get_binance_stats(s)
         if not stats:
+            print(f"Skip {s}: no stats")
             continue
 
         pct = stats["priceChangePercent"]
         if pct is None or not (0.5 <= pct <= 1.5):
+            print(f"Skip {s}: 24hr%={pct}")
             continue
 
         closes = get_binance_history(s, "1h", 20)
         if len(closes) < 5:
+            print(f"Skip {s}: not enough history")
             continue
 
         rising = closes[-1] > closes[-5]
-        if rising:
-            results.append({
-                "symbol": s,
-                "lastPrice": stats["lastPrice"],
-                "24hr%": pct,
-                "volume": stats["volume"]
-            })
+        if not rising:
+            print(f"Skip {s}: not rising (last={closes[-1]}, prev={closes[-5]})")
+            continue
+
+        print(f"Include {s}: 24hr%={pct}, rising trend confirmed")
+        results.append({
+            "symbol": s,
+            "lastPrice": stats["lastPrice"],
+            "24hr%": pct,
+            "volume": stats["volume"]
+        })
 
         if len(results) >= 30:
             break
@@ -71,4 +78,5 @@ def filter_coins():
 if __name__ == "__main__":
     coins = filter_coins()
     print("Total coins returned:", len(coins))
-    print("Symbols:", [c["symbol"] for c in coins])
+    for c in coins:
+        print(f"{c['symbol']} | Price: {c['lastPrice']} | 24hr%: {c['24hr%']} | Volume: {c['volume']}")
