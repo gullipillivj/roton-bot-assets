@@ -1,0 +1,26 @@
+<script>
+// Start Trading button handler
+document.getElementById("startBtn").addEventListener("click", async () => {
+    if (!activeUserId) {
+        logWithTime("[Bot] Cannot start trading — no active user selected");
+        return;
+    }
+    const profitTarget = parseFloat(document.getElementById("profitTarget").value);
+    const stopLoss = parseFloat(document.getElementById("stopLoss").value);
+
+    logWithTime(`[Bot] Starting trading for ${activeUserId} with ProfitTarget=${profitTarget}% StopLoss=${stopLoss}%`);
+
+    // Example: run 10 demo cycles
+    for (let i = 1; i <= 10; i++) {
+        logWithTime(`[Cycle ${i}] started`);
+        await runCycle(activeUserId); // defined in trade_logic.txt
+        logWithTime(`[Cycle ${i}] completed`);
+    }
+});
+
+// Stop Trading button handler
+document.getElementById("stopBtn").addEventListener("click", () => {
+    logWithTime("[Bot] Trading stopped manually");
+    // You can add logic here to cancel ongoing cycles if needed
+});
+</script>
