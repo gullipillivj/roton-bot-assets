@@ -1,10 +1,9 @@
-// simulate_run.txt — Trading simulation with coins.txt
+// simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
 const { spawn } = require("child_process");
 
-let currentCycle = 1;
-let cycleTimer = null;
+let initialBalance = 0;
 
 // --- Helper: run coins.txt directly ---
 async function getBTCPrice() {
@@ -14,7 +13,6 @@ async function getBTCPrice() {
         process.stdout.on("data", data => output += data.toString());
         process.on("close", code => {
             if (code === 0) {
-                // coins.txt prints "Current BTCUSDT price: 30215.45"
                 const match = output.match(/([\d.]+)/);
                 resolve(match ? parseFloat(match[1]) : null);
             } else {
@@ -25,50 +23,67 @@ async function getBTCPrice() {
 }
 
 // --- Single trading cycle ---
-async function simulateCycle(cycle) {
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
+async function simulateCycle(cycleNum) {
+    logWithTime(`[Cycle ${cycleNum}] started`);
 
-    const price = await getBTCPrice();
-    if (!price) {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: No BTC price available`);
+    let balanceBox = document.getElementById("amountBox");
+    let balance = parseFloat(balanceBox.value);
+
+    if (!balance || balance <= 0) {
+        logWithTime(`[Cycle ${cycleNum}] Skipped — balance is zero`);
         return;
     }
 
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought BTCUSDT at ${price} USDT`);
+    const price = await getBTCPrice();
+    if (!price) {
+        logWithTime(`[Cycle ${cycleNum}] No BTC price available`);
+        return;
+    }
 
-    // Simple mock profit/loss around ±10%
+    logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Bought BTCUSDT at ${price} USDT`);
+
+    // Simple profit/loss mock
     const change = (Math.random() - 0.5) * 0.2;
     const result = price * change;
 
     if (result >= 0) {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Result Profit (${result.toFixed(2)} USDT)`);
+        logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Result Profit (${result.toFixed(2)} USDT)`);
     } else {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Result Loss (${result.toFixed(2)} USDT)`);
+        logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Result Loss (${result.toFixed(2)} USDT)`);
     }
 
-    updateChart(price, result);
+    balanceBox.value = balance + result;
+    updateChart(cycleNum, balanceBox.value);
 
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
+    logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
-// --- Start simulation ---
-function startSimulation(totalCycles) {
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
+// --- Start bot ---
+function initBot(cycles) {
+    let balanceBox = document.getElementById("amountBox");
+    initialBalance = parseFloat(balanceBox.value) || 0;
 
-    currentCycle = 1;
-    cycleTimer = setInterval(() => {
-        if (currentCycle > totalCycles) {
-            clearInterval(cycleTimer);
-            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
+    let cycleNum = 1;
+    logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
+
+    window.botInterval = setInterval(async () => {
+        if (cycleNum > cycles) {
+            stopBot();
             return;
         }
+        await simulateCycle(cycleNum);
+        cycleNum++;
+    }, 30000); // 30 seconds
+}
 
-        simulateCycle(currentCycle);
-        currentCycle++;
-    }, 60000); // 1 minute
+// --- Stop bot ---
+function stopBot() {
+    if (window.botInterval) {
+        clearInterval(window.botInterval);
+        logWithTime("[Bot] Stopped");
+    }
 }
 
 // Expose globally
-window.startSimulation = startSimulation;
-window.simulateCycle = simulateCycle;
-window.initBot = startSimulation;
+window.initBot = initBot;
+window.stopBot = stopBot;
