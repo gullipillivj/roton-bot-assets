@@ -1,15 +1,12 @@
 // simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
-// --- Helper: call coins.txt backend ---
+// --- Get best coin from coins.txt backend ---
 async function getBestCoin() {
     try {
-        // Assume you expose categorize_coins() via an API endpoint or subprocess
         const res = await fetch("/coins/categories"); // backend route to run coins.txt
         const categories = await res.json();
-
-        // Pick best coin from short_term list (stub logic)
-        const bestCoin = categories.short_term[0];
+        const bestCoin = categories.short_term[0]; 
         logWithTime(`[CoinSelect] Best coin chosen: ${bestCoin.symbol}`);
         return bestCoin;
     } catch (err) {
@@ -18,19 +15,34 @@ async function getBestCoin() {
     }
 }
 
-// --- PancakeSwap buy stub ---
-async function pancakeBuy(tokenSymbol, amount) {
-    // Replace with actual PancakeSwap API call later
-    logWithTime(`[PancakeSwap] Buying ${tokenSymbol} with ${amount} USDT`);
-    return { status: "success", symbol: tokenSymbol, amount };
+// --- PancakeSwap buy (real Web3 call) ---
+async function pancakeBuy(tokenAddress, amount) {
+    try {
+        const tx = await pancakeRouter.methods.swapExactTokensForTokens(
+            amount,
+            0, // minOut
+            [USDT_ADDRESS, tokenAddress],
+            USER_WALLET,
+            Math.floor(Date.now() / 1000) + 60 * 10 // deadline
+        ).send({ from: USER_WALLET });
+
+        const gasUsed = tx.gasUsed * tx.effectiveGasPrice;
+        logWithTime(`[PancakeSwap] Trade success: ${amount} USDT -> ${tokenAddress}, gas: ${gasUsed}`);
+        return { status: "success", spent: amount, gas: gasUsed };
+    } catch (err) {
+        logWithTime("[PancakeSwap] Trade failed:", err);
+        return { status: "failed" };
+    }
 }
 
 // --- Single trading cycle ---
-async function simulateCycle(userid, cycleNum, amount) {
+async function simulateCycle(cycleNum) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
-    const client = await parseClient(userid);
-    if (!client || client.current_balance <= 0) {
+    let balanceBox = document.getElementById("amountBox");
+    let balance = parseFloat(balanceBox.value);
+
+    if (!balance || balance <= 0) {
         logWithTime(`[Cycle ${cycleNum}] Skipped — balance is zero`);
         return;
     }
@@ -41,30 +53,28 @@ async function simulateCycle(userid, cycleNum, amount) {
         return;
     }
 
-    const result = await pancakeBuy(bestCoin.symbol, amount);
-    if (result && result.status === "success") {
-        logWithTime(`[Cycle ${cycleNum}] Trade success: ${bestCoin.symbol}`);
-        await updateClientBalance(userid, client.current_balance - amount);
-        updateChart(cycleNum, client.current_balance - amount);
-    } else {
-        logWithTime(`[Cycle ${cycleNum}] Trade failed`);
+    const result = await pancakeBuy(bestCoin.address, balance);
+    if (result.status === "success") {
+        balance -= (result.spent + result.gas); // deduct actual values
+        balanceBox.value = balance;
+        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT`);
+        updateChart(cycleNum, balance);
     }
 
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
 // --- Start bot ---
-function initBot_run(cycles, amount) {
-    logWithTime(`[Bot] Starting for ${cycles} cycles with ${amount} USDT`);
-    let userid = "mockuser1";
+function initBot_run(cycles) {
     let cycleNum = 1;
+    logWithTime(`[Bot] Starting for ${cycles} cycles`);
 
     window.botInterval = setInterval(async () => {
         if (cycleNum > cycles) {
             stopBot_run();
             return;
         }
-        await simulateCycle(userid, cycleNum, amount);
+        await simulateCycle(cycleNum);
         cycleNum++;
     }, 30000); // 30 seconds
 }
