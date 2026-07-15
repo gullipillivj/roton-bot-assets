@@ -1,109 +1,74 @@
-// simulate_run.txt — orchestrator
+// simulate_run.txt — Trading simulation with coins.txt
 logToPanel("simulate_run.txt loaded");
 
-let initialBalance = 0; // store starting balance
+const { spawn } = require("child_process");
 
-// --- Helper: get coins from coins.txt backend ---
-async function getCoins() {
-    try {
-        const res = await fetch("/coins/all"); // backend route that runs coins.txt
-        const coins = await res.json(); // may be 30 or fewer
-        logWithTime(`[CoinSelect] Retrieved ${coins.length} coins`);
-        return coins;
-    } catch (err) {
-        logWithTime("[CoinSelect] Failed to fetch coins:", err);
-        return [];
-    }
-}
+let currentCycle = 1;
+let cycleTimer = null;
 
-// --- Randomize with seed ---
-function pickRandomCoin(coins, seed) {
-    if (!coins || coins.length === 0) return null;
-    const rng = Math.abs(Math.sin(seed)) % 1; // seeded RNG
-    const idx = Math.floor(rng * coins.length);
-    return coins[idx];
-}
-
-// --- PancakeSwap buy (real Web3 call) ---
-async function pancakeBuy(tokenAddress, amount) {
-    try {
-        const tx = await pancakeRouter.methods.swapExactTokensForTokens(
-            amount,
-            0,
-            [USDT_ADDRESS, tokenAddress],
-            USER_WALLET,
-            Math.floor(Date.now() / 1000) + 60 * 10
-        ).send({ from: USER_WALLET });
-
-        const gasUsed = tx.gasUsed * tx.effectiveGasPrice;
-        logWithTime(`[PancakeSwap] Trade success: ${amount} USDT -> ${tokenAddress}, gas: ${gasUsed}`);
-        return { status: "success", spent: amount, gas: gasUsed };
-    } catch (err) {
-        logWithTime("[PancakeSwap] Trade failed:", err);
-        return { status: "failed" };
-    }
+// --- Helper: run coins.txt directly ---
+async function getBTCPrice() {
+    return new Promise((resolve, reject) => {
+        const process = spawn("python3", ["coins.txt"]);
+        let output = "";
+        process.stdout.on("data", data => output += data.toString());
+        process.on("close", code => {
+            if (code === 0) {
+                // coins.txt prints "Current BTCUSDT price: 30215.45"
+                const match = output.match(/([\d.]+)/);
+                resolve(match ? parseFloat(match[1]) : null);
+            } else {
+                reject(new Error("coins.txt failed"));
+            }
+        });
+    });
 }
 
 // --- Single trading cycle ---
-async function simulateCycle(cycleNum) {
-    logWithTime(`[Cycle ${cycleNum}] started`);
+async function simulateCycle(cycle) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
 
-    let balanceBox = document.getElementById("amountBox");
-    let balance = parseFloat(balanceBox.value);
-
-    if (!balance || balance <= 0) {
-        logWithTime(`[Cycle ${cycleNum}] Skipped — balance is zero`);
+    const price = await getBTCPrice();
+    if (!price) {
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: No BTC price available`);
         return;
     }
 
-    const coins = await getCoins();
-    const chosenCoin = pickRandomCoin(coins, cycleNum);
-    if (!chosenCoin) {
-        logWithTime(`[Cycle ${cycleNum}] No coin available`);
-        return;
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought BTCUSDT at ${price} USDT`);
+
+    // Simple mock profit/loss around ±10%
+    const change = (Math.random() - 0.5) * 0.2;
+    const result = price * change;
+
+    if (result >= 0) {
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Result Profit (${result.toFixed(2)} USDT)`);
+    } else {
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Result Loss (${result.toFixed(2)} USDT)`);
     }
 
-    const result = await pancakeBuy(chosenCoin.address, balance);
-    if (result.status === "success") {
-        balance -= (result.spent + result.gas);
-        balanceBox.value = balance;
+    updateChart(price, result);
 
-        // --- Profit calculation ---
-        const profit = balance - initialBalance;
-        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT | Profit: ${profit.toFixed(2)} USDT`);
-
-        updateChart(cycleNum, balance);
-    }
-
-    logWithTime(`[Cycle ${cycleNum}] completed`);
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
 }
 
-// --- Start bot ---
-function initBot_run(cycles) {
-    let balanceBox = document.getElementById("amountBox");
-    initialBalance = parseFloat(balanceBox.value) || 0; // capture starting balance
+// --- Start simulation ---
+function startSimulation(totalCycles) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
-    let cycleNum = 1;
-    logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
-
-    window.botInterval = setInterval(async () => {
-        if (cycleNum > cycles) {
-            stopBot_run();
+    currentCycle = 1;
+    cycleTimer = setInterval(() => {
+        if (currentCycle > totalCycles) {
+            clearInterval(cycleTimer);
+            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
             return;
         }
-        await simulateCycle(cycleNum);
-        cycleNum++;
-    }, 30000); // 30 seconds
-}
 
-// --- Stop bot ---
-function stopBot_run() {
-    if (window.botInterval) {
-        clearInterval(window.botInterval);
-        logWithTime("[Bot] Stopped");
-    }
+        simulateCycle(currentCycle);
+        currentCycle++;
+    }, 60000); // 1 minute
 }
 
 // Expose globally
-window.initBot_run = initBot_run;
-window.stopBot_run = stopBot_run;
+window.startSimulation = startSimulation;
+window.simulateCycle = simulateCycle;
+window.initBot = startSimulation;
