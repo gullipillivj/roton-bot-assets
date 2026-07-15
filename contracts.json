@@ -3,7 +3,8 @@
     "UserToken": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
     "TargetToken": "0x0165878A594ca255338adfa4d48449f69242Eb8F",
     "Router": "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
-    "SolidarityFund": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"
+    "SolidarityFund": "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6",
+    "LiquidityPool": "0x0000000000000000000000000000000000000000"
   },
   "tokens": {
     "USDT": {
@@ -20,6 +21,9 @@
   "settings": {
     "profitTarget": 1.0,
     "stopLoss": 0.5,
-    "cycleInterval": 15000
+    "cycleInterval": 15000,
+    "swapFee": 0.003,
+    "gasLimit": 200000,
+    "gasPriceGwei": 5
   }
 }
