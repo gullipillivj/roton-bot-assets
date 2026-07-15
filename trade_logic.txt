@@ -1,35 +1,20 @@
-// trade_logic.txt — Brownie contract interaction helpers
-logToPanel("trade_logic.txt loaded");
-
-// Contract addresses (can also be loaded from contracts.json later)
-const CONTRACTS = {
-    UserToken: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
-    TargetToken: "0x0165878A594ca255338adfa4d48449f69242Eb8F",
-    Router: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853",
-    SolidarityFund: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"
-};
-
-// Simulated trade execution for a given user + cycle
-async function executeTrade(userid, cycleNum) {
-    try {
-        logWithTime(`[Trade] Cycle ${cycleNum} — Executing swap for ${userid}`);
-
-        // Simulate PancakeSwap Router call
-        logWithTime(`[Router] Using Router ${CONTRACTS.Router} to swap UserToken → TargetToken`);
-
-        // Simulate SolidarityFund deposit
-        logWithTime(`[Fund] Depositing reserve into SolidarityFund ${CONTRACTS.SolidarityFund}`);
-
-        // Randomized profit/loss for mock trading
-        const profit = (Math.random() - 0.4) * 10;
-
-        logWithTime(`[Result] Cycle ${cycleNum} — Profit ${profit.toFixed(2)} USDT`);
-        return profit;
-    } catch (err) {
-        logWithTime(`[ERROR] executeTrade(${userid}, ${cycleNum}) failed: ${err}`);
-        return 0;
+async function runCycle(userid) {
+    const client = await getClientInfo(userid);
+    if (!client || client.current_balance <= 0) {
+        logWithTime(`[Cycle] No funds available for user ${userid}`);
+        return;
     }
-}
 
-// Expose globally so simulate_run.txt can call it
-window.executeTrade = executeTrade;
+    logWithTime(`[Config] ProfitTarget=${client.profit_target}% StopLoss=${client.stop_loss}%`);
+
+    // Example trade using contracts + tokens
+    logWithTime(`[Trade] Executing swap for ${client.userid}`);
+    logWithTime(`[Router] Using Router ${window.CONTRACTS.router} to swap ${window.TOKENS.UserToken} → ${window.TOKENS.TargetToken}`);
+
+    // Simulate profit/loss
+    const profit = (Math.random() - 0.5) * 10;
+    const newBalance = client.current_balance + profit;
+    await updateClientBalance(userid, newBalance);
+
+    logWithTime(`[Result] Cycle for ${client.userid} — Profit ${profit.toFixed(2)} USDT`);
+}
