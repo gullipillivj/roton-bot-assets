@@ -1,0 +1,18 @@
+<script>
+function logWithTime(msg) {
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString();
+    console.log(`[${timestamp}] ${msg}`);
+    const panel = document.getElementById("logPanel");
+    if (panel) panel.value += `[${timestamp}] ${msg}\n`;
+}
+
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    if (panel) panel.value += msg + "\n";
+}
+
+// Expose globally
+window.logWithTime = logWithTime;
+window.logToPanel = logToPanel;
+</script>
