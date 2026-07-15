@@ -1,18 +1,51 @@
 // simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
-// Run a single trading cycle
-async function simulateCycle(userid, cycleNum) {
+// --- Helper: call coins.txt backend ---
+async function getBestCoin() {
+    try {
+        // Assume you expose categorize_coins() via an API endpoint or subprocess
+        const res = await fetch("/coins/categories"); // backend route to run coins.txt
+        const categories = await res.json();
+
+        // Pick best coin from short_term list (stub logic)
+        const bestCoin = categories.short_term[0];
+        logWithTime(`[CoinSelect] Best coin chosen: ${bestCoin.symbol}`);
+        return bestCoin;
+    } catch (err) {
+        logWithTime("[CoinSelect] Failed to fetch coins:", err);
+        return null;
+    }
+}
+
+// --- PancakeSwap buy stub ---
+async function pancakeBuy(tokenSymbol, amount) {
+    // Replace with actual PancakeSwap API call later
+    logWithTime(`[PancakeSwap] Buying ${tokenSymbol} with ${amount} USDT`);
+    return { status: "success", symbol: tokenSymbol, amount };
+}
+
+// --- Single trading cycle ---
+async function simulateCycle(userid, cycleNum, amount) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
-    // Example: load config and execute trade
-    const cfg = loadConfigFromUI();
-    const result = await executeTrade(userid, cfg);
+    const client = await parseClient(userid);
+    if (!client || client.current_balance <= 0) {
+        logWithTime(`[Cycle ${cycleNum}] Skipped — balance is zero`);
+        return;
+    }
 
-    if (result && result.profit !== undefined) {
-        logWithTime(`[Cycle ${cycleNum}] Profit: ${result.profit.toFixed(2)} USDT`);
-        await updateClientBalance(userid, result.newBalance.toFixed(2));
-        updateChart(cycleNum, result.newBalance);
+    const bestCoin = await getBestCoin();
+    if (!bestCoin) {
+        logWithTime(`[Cycle ${cycleNum}] No coin selected`);
+        return;
+    }
+
+    const result = await pancakeBuy(bestCoin.symbol, amount);
+    if (result && result.status === "success") {
+        logWithTime(`[Cycle ${cycleNum}] Trade success: ${bestCoin.symbol}`);
+        await updateClientBalance(userid, client.current_balance - amount);
+        updateChart(cycleNum, client.current_balance - amount);
     } else {
         logWithTime(`[Cycle ${cycleNum}] Trade failed`);
     }
@@ -20,10 +53,10 @@ async function simulateCycle(userid, cycleNum) {
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
-// Start bot for N cycles
-function initBot_run(cycles) {
-    logWithTime(`[Bot] Starting for ${cycles} cycles`);
-    let userid = "demoUser"; // replace with actual user ID
+// --- Start bot ---
+function initBot_run(cycles, amount) {
+    logWithTime(`[Bot] Starting for ${cycles} cycles with ${amount} USDT`);
+    let userid = "mockuser1";
     let cycleNum = 1;
 
     window.botInterval = setInterval(async () => {
@@ -31,12 +64,12 @@ function initBot_run(cycles) {
             stopBot_run();
             return;
         }
-        await simulateCycle(userid, cycleNum);
+        await simulateCycle(userid, cycleNum, amount);
         cycleNum++;
-    }, CONFIG.cycleInterval || 15000);
+    }, 30000); // 30 seconds
 }
 
-// Stop bot
+// --- Stop bot ---
 function stopBot_run() {
     if (window.botInterval) {
         clearInterval(window.botInterval);
@@ -44,6 +77,6 @@ function stopBot_run() {
     }
 }
 
-// Expose globally so main_run.txt can call them
+// Expose globally
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
