@@ -1,11 +1,20 @@
-// db_access.txt — Client DB access
+// db_access.txt — Client DB access (debug version)
 logToPanel("db_access.txt loaded");
 
 async function getClientInfo(userid) {
     try {
         const res = await fetch(`/api/client/${userid}`);
-        // ✅ Only parse once
-        const data = await res.json();
+        const text = await res.text();   // raw response
+        console.log("Raw response from /api/client:", text);
+
+        // Try parsing safely
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseErr) {
+            logWithTime(`[ERROR] JSON parse failed for ${userid}: ${parseErr}`);
+            return null;
+        }
 
         if (data.error) {
             logWithTime(`[ERROR] Client ${userid} not found`);
@@ -23,7 +32,16 @@ async function getClientInfo(userid) {
 async function updateClientBalance(userid, newBalance) {
     try {
         const res = await fetch(`/api/update_balance/${userid}/${newBalance}`);
-        const data = await res.json();
+        const text = await res.text();   // raw response
+        console.log("Raw response from /api/update_balance:", text);
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (parseErr) {
+            logWithTime(`[ERROR] JSON parse failed for balance update: ${parseErr}`);
+            return null;
+        }
 
         if (data.error) {
             logWithTime(`[ERROR] Balance update failed for ${userid}`);
