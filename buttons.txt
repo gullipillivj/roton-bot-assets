@@ -9,12 +9,14 @@ document.getElementById("depositBtn").addEventListener("click", async () => {
     }
 
     const result = await deposit(activeUserId, amount);
-    if (result) {
+    if (result && !result.error) {
         const client = await getClientInfo(activeUserId);
         if (client) {
             setActiveUser(client.userid, client.name);
             logWithTime(`[Deposit] ${amount} USDT deposited. New balance: ${client.current_balance} USDT`);
         }
+    } else {
+        logWithTime("[Deposit] Failed to record deposit");
     }
 });
 
@@ -32,11 +34,13 @@ document.getElementById("withdrawBtn").addEventListener("click", async () => {
     }
 
     const result = await withdraw(activeUserId, amount);
-    if (result) {
+    if (result && !result.error) {
         const client = await getClientInfo(activeUserId);
         if (client) {
             setActiveUser(client.userid, client.name);
             logWithTime(`[Withdraw] ${amount} USDT withdrawn. New balance: ${client.current_balance} USDT`);
         }
+    } else {
+        logWithTime("[Withdraw] Failed to record withdrawal");
     }
 });
