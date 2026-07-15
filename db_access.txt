@@ -1,9 +1,12 @@
-const API_BASE = "http://localhost:5003"; // or your ngrok URL
+// db_access.txt
 
+const API_BASE = "http://localhost:5003"; // or your ngrok URL pointing to port 5003
+
+// --- Fetch one client ---
 async function getClientInfo(userid) {
     try {
         const res = await fetch(`${API_BASE}/api/client/${userid}`);
-        const data = await res.json();   // no manual parse needed
+        const data = await res.json();   // no manual JSON.parse needed
         if (data.error) {
             logWithTime(`[ERROR] Client ${userid} not found`);
             return null;
@@ -12,6 +15,70 @@ async function getClientInfo(userid) {
         return data;
     } catch (err) {
         logWithTime(`[ERROR] getClientInfo(${userid}) failed: ${err}`);
+        return null;
+    }
+}
+
+// --- Fetch all clients ---
+async function getAllClients() {
+    try {
+        const res = await fetch(`${API_BASE}/api/clients`);
+        const data = await res.json();
+        logWithTime(`[DB] All clients loaded (${data.clients.length})`);
+        return data.clients;
+    } catch (err) {
+        logWithTime(`[ERROR] getAllClients() failed: ${err}`);
+        return [];
+    }
+}
+
+// --- Update balance ---
+async function updateClientBalance(userid, newBalance) {
+    try {
+        const res = await fetch(`${API_BASE}/api/update_balance/${userid}/${newBalance}`);
+        const data = await res.json();
+        if (data.error) {
+            logWithTime(`[ERROR] Balance update failed for ${userid}`);
+            return null;
+        }
+        logWithTime(`[DB] Balance updated for ${userid}: ${newBalance}`);
+        return data;
+    } catch (err) {
+        logWithTime(`[ERROR] updateClientBalance(${userid}) failed: ${err}`);
+        return null;
+    }
+}
+
+// --- Deposit ---
+async function deposit(userid, amount) {
+    try {
+        const res = await fetch(`${API_BASE}/api/deposit/${userid}/${amount}`);
+        const data = await res.json();
+        if (data.error) {
+            logWithTime(`[ERROR] Deposit failed for ${userid}`);
+            return null;
+        }
+        logWithTime(`[DB] Deposit recorded for ${userid}: ${amount}`);
+        return data;
+    } catch (err) {
+        logWithTime(`[ERROR] deposit(${userid}) failed: ${err}`);
+        return null;
+    }
+}
+
+// --- Withdraw ---
+async function withdraw(userid, amount) {
+    try {
+        const res = await fetch(`${API_BASE}/api/withdraw/${userid}/${amount}`);
+        const data = await res.json();
+        if (data.error) {
+            logWithTime(`[ERROR] Withdraw failed for ${userid}`);
+            return null;
+        }
+        logWithTime(`[DB] Withdraw recorded for ${userid}: ${amount}`);
+        return data;
+    } catch (err) {
+        logWithTime(`[ERROR] withdraw(${userid}) failed: ${err}`);
         return null;
     }
 }
