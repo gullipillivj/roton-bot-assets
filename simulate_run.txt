@@ -1,18 +1,27 @@
 // simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
-// --- Get best coin from coins.txt backend ---
-async function getBestCoin() {
+let initialBalance = 0; // store starting balance
+
+// --- Helper: get coins from coins.txt backend ---
+async function getCoins() {
     try {
-        const res = await fetch("/coins/categories"); // backend route to run coins.txt
-        const categories = await res.json();
-        const bestCoin = categories.short_term[0]; 
-        logWithTime(`[CoinSelect] Best coin chosen: ${bestCoin.symbol}`);
-        return bestCoin;
+        const res = await fetch("/coins/all"); // backend route that runs coins.txt
+        const coins = await res.json(); // may be 30 or fewer
+        logWithTime(`[CoinSelect] Retrieved ${coins.length} coins`);
+        return coins;
     } catch (err) {
         logWithTime("[CoinSelect] Failed to fetch coins:", err);
-        return null;
+        return [];
     }
+}
+
+// --- Randomize with seed ---
+function pickRandomCoin(coins, seed) {
+    if (!coins || coins.length === 0) return null;
+    const rng = Math.abs(Math.sin(seed)) % 1; // seeded RNG
+    const idx = Math.floor(rng * coins.length);
+    return coins[idx];
 }
 
 // --- PancakeSwap buy (real Web3 call) ---
@@ -20,10 +29,10 @@ async function pancakeBuy(tokenAddress, amount) {
     try {
         const tx = await pancakeRouter.methods.swapExactTokensForTokens(
             amount,
-            0, // minOut
+            0,
             [USDT_ADDRESS, tokenAddress],
             USER_WALLET,
-            Math.floor(Date.now() / 1000) + 60 * 10 // deadline
+            Math.floor(Date.now() / 1000) + 60 * 10
         ).send({ from: USER_WALLET });
 
         const gasUsed = tx.gasUsed * tx.effectiveGasPrice;
@@ -47,17 +56,22 @@ async function simulateCycle(cycleNum) {
         return;
     }
 
-    const bestCoin = await getBestCoin();
-    if (!bestCoin) {
-        logWithTime(`[Cycle ${cycleNum}] No coin selected`);
+    const coins = await getCoins();
+    const chosenCoin = pickRandomCoin(coins, cycleNum);
+    if (!chosenCoin) {
+        logWithTime(`[Cycle ${cycleNum}] No coin available`);
         return;
     }
 
-    const result = await pancakeBuy(bestCoin.address, balance);
+    const result = await pancakeBuy(chosenCoin.address, balance);
     if (result.status === "success") {
-        balance -= (result.spent + result.gas); // deduct actual values
+        balance -= (result.spent + result.gas);
         balanceBox.value = balance;
-        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT`);
+
+        // --- Profit calculation ---
+        const profit = balance - initialBalance;
+        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT | Profit: ${profit.toFixed(2)} USDT`);
+
         updateChart(cycleNum, balance);
     }
 
@@ -66,8 +80,11 @@ async function simulateCycle(cycleNum) {
 
 // --- Start bot ---
 function initBot_run(cycles) {
+    let balanceBox = document.getElementById("amountBox");
+    initialBalance = parseFloat(balanceBox.value) || 0; // capture starting balance
+
     let cycleNum = 1;
-    logWithTime(`[Bot] Starting for ${cycles} cycles`);
+    logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
 
     window.botInterval = setInterval(async () => {
         if (cycleNum > cycles) {
