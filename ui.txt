@@ -1,0 +1,33 @@
+<!-- Current User Label -->
+<label id="currentUserLabel" style="color:white; font-weight:bold;">
+    Current User: mockuser1
+</label><br><br>
+
+<!-- Amount Input -->
+<label style="color:white">Amount:</label><br>
+<input id="amountBox" type="number" class="rounded-textbox" style="background-color:#0F172A;color:yellow"><br><br>
+
+<!-- Action Buttons -->
+<button id="depositBtn" class="rounded-textbox" style="background-color:blue;color:white;">Deposit</button>
+<button id="withdrawBtn" class="rounded-textbox" style="background-color:orange;color:white;">Withdraw</button>
+<button id="logoutBtn" class="rounded-textbox" style="background-color:red;color:white;">Logout</button><br><br>
+
+<!-- Trading Config -->
+<label style="color:white">Profit Target (%):</label><br>
+<input id="profitTarget" type="number" value="1" class="rounded-textbox" style="background-color:#0F172A;color:yellow"><br>
+<label style="color:white">Stop Loss (%):</label><br>
+<input id="stopLoss" type="number" value="0.5" class="rounded-textbox" style="background-color:#0F172A;color:yellow"><br>
+<button id="startBtn" class="rounded-textbox" style="background-color:green;color:white;">Start Trading</button>
+<button id="stopBtn" class="rounded-textbox" style="background-color:red;color:white;">Stop Trading</button><br><br>
+
+<!-- Logs -->
+<h4 style="color:white">Logs will appear here...</h4>
+<textarea id="logPanel" readonly class="rounded-textbox" style="color:yellow;background-color:#0F172A"></textarea>
+
+<!-- Live Profit -->
+<div id="liveProfitBox" style="color:white; font-size:18px; margin-top:10px;">
+    Live Profit: <span id="liveProfitValue" style="color:#f3ba2f;">0.00 USDT</span>
+</div>
+
+<!-- Balance Chart -->
+<canvas id="balanceChart" width="500" height="140" style="border:1px solid #FFF;"></canvas>
