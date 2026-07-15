@@ -4,7 +4,7 @@ logToPanel("db_access.txt loaded");
 async function getClientInfo(userid) {
     try {
         const res = await fetch(`/api/client/${userid}`);
-        // ✅ Correct: use res.json(), not JSON.parse
+        // ✅ Only parse once
         const data = await res.json();
 
         if (data.error) {
@@ -23,7 +23,6 @@ async function getClientInfo(userid) {
 async function updateClientBalance(userid, newBalance) {
     try {
         const res = await fetch(`/api/update_balance/${userid}/${newBalance}`);
-        // ✅ Correct: use res.json(), not JSON.parse
         const data = await res.json();
 
         if (data.error) {
