@@ -1,0 +1,39 @@
+<script>
+// Deposit button handler
+document.getElementById("depositBtn").addEventListener("click", async () => {
+    const amount = parseFloat(document.getElementById("amountBox").value);
+    if (!amount || amount <= 0) {
+        logWithTime("[Deposit] Invalid amount");
+        return;
+    }
+    await deposit(activeUserId, amount);
+    const client = await getClientInfo(activeUserId);
+    if (client) {
+        setActiveUser(client.userid, client.name);
+        logWithTime(`[Deposit] Balance updated: ${client.current_balance} USDT`);
+    }
+});
+
+// Withdraw button handler
+document.getElementById("withdrawBtn").addEventListener("click", async () => {
+    const amount = parseFloat(document.getElementById("amountBox").value);
+    if (!amount || amount <= 0) {
+        logWithTime("[Withdraw] Invalid amount");
+        return;
+    }
+    await withdraw(activeUserId, amount);
+    const client = await getClientInfo(activeUserId);
+    if (client) {
+        setActiveUser(client.userid, client.name);
+        logWithTime(`[Withdraw] Balance updated: ${client.current_balance} USDT`);
+    }
+});
+
+// Logout button handler
+document.getElementById("logoutBtn").addEventListener("click", () => {
+    activeUserId = null;
+    activeUsername = null;
+    document.getElementById("currentUserLabel").innerText = "Current User: None";
+    logWithTime("[Logout] User session ended");
+});
+</script>
