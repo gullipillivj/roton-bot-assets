@@ -2,25 +2,58 @@
 
 const CLIENTS_URL = "https://almanac-sierra-rundown.ngrok-free.dev/clients";
 
-// --- Fetch all clients (debug: show raw response only) ---
-async function getAllClients() {
+// --- Connection: fetch raw JSON ---
+async function connectClients() {
     try {
         const res = await fetch(CLIENTS_URL);
-        const text = await res.text(); // get raw response as plain text
+        const text = await res.text();
         logWithTime("[DEBUG] Raw response from /clients:");
-        logWithTime(text);             // dump raw JSON/HTML string into log panel
-        // Do NOT parse for now
-        return text;
+        logWithTime(text);
+        return text; // raw string
     } catch (err) {
-        logWithTime(`[ERROR] getAllClients() failed: ${err}`);
+        logWithTime(`[ERROR] connectClients() failed: ${err}`);
         return null;
     }
 }
 
-// --- Fetch one client by userid or name (debug: just show all) ---
-async function getClientInfo(userid) {
-    const raw = await getAllClients();
-    logWithTime(`[DEBUG] getClientInfo called for ${userid}`);
-    // No parsing yet — just return raw string
-    return raw;
+// --- Parser: extract one client by userid or name ---
+async function parseClient(userid) {
+    try {
+        const raw = await connectClients();
+        if (!raw) return null;
+
+        const data = JSON.parse(raw);
+        const client = data.clients.find(c => c.userid === userid || c.name === userid);
+        if (!client) {
+            logWithTime(`[ERROR] Client ${userid} not found`);
+            return null;
+        }
+        logWithTime(`[DB] Client ${userid} parsed successfully`);
+        return client;
+    } catch (err) {
+        logWithTime(`[ERROR] parseClient(${userid}) failed: ${err}`);
+        return null;
+    }
+}
+
+// --- Deposit ---
+async function deposit(userid, amount) {
+    try {
+        const res = await fetch(`${CLIENTS_URL}/deposit/${userid}/${amount}`);
+        return await res.json();
+    } catch (err) {
+        logWithTime(`[ERROR] deposit(${userid}) failed: ${err}`);
+        return null;
+    }
+}
+
+// --- Withdraw ---
+async function withdraw(userid, amount) {
+    try {
+        const res = await fetch(`${CLIENTS_URL}/withdraw/${userid}/${amount}`);
+        return await res.json();
+    } catch (err) {
+        logWithTime(`[ERROR] withdraw(${userid}) failed: ${err}`);
+        return null;
+    }
 }
