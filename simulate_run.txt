@@ -27,15 +27,15 @@ async function getCoins() {
     });
 }
 
-// --- Randomize with seed (still here if you add more coins later) ---
+// --- Randomize with seed ---
 function pickRandomCoin(coins, seed) {
     if (!coins || coins.length === 0) return null;
-    const rng = Math.abs(Math.sin(seed)) % 1;
+    const rng = Math.abs(Math.sin(seed)) % 1; // seeded RNG
     const idx = Math.floor(rng * coins.length);
     return coins[idx];
 }
 
-// --- PancakeSwap buy (placeholder for now) ---
+// --- PancakeSwap buy (simulated for now) ---
 async function pancakeBuy(tokenAddress, amount) {
     logWithTime(`[PancakeSwap] Simulated trade: ${amount} USDT -> ${tokenAddress}`);
     return { status: "success", spent: amount, gas: 0 };
@@ -67,6 +67,7 @@ async function simulateCycle(cycleNum) {
         balance -= (result.spent + result.gas);
         balanceBox.value = balance;
 
+        // --- Profit calculation ---
         const profit = balance - initialBalance;
         logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT | Profit: ${profit.toFixed(2)} USDT`);
 
@@ -79,7 +80,7 @@ async function simulateCycle(cycleNum) {
 // --- Start bot ---
 function initBot_run(cycles) {
     let balanceBox = document.getElementById("amountBox");
-    initialBalance = parseFloat(balanceBox.value) || 0;
+    initialBalance = parseFloat(balanceBox.value) || 0; // capture starting balance
 
     let cycleNum = 1;
     logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
@@ -105,3 +106,21 @@ function stopBot_run() {
 // Expose globally
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
+
+// Hook up Start/Stop buttons
+document.addEventListener("DOMContentLoaded", () => {
+    const startBtn = document.getElementById("startBot");
+    const stopBtn = document.getElementById("stopBot");
+
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            initBot_run(10); // start with 10 cycles
+        });
+    }
+
+    if (stopBtn) {
+        stopBtn.addEventListener("click", () => {
+            stopBot_run();
+        });
+    }
+});
