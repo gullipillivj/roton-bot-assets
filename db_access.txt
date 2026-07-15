@@ -1,14 +1,18 @@
 // db_access.txt — API helpers for clients.db
 logToPanel("db_access.txt loaded");
 
+// --- Core API calls ---
+
 // Update client balance via Flask API
 async function updateClientBalance(userid, newBalance) {
     try {
         const res = await fetch(`/api/update_balance/${userid}/${newBalance}`);
         const data = await res.json();
         logWithTime(`[DB] Balance updated for ${data.userid}: ${data.new_balance} USDT`);
+        return data.new_balance;
     } catch (err) {
         logWithTime(`[ERROR] updateClientBalance(${userid}) failed: ${err}`);
+        return null;
     }
 }
 
@@ -25,6 +29,48 @@ async function getClientInfo(userid) {
     }
 }
 
-// Expose globally so simulate_run.txt can call them
+// --- Deposit / Withdraw helpers ---
+
+async function deposit(userid, amount) {
+    const client = await getClientInfo(userid);
+    if (!client) {
+        logWithTime(`[Deposit] Failed — user ${userid} not found`);
+        return;
+    }
+    const newBalance = client.balance + amount;
+    await updateClientBalance(userid, newBalance);
+    logWithTime(`[Deposit] ${amount} USDT credited to ${client.username}`);
+}
+
+async function withdraw(userid, amount) {
+    const client = await getClientInfo(userid);
+    if (!client) {
+        logWithTime(`[Withdraw] Failed — user ${userid} not found`);
+        return;
+    }
+    if (amount > client.balance) {
+        logWithTime(`[Withdraw] Failed — insufficient balance for ${client.username}`);
+        return;
+    }
+    const newBalance = client.balance - amount;
+    await updateClientBalance(userid, newBalance);
+    logWithTime(`[Withdraw] ${amount} USDT debited from ${client.username}`);
+}
+
+// --- User switching ---
+
+async function setActiveUserById(userid) {
+    const client = await getClientInfo(userid);
+    if (client) {
+        setActiveUser(client.id, client.username);
+    } else {
+        logWithTime(`[User] Switch failed — user ${userid} not found`);
+    }
+}
+
+// Expose globally so simulate_run.txt and main_run.txt can call them
 window.updateClientBalance = updateClientBalance;
 window.getClientInfo = getClientInfo;
+window.deposit = deposit;
+window.withdraw = withdraw;
+window.setActiveUserById = setActiveUserById;
