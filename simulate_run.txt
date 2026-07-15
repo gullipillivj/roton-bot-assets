@@ -1,76 +1,7 @@
-logToPanel("simulate_run.txt loaded");
-
-window.balanceHistory = [];
-window.totalProfit = 0;
-
-document.addEventListener("DOMContentLoaded", () => {
-    const ctx = document.getElementById("balanceChart").getContext("2d");
-    window.balanceChart = new Chart(ctx, {
-        type: "bar",
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: "Investment Balance",
-                    data: [],
-                    backgroundColor: [],
-                    borderColor: "#f3ba2f",
-                    borderWidth: 1
-                },
-                {
-                    label: "Profit/Loss",
-                    data: [],
-                    backgroundColor: [],
-                    borderColor: "#00FF00",
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            plugins: { legend: { display: true } },
-            scales: {
-                x: { title: { display: true, text: "Cycle" } },
-                y: { title: { display: true, text: "USDT" } }
-            }
-        }
-    });
-});
-
-function updateChart(profit) {
-    const cycleLabel = `Cycle ${window.balanceChart.data.labels.length + 1}`;
-    window.balanceChart.data.labels.push(cycleLabel);
-
-    const latestBalance = window.balanceHistory[window.balanceHistory.length - 1];
-    window.balanceChart.data.datasets[0].data.push(latestBalance);
-
-    // Fade investment bar if loss
-    const investColor = profit >= 0 ? "rgba(243,186,47,0.6)" : "rgba(243,186,47,0.3)";
-    window.balanceChart.data.datasets[0].backgroundColor.push(investColor);
-
-    // Profit/Loss bar color
-    window.balanceChart.data.datasets[1].data.push(profit);
-    const profitColor = profit >= 0 ? "rgba(0,255,0,0.4)" : "rgba(255,0,0,0.4)";
-    window.balanceChart.data.datasets[1].backgroundColor.push(profitColor);
-
-    window.balanceChart.update();
-}
-
-if (typeof window.logToPanel !== "function") {
-    window.logToPanel = function (msg) { console.log(msg); };
-}
-
-function logWithTime(message) {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("en-GB", { hour12: false });
-    window.logToPanel(`[INFO] ${timeStr} — ${message}`);
-}
-
-const web3 = new Web3("https://bsc-dataseed.binance.org/");
-
-async function simulateCycle(cycleNum) {
+async function simulateCycle(userid, cycleNum) {
     try {
-        logWithTime(`[Cycle] ${cycleNum} started`);
+        logWithTime(`[Cycle] ${cycleNum} started for ${userid}`);
+
         let investBalance = parseFloat(document.getElementById("investBalance").value);
         const reserve = investBalance * 0.1;
         let balance = investBalance - reserve;
@@ -79,7 +10,10 @@ async function simulateCycle(cycleNum) {
         await new Promise(r => setTimeout(r, 3000));
         logWithTime(`[Trade] Swap complete for cycle ${cycleNum}`);
 
-        const profit = (Math.random() - 0.4) * 10; // random profit/loss
+        // --- Delegate to trade_logic.txt ---
+        const profit = await executeTrade(userid, cycleNum);
+
+        // Apply profit/loss
         investBalance += profit;
         document.getElementById("investBalance").value = investBalance.toFixed(2);
 
@@ -97,51 +31,3 @@ async function simulateCycle(cycleNum) {
         logWithTime(`[ERROR] simulateCycle(${cycleNum}) crashed: ${err}`);
     }
 }
-
-// --- Bot orchestration ---
-let runTimer = null;
-let currentCycle = 1;
-
-function initBot_run(totalCycles = 10) {
-    logWithTime(`[Bot] Starting production run for ${totalCycles} cycles (15‑second interval)`);
-
-    // Reset state
-    currentCycle = 1;
-    window.balanceHistory = [];
-    window.balanceChart.data.labels = [];
-    window.balanceChart.data.datasets.forEach(ds => ds.data = []);
-    window.balanceChart.data.datasets.forEach(ds => ds.backgroundColor = []);
-    window.balanceChart.update();
-    window.totalProfit = 0;
-    document.getElementById("liveProfitValue").textContent = "0.00 USDT";
-    document.getElementById("liveProfitValue").style.color = "#f3ba2f";
-
-    // Sync opening balance
-    const startBalanceInput = document.getElementById("startBalance");
-    const investBalanceInput = document.getElementById("investBalance");
-    startBalanceInput.value = investBalanceInput.value;
-
-    simulateCycle(currentCycle);
-    currentCycle++;
-
-    runTimer = setInterval(async () => {
-        if (currentCycle > totalCycles) {
-            clearInterval(runTimer);
-            logWithTime("[Bot] Production run complete");
-            return;
-        }
-        await simulateCycle(currentCycle);
-        currentCycle++;
-    }, 15000); // 15 seconds
-}
-
-function stopBot_run() {
-    if (runTimer) {
-        clearInterval(runTimer);
-        logWithTime("[Bot] Run stopped manually");
-    }
-}
-
-// Expose globally
-window.initBot_run = initBot_run;
-window.stopBot_run = stopBot_run;
