@@ -68,13 +68,13 @@ async function simulateCycle(cycleNum, user) {
     return;
   }
 
-  logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.lastPrice} USDT`);
+  logWithTime(`[INFO] Cycle ${cycleNum}: Coin data\n${JSON.stringify(chosenCoin, null, 2)}`);
 
   const profit = balance - initialBalance;
   if (profit > GAS_COST_USDT) {
     await approveToken(userTokenAddress, balance, user);
     const tx = await swapToTarget(balance, user);
-    logWithTime(`[Cycle ${cycleNum}] Swap executed to ${chosenCoin.symbol} (tx: ${tx.transactionHash})`);
+    logWithTime(`[Cycle ${cycleNum}] Swap executed to ${chosenCoin.symbol}\n${JSON.stringify(tx, null, 2)}`);
     swapCount++;
     lastTradeTimestamp = now;
   } else {
@@ -92,7 +92,7 @@ async function initBot_run(cycles, user) {
 
   if (initialBalance > 0) {
     const tx = await depositToFund(userTokenAddress, initialBalance, user);
-    logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund (tx: ${tx.transactionHash})`);
+    logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
 
     // Fund balance check
     const bal = await fund.methods.balanceOf(user).call();
@@ -119,7 +119,7 @@ async function stopBot_run(user) {
     logWithTime("[Bot] Stopped");
 
     const tx = await withdrawFromFund(userTokenAddress, initialBalance, user);
-    logWithTime(`[Bot] Withdrawn funds from SolidarityFund (tx: ${tx.transactionHash})`);
+    logWithTime(`[Bot] Withdrawn funds from SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
   }
 }
 
