@@ -114,3 +114,4 @@ async function stopBot_run(user) {
 // Attach to window for main_run.txt
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
+window.simulateCycle = simulateCycl
