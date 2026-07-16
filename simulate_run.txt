@@ -1,13 +1,15 @@
 // simulate_run.txt — orchestrator layer
 logToPanel("simulate_run.txt loaded");
 
-const {
+import {
   approveToken,
   swapToTarget,
   swapToUser,
   depositToFund,
-  withdrawFromFund
-} = require("./pancake_calls.txt");
+  withdrawFromFund,
+  userTokenAddress,
+  fund
+} from "./pancake_calls.txt";
 
 let initialBalance = 0;
 let cycleCount = 0;
@@ -22,7 +24,7 @@ const GAS_COST_USDT = 2;
 // === Fetch coin categories from Python scanner ===
 async function getCoinCategories() {
   try {
-    const res = await fetch("http://127.0.0.1:5000/coins"); // Flask/JSON endpoint from your Python scanner
+    const res = await fetch("http://127.0.0.1:5000/coins");
     return await res.json();
   } catch (err) {
     logWithTime("[ERROR] Failed to fetch coin categories");
@@ -30,7 +32,6 @@ async function getCoinCategories() {
   }
 }
 
-// === Pick a coin from categories ===
 function pickCoin(categories, cycleNum) {
   const pool = [...categories.short_term, ...categories.mid_term, ...categories.long_term];
   if (pool.length === 0) return null;
@@ -38,7 +39,6 @@ function pickCoin(categories, cycleNum) {
   return pool[idx];
 }
 
-// === Single trading cycle ===
 async function simulateCycle(cycleNum, user) {
   logWithTime(`[Cycle ${cycleNum}] started`);
 
@@ -85,8 +85,7 @@ async function simulateCycle(cycleNum, user) {
   logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
-// === Start bot ===
-async function initBot_run(cycles, user) {
+export async function initBot_run(cycles, user) {
   const balanceBox = document.getElementById("amountBox");
   initialBalance = parseFloat(balanceBox.value) || 0;
 
@@ -94,7 +93,6 @@ async function initBot_run(cycles, user) {
     const tx = await depositToFund(userTokenAddress, initialBalance, user);
     logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
 
-    // Fund balance check
     const bal = await fund.methods.balanceOf(user).call();
     logWithTime(`[Bot] Fund balance for ${user}: ${web3.utils.fromWei(bal, "ether")} USDT`);
   }
@@ -112,8 +110,7 @@ async function initBot_run(cycles, user) {
   }, 60000);
 }
 
-// === Stop bot ===
-async function stopBot_run(user) {
+export async function stopBot_run(user) {
   if (window.botInterval) {
     clearInterval(window.botInterval);
     logWithTime("[Bot] Stopped");
@@ -122,7 +119,3 @@ async function stopBot_run(user) {
     logWithTime(`[Bot] Withdrawn funds from SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
   }
 }
-
-// === Expose globally ===
-window.initBot_run = initBot_run;
-window.stopBot_run = stopBot_run;
