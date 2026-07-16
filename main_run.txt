@@ -1,6 +1,27 @@
 // main_run.txt — central loader
 logToPanel("main_run.txt loaded");
 
+// Define bot functions globally
+window.initbot_run = function(cycles, user) {
+    logToPanel("[InitBot] Simulation started for " + cycles + " cycles for " + user);
+    // … trading loop logic …
+};
+
+window.stopbot_run = function(user) {
+    logToPanel("[StopBot] Stopping bot for " + user);
+    // … cleanup logic …
+};
+
+window.deposit_run = function(user) {
+    logToPanel("[Deposit] Depositing funds for " + user);
+    // … deposit logic …
+};
+
+window.withdraw_run = function(user) {
+    logToPanel("[Withdraw] Withdrawing funds for " + user);
+    // … withdraw logic …
+};
+
 // Wire UI after DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
@@ -8,25 +29,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const startBtn = document.getElementById("startBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
-            if (typeof window.initBot_run === "function") {
-                // Run cycles for mockuser1
-                const user = "mockuser1";
-                window.initBot_run(10, user);
-            } else {
-                logToPanel("ERROR: initBot_run not found");
-            }
+            const user = "mockuser1";
+            initbot_run(10, user);
         });
     }
 
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
-            if (typeof window.stopBot_run === "function") {
-                const user = "mockuser1";
-                window.stopBot_run(user);
-            } else {
-                logToPanel("ERROR: stopBot_run not found");
-            }
+            const user = "mockuser1";
+            stopbot_run(user);
+        });
+    }
+
+    const depositBtn = document.getElementById("depositBtn");
+    if (depositBtn) {
+        depositBtn.addEventListener("click", () => {
+            const user = "mockuser1";
+            deposit_run(user);
+        });
+    }
+
+    const withdrawBtn = document.getElementById("withdrawBtn");
+    if (withdrawBtn) {
+        withdrawBtn.addEventListener("click", () => {
+            const user = "mockuser1";
+            withdraw_run(user);
         });
     }
 });
