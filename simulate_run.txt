@@ -1,180 +1,128 @@
-// simulate_run.txt — orchestrator (browser version)
+// simulate_run.txt — orchestrator layer
 logToPanel("simulate_run.txt loaded");
+
+const {
+  approveToken,
+  swapToTarget,
+  swapToUser,
+  depositToFund,
+  withdrawFromFund
+} = require("./pancake_calls.txt");
 
 let initialBalance = 0;
 let cycleCount = 0;
 let swapCount = 0;
 let lastTradeTimestamp = 0;
 
-const HOLDING_PERIOD = 60; // 1 minute
+const HOLDING_PERIOD = 60; // seconds
 const MAX_CYCLES = 10;
 const MAX_SWAPS = 3;
-const GAS_COST_USDT = 2; // estimated fee
+const GAS_COST_USDT = 2;
 
-// === Web3 setup ===
-const web3 = new Web3(window.ethereum);
-const routerAddress = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
-const fundAddress   = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
-const userTokenAddress   = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
-const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
-
-// === ABIs (shortened for clarity) ===
-const routerABI = [ /* Pancake Router ABI JSON here */ ];
-const fundABI   = [ /* SolidarityFund ABI JSON here */ ];
-const erc20ABI  = [
-  { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve", "outputs":[{"name":"","type":"bool"}], "type":"function" },
-  { "constant": true, "inputs":[{"name":"owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"","type":"uint256"}], "type":"function" }
-];
-
-const router = new web3.eth.Contract(routerABI, routerAddress);
-const fund   = new web3.eth.Contract(fundABI, fundAddress);
-
-// === Fetch live coins directly from Binance ===
-async function getCoins() {
-    try {
-        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
-        const data = await res.json();
-        return data.filter(d => d.symbol.endsWith("USDT")).map(d => ({
-            symbol: d.symbol,
-            lastPrice: parseFloat(d.lastPrice),
-            change: parseFloat(d.priceChangePercent),
-            volume: parseFloat(d.volume)
-        }));
-    } catch (err) {
-        logWithTime("[ERROR] Failed to fetch coins from Binance");
-        return [];
-    }
+// === Fetch coin categories from Python scanner ===
+async function getCoinCategories() {
+  try {
+    const res = await fetch("http://127.0.0.1:5000/coins"); // Flask/JSON endpoint from your Python scanner
+    return await res.json();
+  } catch (err) {
+    logWithTime("[ERROR] Failed to fetch coin categories");
+    return { long_term: [], mid_term: [], short_term: [] };
+  }
 }
 
-// --- Randomize with seed ---
-function pickRandomCoin(coins, seed) {
-    if (!coins || coins.length === 0) return null;
-    const rng = Math.abs(Math.sin(seed)) % 1;
-    const idx = Math.floor(rng * coins.length);
-    return coins[idx];
+// === Pick a coin from categories ===
+function pickCoin(categories, cycleNum) {
+  const pool = [...categories.short_term, ...categories.mid_term, ...categories.long_term];
+  if (pool.length === 0) return null;
+  const idx = cycleNum % pool.length;
+  return pool[idx];
 }
 
-// --- Approve + Swap ---
-async function pancakeBuy(tokenAddress, amount, user) {
-    const tokenContract = new web3.eth.Contract(erc20ABI, userTokenAddress);
-    await tokenContract.methods.approve(routerAddress, web3.utils.toWei(amount.toString(), "ether")).send({ from: user });
-
-    const path = [userTokenAddress, tokenAddress];
-    const deadline = Math.floor(Date.now() / 1000) + 600;
-    const tx = await router.methods.swapExactTokensForTokens(
-        web3.utils.toWei(amount.toString(), "ether"),
-        0,
-        path,
-        user,
-        deadline
-    ).send({ from: user });
-
-    logWithTime(`[PancakeSwap] Trade executed: ${amount} USDT -> ${tokenAddress} (tx: ${tx.transactionHash})`);
-    return tx;
-}
-
-// --- Single trading cycle ---
+// === Single trading cycle ===
 async function simulateCycle(cycleNum, user) {
-    logWithTime(`[Cycle ${cycleNum}] started`);
+  logWithTime(`[Cycle ${cycleNum}] started`);
 
-    const balanceBox = document.getElementById("amountBox");
-    let balance = parseFloat(balanceBox.value);
+  const balanceBox = document.getElementById("amountBox");
+  let balance = parseFloat(balanceBox.value);
 
-    if (!balance || balance <= 0) {
-        logWithTime(`[Cycle ${cycleNum}] Skipped — balance is zero`);
-        return;
-    }
+  if (!balance || balance <= 0) {
+    logWithTime(`[Cycle ${cycleNum}] Skipped — balance is zero`);
+    return;
+  }
 
-    const now = Math.floor(Date.now() / 1000);
-    if (now < lastTradeTimestamp + HOLDING_PERIOD) {
-        logWithTime(`[Cycle ${cycleNum}] Skipped — holding period active`);
-        return;
-    }
+  const now = Math.floor(Date.now() / 1000);
+  if (now < lastTradeTimestamp + HOLDING_PERIOD) {
+    logWithTime(`[Cycle ${cycleNum}] Skipped — holding period active`);
+    return;
+  }
 
-    if (swapCount >= MAX_SWAPS) {
-        logWithTime(`[Cycle ${cycleNum}] Skipped — max swaps reached`);
-        return;
-    }
+  if (swapCount >= MAX_SWAPS) {
+    logWithTime(`[Cycle ${cycleNum}] Skipped — max swaps reached`);
+    return;
+  }
 
-    const coins = await getCoins();
-    const chosenCoin = pickRandomCoin(coins, cycleNum);
-    if (!chosenCoin) {
-        logWithTime(`[Cycle ${cycleNum}] No coin available`);
-        return;
-    }
+  const categories = await getCoinCategories();
+  const chosenCoin = pickCoin(categories, cycleNum);
+  if (!chosenCoin) {
+    logWithTime(`[Cycle ${cycleNum}] No coin available`);
+    return;
+  }
 
-    logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.lastPrice} USDT`);
+  logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.lastPrice} USDT`);
 
-    const profit = balance - initialBalance;
-    if (profit > GAS_COST_USDT) {
-        const tx = await pancakeBuy(targetTokenAddress, balance, user);
-        balanceBox.value = balance;
-        logWithTime(`[Cycle ${cycleNum}] Executed swap to ${chosenCoin.symbol} (tx: ${tx.transactionHash})`);
-        swapCount++;
-        lastTradeTimestamp = now;
-    } else {
-        logWithTime(`[Cycle ${cycleNum}] No profitable swap, holding coin.`);
-    }
+  const profit = balance - initialBalance;
+  if (profit > GAS_COST_USDT) {
+    await approveToken(userTokenAddress, balance, user);
+    const tx = await swapToTarget(balance, user);
+    logWithTime(`[Cycle ${cycleNum}] Swap executed to ${chosenCoin.symbol} (tx: ${tx.transactionHash})`);
+    swapCount++;
+    lastTradeTimestamp = now;
+  } else {
+    logWithTime(`[Cycle ${cycleNum}] No profitable swap, holding coin.`);
+  }
 
-    cycleCount++;
-    logWithTime(`[Cycle ${cycleNum}] completed`);
+  cycleCount++;
+  logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
-// --- Start bot ---
+// === Start bot ===
 async function initBot_run(cycles, user) {
-    const balanceBox = document.getElementById("amountBox");
-    initialBalance = parseFloat(balanceBox.value) || 0;
+  const balanceBox = document.getElementById("amountBox");
+  initialBalance = parseFloat(balanceBox.value) || 0;
 
-    if (initialBalance > 0) {
-        const tx = await fund.methods.deposit(userTokenAddress, web3.utils.toWei(initialBalance.toString(), "ether")).send({ from: user });
-        logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund (tx: ${tx.transactionHash})`);
+  if (initialBalance > 0) {
+    const tx = await depositToFund(userTokenAddress, initialBalance, user);
+    logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund (tx: ${tx.transactionHash})`);
+
+    // Fund balance check
+    const bal = await fund.methods.balanceOf(user).call();
+    logWithTime(`[Bot] Fund balance for ${user}: ${web3.utils.fromWei(bal, "ether")} USDT`);
+  }
+
+  let cycleNum = 1;
+  logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
+
+  window.botInterval = setInterval(async () => {
+    if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
+      stopBot_run(user);
+      return;
     }
-
-    let cycleNum = 1;
-    logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
-
-    window.botInterval = setInterval(async () => {
-        if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
-            stopBot_run(user);
-            return;
-        }
-        await simulateCycle(cycleNum, user);
-        cycleNum++;
-    }, 60000);
+    await simulateCycle(cycleNum, user);
+    cycleNum++;
+  }, 60000);
 }
 
-// --- Stop bot ---
+// === Stop bot ===
 async function stopBot_run(user) {
-    if (window.botInterval) {
-        clearInterval(window.botInterval);
-        logWithTime("[Bot] Stopped");
+  if (window.botInterval) {
+    clearInterval(window.botInterval);
+    logWithTime("[Bot] Stopped");
 
-        const tx = await fund.methods.withdraw(userTokenAddress, web3.utils.toWei(initialBalance.toString(), "ether")).send({ from: user });
-        logWithTime(`[Bot] Withdrawn funds from SolidarityFund (tx: ${tx.transactionHash})`);
-    }
+    const tx = await withdrawFromFund(userTokenAddress, initialBalance, user);
+    logWithTime(`[Bot] Withdrawn funds from SolidarityFund (tx: ${tx.transactionHash})`);
+  }
 }
 
-// --- Expose globally for main_run.txt ---
+// === Expose globally ===
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
-
-// --- Hook up Start/Stop buttons ---
-document.addEventListener("DOMContentLoaded", () => {
-    const startBtn = document.getElementById("startBtn");
-    const stopBtn = document.getElementById("stopBtn");
-
-    if (startBtn) {
-        startBtn.addEventListener("click", async () => {
-            await window.ethereum.request({ method: "eth_requestAccounts" });
-            const user = (await web3.eth.getAccounts())[0];
-            initBot_run(10, user);
-        });
-    }
-
-    if (stopBtn) {
-        stopBtn.addEventListener("click", async () => {
-            const user = (await web3.eth.getAccounts())[0];
-            stopBot_run(user);
-        });
-    }
-});
