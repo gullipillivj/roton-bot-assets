@@ -11,6 +11,8 @@ import {
   fund
 } from "./pancake_calls.txt";
 
+import { categorizeCoins } from "./coins.txt";  // <-- direct import
+
 let initialBalance = 0;
 let cycleCount = 0;
 let swapCount = 0;
@@ -20,17 +22,6 @@ const HOLDING_PERIOD = 60; // seconds
 const MAX_CYCLES = 10;
 const MAX_SWAPS = 3;
 const GAS_COST_USDT = 2;
-
-// === Fetch coin categories from Python scanner ===
-async function getCoinCategories() {
-  try {
-    const res = await fetch("http://127.0.0.1:5000/coins");
-    return await res.json();
-  } catch (err) {
-    logWithTime("[ERROR] Failed to fetch coin categories");
-    return { long_term: [], mid_term: [], short_term: [] };
-  }
-}
 
 function pickCoin(categories, cycleNum) {
   const pool = [...categories.short_term, ...categories.mid_term, ...categories.long_term];
@@ -61,7 +52,7 @@ async function simulateCycle(cycleNum, user) {
     return;
   }
 
-  const categories = await getCoinCategories();
+  const categories = await categorizeCoins();   // <-- use JS module
   const chosenCoin = pickCoin(categories, cycleNum);
   if (!chosenCoin) {
     logWithTime(`[Cycle ${cycleNum}] No coin available`);
