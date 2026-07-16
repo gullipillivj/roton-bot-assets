@@ -11,15 +11,38 @@ const MAX_CYCLES = 10;
 const MAX_SWAPS = 3;
 const GAS_COST_USDT = 2; // estimated fee
 
-// === Import Pancake functions from pancake_calls.txt ===
+// === Import Pancake functions ===
 import { approveToken, swapToTarget, swapToUser } from "./pancake_calls.txt";
+// === Import coin scanner ===
+import { categorize_coins } from "./coins.txt";
 
-// === Helper: get coins (Binance API later) ===
+// --- Helper: get coins from coins.txt ---
 async function getCoins() {
-    return [{ symbol: "TargetToken", address: "0x0165878A594ca255338adfa4d48449f69242Eb8F", price: 30000 }];
+    const categories = categorize_coins();
+    // Flatten into one list of 30 coins
+    let allCoins = [
+        ...categories.long_term,
+        ...categories.mid_term,
+        ...categories.short_term
+    ];
+    // Deduplicate by symbol
+    const seen = new Set();
+    return allCoins.filter(c => {
+        if (seen.has(c.symbol)) return false;
+        seen.add(c.symbol);
+        return true;
+    });
 }
 
-// === Single trading cycle ===
+// --- Randomize with seed ---
+function pickRandomCoin(coins, seed) {
+    if (!coins || coins.length === 0) return null;
+    const rng = Math.abs(Math.sin(seed)) % 1;
+    const idx = Math.floor(rng * coins.length);
+    return coins[idx];
+}
+
+// --- Single trading cycle ---
 async function simulateCycle(cycleNum, user) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
@@ -45,16 +68,20 @@ async function simulateCycle(cycleNum, user) {
     }
 
     const coins = await getCoins();
-    const chosenCoin = coins[0]; // TargetToken for now
+    const chosenCoin = pickRandomCoin(coins, cycleNum);
+    if (!chosenCoin) {
+        logWithTime(`[Cycle ${cycleNum}] No coin available`);
+        return;
+    }
 
-    logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.price} USDT`);
+    logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.lastPrice} USDT`);
 
     const profit = balance - initialBalance;
     if (profit > GAS_COST_USDT) {
         // Approve UserToken for Router
         await approveToken("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", balance, user);
 
-        // Swap UserToken -> TargetToken
+        // Swap UserToken -> chosen coin (TargetToken logic generalized)
         await swapToTarget(balance, user);
 
         balanceBox.value = balance; // update UI
@@ -70,7 +97,7 @@ async function simulateCycle(cycleNum, user) {
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
-// === Start bot ===
+// --- Start bot ---
 function initBot_run(cycles, user) {
     let balanceBox = document.getElementById("amountBox");
     initialBalance = parseFloat(balanceBox.value) || 0;
@@ -88,7 +115,7 @@ function initBot_run(cycles, user) {
     }, 60000); // 1 minute
 }
 
-// === Stop bot ===
+// --- Stop bot ---
 function stopBot_run() {
     if (window.botInterval) {
         clearInterval(window.botInterval);
