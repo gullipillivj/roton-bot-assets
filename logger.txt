@@ -1,4 +1,3 @@
-<script>
 function logWithTime(msg) {
     const now = new Date();
     const timestamp = now.toLocaleTimeString();
@@ -15,4 +14,3 @@ function logToPanel(msg) {
 // Expose globally
 window.logWithTime = logWithTime;
 window.logToPanel = logToPanel;
-</script>
