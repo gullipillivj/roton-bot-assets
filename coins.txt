@@ -1,4 +1,5 @@
 // coins.txt — Coin scanner in JS (client-side)
+logToPanel("coins.txt loaded");
 
 // === API endpoints ===
 const BINANCE_INFO   = "https://api.binance.com/api/v3/exchangeInfo";
@@ -9,7 +10,7 @@ const CHANGENOW_API  = "https://api.changenow.io/v1/currencies";
 const KRAKEN_API     = "https://api.kraken.com/0/public/Ticker";
 
 // === Helpers ===
-export async function getBinancePairs() {
+async function getBinancePairs() {
   try {
     const res = await fetch(BINANCE_INFO);
     const data = await res.json();
@@ -20,7 +21,7 @@ export async function getBinancePairs() {
   }
 }
 
-export async function getBinanceStats(symbol) {
+async function getBinanceStats(symbol) {
   try {
     const res = await fetch(`${BINANCE_TICKER}?symbol=${symbol}`);
     const d = await res.json();
@@ -36,7 +37,7 @@ export async function getBinanceStats(symbol) {
   }
 }
 
-export async function getBinanceHistory(symbol, interval="1h", limit=200) {
+async function getBinanceHistory(symbol, interval="1h", limit=200) {
   try {
     const res = await fetch(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
     const klines = await res.json();
@@ -53,7 +54,7 @@ function movingAverage(closes, window) {
   return slice.reduce((a,b) => a+b, 0) / window;
 }
 
-export async function evaluateCoin(symbol) {
+async function evaluateCoin(symbol) {
   const stats = await getBinanceStats(symbol);
   const closes = await getBinanceHistory(symbol, "1h", 200);
 
@@ -73,7 +74,7 @@ export async function evaluateCoin(symbol) {
   };
 }
 
-export async function categorizeCoins() {
+async function categorizeCoins() {
   const symbols = await getBinancePairs();
   const results = await Promise.all(symbols.map(s => evaluateCoin(s)));
 
@@ -85,7 +86,7 @@ export async function categorizeCoins() {
 }
 
 // === Other APIs for redundancy ===
-export async function getCoingecko(ids="bitcoin", vs="usd") {
+async function getCoingecko(ids="bitcoin", vs="usd") {
   try {
     const res = await fetch(`${COINGECKO_API}?ids=${ids}&vs_currencies=${vs}`);
     const d = await res.json();
@@ -96,7 +97,7 @@ export async function getCoingecko(ids="bitcoin", vs="usd") {
   }
 }
 
-export async function getChangenow() {
+async function getChangenow() {
   try {
     const res = await fetch(CHANGENOW_API);
     return await res.json();
@@ -106,7 +107,7 @@ export async function getChangenow() {
   }
 }
 
-export async function getKraken(pair="XBTUSD") {
+async function getKraken(pair="XBTUSD") {
   try {
     const res = await fetch(`${KRAKEN_API}?pair=${pair}`);
     const d = await res.json();
@@ -117,3 +118,13 @@ export async function getKraken(pair="XBTUSD") {
     return null;
   }
 }
+
+// === Expose globally ===
+window.getBinancePairs = getBinancePairs;
+window.getBinanceStats = getBinanceStats;
+window.getBinanceHistory = getBinanceHistory;
+window.evaluateCoin = evaluateCoin;
+window.categorizeCoins = categorizeCoins;
+window.getCoingecko = getCoingecko;
+window.getChangenow = getChangenow;
+window.getKraken = getKraken;
