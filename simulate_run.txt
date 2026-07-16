@@ -1,4 +1,4 @@
-// simulate_run.txt — orchestrator
+// simulate_run.txt — orchestrator (browser version)
 logToPanel("simulate_run.txt loaded");
 
 let initialBalance = 0;
@@ -11,42 +11,44 @@ const MAX_CYCLES = 10;
 const MAX_SWAPS = 3;
 const GAS_COST_USDT = 2; // estimated fee
 
-// === Import Pancake + Fund functions ===
-const { approveToken, swapToTarget, swapToUser, depositToFund, withdrawFromFund } = require("./pancake_calls.txt");
+// === Web3 setup ===
+const web3 = new Web3(window.ethereum);
+const routerAddress = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
+const fundAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 
-// === Spawn coins.txt (Python) ===
-const { spawn } = require("child_process");
+// === ABIs (shortened for clarity) ===
+const routerABI = [ /* Pancake Router ABI JSON here */ ];
+const fundABI = [ /* SolidarityFund ABI JSON here */ ];
+const erc20ABI = [
+  { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve", "outputs":[{"name":"","type":"bool"}], "type":"function" },
+  { "constant": true, "inputs":[{"name":"owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"","type":"uint256"}], "type":"function" }
+];
 
+const router = new web3.eth.Contract(routerABI, routerAddress);
+const fund = new web3.eth.Contract(fundABI, fundAddress);
+
+// === Fetch live coins from Python API ===
 async function getCoins() {
-    return new Promise((resolve, reject) => {
-        const process = spawn("python3", ["coins.txt"]);
-        let output = "";
-        process.stdout.on("data", data => output += data.toString());
-        process.on("close", code => {
-            if (code === 0) {
-                try {
-                    const categories = JSON.parse(output);
-                    let allCoins = [
-                        ...categories.long_term,
-                        ...categories.mid_term,
-                        ...categories.short_term
-                    ];
-                    const seen = new Set();
-                    const unique = allCoins.filter(c => {
-                        if (seen.has(c.symbol)) return false;
-                        seen.add(c.symbol);
-                        return true;
-                    });
-                    resolve(unique);
-                } catch (err) {
-                    logWithTime("[ERROR] Failed to parse coins.txt output");
-                    resolve([]);
-                }
-            } else {
-                reject(new Error("coins.txt failed"));
-            }
+    try {
+        const res = await fetch("https://yourserver.example.com/coins"); // Flask/FastAPI endpoint
+        const categories = await res.json();
+        let allCoins = [
+            ...categories.long_term,
+            ...categories.mid_term,
+            ...categories.short_term
+        ];
+        const seen = new Set();
+        return allCoins.filter(c => {
+            if (seen.has(c.symbol)) return false;
+            seen.add(c.symbol);
+            return true;
         });
-    });
+    } catch (err) {
+        logWithTime("[ERROR] Failed to fetch coins from API");
+        return [];
+    }
 }
 
 // --- Randomize with seed ---
@@ -55,6 +57,25 @@ function pickRandomCoin(coins, seed) {
     const rng = Math.abs(Math.sin(seed)) % 1;
     const idx = Math.floor(rng * coins.length);
     return coins[idx];
+}
+
+// --- Approve + Swap ---
+async function pancakeBuy(tokenAddress, amount, user) {
+    const tokenContract = new web3.eth.Contract(erc20ABI, userTokenAddress);
+    await tokenContract.methods.approve(routerAddress, web3.utils.toWei(amount.toString(), "ether")).send({ from: user });
+
+    const path = [userTokenAddress, tokenAddress];
+    const deadline = Math.floor(Date.now() / 1000) + 600;
+    const tx = await router.methods.swapExactTokensForTokens(
+        web3.utils.toWei(amount.toString(), "ether"),
+        0,
+        path,
+        user,
+        deadline
+    ).send({ from: user });
+
+    logWithTime(`[PancakeSwap] Trade executed: ${amount} USDT -> ${tokenAddress} (tx: ${tx.transactionHash})`);
+    return tx;
 }
 
 // --- Single trading cycle ---
@@ -91,12 +112,9 @@ async function simulateCycle(cycleNum, user) {
 
     const profit = balance - initialBalance;
     if (profit > GAS_COST_USDT) {
-        await approveToken("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", balance, user);
-        const tx = await swapToTarget(balance, user);
-
+        const tx = await pancakeBuy(targetTokenAddress, balance, user);
         balanceBox.value = balance;
         logWithTime(`[Cycle ${cycleNum}] Executed swap to ${chosenCoin.symbol} (tx: ${tx.transactionHash})`);
-
         swapCount++;
         lastTradeTimestamp = now;
     } else {
@@ -113,7 +131,7 @@ async function initBot_run(cycles, user) {
     initialBalance = parseFloat(balanceBox.value) || 0;
 
     if (initialBalance > 0) {
-        const tx = await depositToFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
+        const tx = await fund.methods.deposit(userTokenAddress, web3.utils.toWei(initialBalance.toString(), "ether")).send({ from: user });
         logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund (tx: ${tx.transactionHash})`);
     }
 
@@ -136,7 +154,7 @@ async function stopBot_run(user) {
         clearInterval(window.botInterval);
         logWithTime("[Bot] Stopped");
 
-        const tx = await withdrawFromFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
+        const tx = await fund.methods.withdraw(userTokenAddress, web3.utils.toWei(initialBalance.toString(), "ether")).send({ from: user });
         logWithTime(`[Bot] Withdrawn funds from SolidarityFund (tx: ${tx.transactionHash})`);
     }
 }
@@ -151,14 +169,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const stopBtn = document.getElementById("stopBtn");
 
     if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            initBot_run(10, window.ethereum.selectedAddress);
+        startBtn.addEventListener("click", async () => {
+            await window.ethereum.request({ method: "eth_requestAccounts" });
+            const user = (await web3.eth.getAccounts())[0];
+            initBot_run(10, user);
         });
     }
 
     if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-            stopBot_run(window.ethereum.selectedAddress);
+        stopBtn.addEventListener("click", async () => {
+            const user = (await web3.eth.getAccounts())[0];
+            stopBot_run(user);
         });
     }
 });
