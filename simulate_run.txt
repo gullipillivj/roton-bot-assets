@@ -11,15 +11,15 @@ const MAX_CYCLES = 10;
 const MAX_SWAPS = 3;
 const GAS_COST_USDT = 2; // estimated fee
 
-// --- Import Pancake functions ---
-import { approveToken, swapToToken, swapToUSDT } from "./pancake_calls.txt";
+// === Import Pancake functions from pancake_calls.txt ===
+import { approveToken, swapToTarget, swapToUser } from "./pancake_calls.txt";
 
-// --- Helper: get coins (Binance API later) ---
+// === Helper: get coins (Binance API later) ===
 async function getCoins() {
-    return [{ symbol: "BTCUSDT", address: "0xBTCAddress", price: 30000 }];
+    return [{ symbol: "TargetToken", address: "0x0165878A594ca255338adfa4d48449f69242Eb8F", price: 30000 }];
 }
 
-// --- Single trading cycle ---
+// === Single trading cycle ===
 async function simulateCycle(cycleNum, user) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
@@ -45,17 +45,17 @@ async function simulateCycle(cycleNum, user) {
     }
 
     const coins = await getCoins();
-    const chosenCoin = coins[0]; // BTC for now
+    const chosenCoin = coins[0]; // TargetToken for now
 
     logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.price} USDT`);
 
     const profit = balance - initialBalance;
     if (profit > GAS_COST_USDT) {
-        // Approve USDT for Pancake router
-        await approveToken("0xUSDTAddress", balance, user);
+        // Approve UserToken for Router
+        await approveToken("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", balance, user);
 
-        // Swap USDT -> Coin
-        await swapToToken("0xUSDTAddress", chosenCoin.address, balance, user);
+        // Swap UserToken -> TargetToken
+        await swapToTarget(balance, user);
 
         balanceBox.value = balance; // update UI
         logWithTime(`[Cycle ${cycleNum}] Executed swap to ${chosenCoin.symbol}`);
@@ -70,7 +70,7 @@ async function simulateCycle(cycleNum, user) {
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
-// --- Start bot ---
+// === Start bot ===
 function initBot_run(cycles, user) {
     let balanceBox = document.getElementById("amountBox");
     initialBalance = parseFloat(balanceBox.value) || 0;
@@ -88,7 +88,7 @@ function initBot_run(cycles, user) {
     }, 60000); // 1 minute
 }
 
-// --- Stop bot ---
+// === Stop bot ===
 function stopBot_run() {
     if (window.botInterval) {
         clearInterval(window.botInterval);
