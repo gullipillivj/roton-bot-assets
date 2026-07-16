@@ -1,34 +1,64 @@
 // simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
-// --- Node spawn disabled in browser context ---
-// If you’re running this in a browser (via ngrok), require() isn’t supported.
-// Replace the spawn call with a simulated coin fetch instead.
+let initialBalance = 0;
+let cycleCount = 0;
+let swapCount = 0;
+let lastTradeTimestamp = 0;
 
-let initialBalance = 0; // store starting balance
+const HOLDING_PERIOD = 60; // 1 minute
+const MAX_CYCLES = 10;
+const MAX_SWAPS = 3;
+const GAS_COST_USDT = 2; // estimated fee
 
-// --- Helper: simulate coins.txt output ---
+// === Import Pancake + Fund functions ===
+const { approveToken, swapToTarget, swapToUser, depositToFund, withdrawFromFund } = require("./pancake_calls.txt");
+
+// === Spawn coins.txt (Python) ===
+const { spawn } = require("child_process");
+
 async function getCoins() {
-    // Simulate the same output coins.txt would produce
-    return [{ symbol: "BTCUSDT", address: "BTCUSDT", price: 30215.45 }];
+    return new Promise((resolve, reject) => {
+        const process = spawn("python3", ["coins.txt"]);
+        let output = "";
+        process.stdout.on("data", data => output += data.toString());
+        process.on("close", code => {
+            if (code === 0) {
+                try {
+                    const categories = JSON.parse(output);
+                    let allCoins = [
+                        ...categories.long_term,
+                        ...categories.mid_term,
+                        ...categories.short_term
+                    ];
+                    const seen = new Set();
+                    const unique = allCoins.filter(c => {
+                        if (seen.has(c.symbol)) return false;
+                        seen.add(c.symbol);
+                        return true;
+                    });
+                    resolve(unique);
+                } catch (err) {
+                    logWithTime("[ERROR] Failed to parse coins.txt output");
+                    resolve([]);
+                }
+            } else {
+                reject(new Error("coins.txt failed"));
+            }
+        });
+    });
 }
 
 // --- Randomize with seed ---
 function pickRandomCoin(coins, seed) {
     if (!coins || coins.length === 0) return null;
-    const rng = Math.abs(Math.sin(seed)) % 1; // seeded RNG
+    const rng = Math.abs(Math.sin(seed)) % 1;
     const idx = Math.floor(rng * coins.length);
     return coins[idx];
 }
 
-// --- PancakeSwap buy (simulated for now) ---
-async function pancakeBuy(tokenAddress, amount) {
-    logWithTime(`[PancakeSwap] Simulated trade: ${amount} USDT -> ${tokenAddress}`);
-    return { status: "success", spent: amount, gas: 0 };
-}
-
 // --- Single trading cycle ---
-async function simulateCycle(cycleNum) {
+async function simulateCycle(cycleNum, user) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
     const balanceBox = document.getElementById("amountBox");
@@ -39,6 +69,17 @@ async function simulateCycle(cycleNum) {
         return;
     }
 
+    const now = Math.floor(Date.now() / 1000);
+    if (now < lastTradeTimestamp + HOLDING_PERIOD) {
+        logWithTime(`[Cycle ${cycleNum}] Skipped — holding period active`);
+        return;
+    }
+
+    if (swapCount >= MAX_SWAPS) {
+        logWithTime(`[Cycle ${cycleNum}] Skipped — max swaps reached`);
+        return;
+    }
+
     const coins = await getCoins();
     const chosenCoin = pickRandomCoin(coins, cycleNum);
     if (!chosenCoin) {
@@ -46,46 +87,57 @@ async function simulateCycle(cycleNum) {
         return;
     }
 
-    logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Bought ${chosenCoin.symbol} at ${chosenCoin.price} USDT`);
+    logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.lastPrice} USDT`);
 
-    const result = await pancakeBuy(chosenCoin.address, balance);
-    if (result.status === "success") {
-        balance -= (result.spent + result.gas);
+    const profit = balance - initialBalance;
+    if (profit > GAS_COST_USDT) {
+        await approveToken("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", balance, user);
+        const tx = await swapToTarget(balance, user);
+
         balanceBox.value = balance;
+        logWithTime(`[Cycle ${cycleNum}] Executed swap to ${chosenCoin.symbol} (tx: ${tx.transactionHash})`);
 
-        // --- Profit calculation ---
-        const profit = balance - initialBalance;
-        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT | Profit: ${profit.toFixed(2)} USDT`);
-
-        updateChart(cycleNum, balance);
+        swapCount++;
+        lastTradeTimestamp = now;
+    } else {
+        logWithTime(`[Cycle ${cycleNum}] No profitable swap, holding coin.`);
     }
 
+    cycleCount++;
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
 // --- Start bot ---
-function initBot_run(cycles) {
+async function initBot_run(cycles, user) {
     const balanceBox = document.getElementById("amountBox");
-    initialBalance = parseFloat(balanceBox.value) || 0; // capture starting balance
+    initialBalance = parseFloat(balanceBox.value) || 0;
+
+    if (initialBalance > 0) {
+        const tx = await depositToFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
+        logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund (tx: ${tx.transactionHash})`);
+    }
 
     let cycleNum = 1;
     logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
 
     window.botInterval = setInterval(async () => {
-        if (cycleNum > cycles) {
-            stopBot_run();
+        if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
+            stopBot_run(user);
             return;
         }
-        await simulateCycle(cycleNum);
+        await simulateCycle(cycleNum, user);
         cycleNum++;
-    }, 30000); // 30 seconds
+    }, 60000);
 }
 
 // --- Stop bot ---
-function stopBot_run() {
+async function stopBot_run(user) {
     if (window.botInterval) {
         clearInterval(window.botInterval);
         logWithTime("[Bot] Stopped");
+
+        const tx = await withdrawFromFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
+        logWithTime(`[Bot] Withdrawn funds from SolidarityFund (tx: ${tx.transactionHash})`);
     }
 }
 
@@ -93,20 +145,20 @@ function stopBot_run() {
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
 
-// --- Hook up Start/Stop buttons (IDs must match main_run.txt) ---
+// --- Hook up Start/Stop buttons ---
 document.addEventListener("DOMContentLoaded", () => {
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
 
     if (startBtn) {
         startBtn.addEventListener("click", () => {
-            initBot_run(10); // start with 10 cycles
+            initBot_run(10, window.ethereum.selectedAddress);
         });
     }
 
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
-            stopBot_run();
+            stopBot_run(window.ethereum.selectedAddress);
         });
     }
 });
