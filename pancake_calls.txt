@@ -8,7 +8,7 @@ window.web3 = web3;
 // === Deployed contracts ===
 const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
 const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
-const routerAddress = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
+const routerAddress      = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
 const solidarityFundAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
 
 // === ABIs ===
@@ -20,7 +20,7 @@ const erc20ABI = [
 const fundABI = [ /* SolidarityFund ABI JSON here */ ];
 
 const router = new web3.eth.Contract(routerABI, routerAddress);
-const fund = new web3.eth.Contract(fundABI, solidarityFundAddress);
+const fund   = new web3.eth.Contract(fundABI, solidarityFundAddress);
 
 // === Functions ===
 async function approveToken(token, amount, user) {
@@ -49,11 +49,11 @@ async function withdrawFromFund(token, amount, user) {
 }
 
 // === Expose globally ===
-window.userTokenAddress = userTokenAddress;
+window.userTokenAddress   = userTokenAddress;
 window.targetTokenAddress = targetTokenAddress;
-window.fund = fund;
-window.approveToken = approveToken;
-window.swapToTarget = swapToTarget;
-window.swapToUser = swapToUser;
-window.depositToFund = depositToFund;
-window.withdrawFromFund = withdrawFromFund;
+window.fund               = fund;
+window.approveToken       = approveToken;
+window.swapToTarget       = swapToTarget;
+window.swapToUser         = swapToUser;
+window.depositToFund      = depositToFund;
+window.withdrawFromFund   = withdrawFromFund;
