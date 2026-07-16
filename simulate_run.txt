@@ -11,12 +11,13 @@ import {
   fund
 } from "./pancake_calls.txt";
 
-import { categorizeCoins } from "./coins.txt";  // direct import
+import { categorizeCoins } from "./coins.txt";
 
 let initialBalance = 0;
 let cycleCount = 0;
 let swapCount = 0;
 let lastTradeTimestamp = 0;
+let botInterval = null;
 
 const HOLDING_PERIOD = 60; // seconds
 const MAX_CYCLES = 10;
@@ -91,7 +92,7 @@ async function initBot_run(cycles, user) {
   let cycleNum = 1;
   logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
 
-  window.botInterval = setInterval(async () => {
+  botInterval = setInterval(async () => {
     if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
       stopBot_run(user);
       return;
@@ -102,8 +103,8 @@ async function initBot_run(cycles, user) {
 }
 
 async function stopBot_run(user) {
-  if (window.botInterval) {
-    clearInterval(window.botInterval);
+  if (botInterval) {
+    clearInterval(botInterval);
     logWithTime("[Bot] Stopped");
 
     const tx = await withdrawFromFund(userTokenAddress, initialBalance, user);
@@ -111,7 +112,7 @@ async function stopBot_run(user) {
   }
 }
 
-// Attach to window for main_run.txt
+// Expose orchestrator functions globally (browser style)
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
-window.simulateCycle = simulateCycl
+window.simulateCycle = simulateCycle;
