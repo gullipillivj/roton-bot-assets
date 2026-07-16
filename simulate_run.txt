@@ -110,3 +110,6 @@ export async function stopBot_run(user) {
     logWithTime(`[Bot] Withdrawn funds from SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
   }
 }
+// Attach exports to window for main_run.txt
+window.initBot_run = initBot_run;
+window.stopBot_run = stopBot_run;
