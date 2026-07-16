@@ -11,7 +11,7 @@ import {
   fund
 } from "./pancake_calls.txt";
 
-import { categorizeCoins } from "./coins.txt";  // <-- direct import
+import { categorizeCoins } from "./coins.txt";  // direct import
 
 let initialBalance = 0;
 let cycleCount = 0;
@@ -52,7 +52,7 @@ async function simulateCycle(cycleNum, user) {
     return;
   }
 
-  const categories = await categorizeCoins();   // <-- use JS module
+  const categories = await categorizeCoins();
   const chosenCoin = pickCoin(categories, cycleNum);
   if (!chosenCoin) {
     logWithTime(`[Cycle ${cycleNum}] No coin available`);
@@ -76,7 +76,7 @@ async function simulateCycle(cycleNum, user) {
   logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
-export async function initBot_run(cycles, user) {
+async function initBot_run(cycles, user) {
   const balanceBox = document.getElementById("amountBox");
   initialBalance = parseFloat(balanceBox.value) || 0;
 
@@ -101,7 +101,7 @@ export async function initBot_run(cycles, user) {
   }, 60000);
 }
 
-export async function stopBot_run(user) {
+async function stopBot_run(user) {
   if (window.botInterval) {
     clearInterval(window.botInterval);
     logWithTime("[Bot] Stopped");
@@ -110,6 +110,7 @@ export async function stopBot_run(user) {
     logWithTime(`[Bot] Withdrawn funds from SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
   }
 }
-// Attach exports to window for main_run.txt
+
+// Attach to window for main_run.txt
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
