@@ -1,4 +1,4 @@
-// pancake_calls.txt — PancakeSwap interaction layer (Brownie test addresses)
+// pancake_calls.txt — PancakeSwap + SolidarityFund interaction layer
 
 const Web3 = require("web3");
 const web3 = new Web3("http://127.0.0.1:8545"); // Brownie local chain RPC
@@ -15,8 +15,10 @@ const erc20ABI = [
   { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve", "outputs":[{"name":"","type":"bool"}], "type":"function" },
   { "constant": true, "inputs":[{"name":"owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"","type":"uint256"}], "type":"function" }
 ];
+const fundABI = [ /* SolidarityFund ABI JSON here */ ];
 
 const router = new web3.eth.Contract(routerABI, routerAddress);
+const fund = new web3.eth.Contract(fundABI, solidarityFundAddress);
 
 // === Approve token for swap ===
 async function approveToken(token, amount, user) {
@@ -28,28 +30,24 @@ async function approveToken(token, amount, user) {
 async function swapToTarget(amount, user) {
   const path = [userTokenAddress, targetTokenAddress];
   const deadline = Math.floor(Date.now() / 1000) + 600;
-
-  return await router.methods.swapExactTokensForTokens(
-    amount,
-    0,
-    path,
-    user,
-    deadline
-  ).send({ from: user });
+  return await router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user });
 }
 
 // === Swap TargetToken -> UserToken ===
 async function swapToUser(amount, user) {
   const path = [targetTokenAddress, userTokenAddress];
   const deadline = Math.floor(Date.now() / 1000) + 600;
-
-  return await router.methods.swapExactTokensForTokens(
-    amount,
-    0,
-    path,
-    user,
-    deadline
-  ).send({ from: user });
+  return await router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user });
 }
 
-module.exports = { approveToken, swapToTarget, swapToUser };
+// === Deposit UserToken into SolidarityFund ===
+async function depositToFund(token, amount, user) {
+  return await fund.methods.deposit(token, amount).send({ from: user });
+}
+
+// === Withdraw UserToken from SolidarityFund ===
+async function withdrawFromFund(token, amount, user) {
+  return await fund.methods.withdraw(token, amount).send({ from: user });
+}
+
+module.exports = { approveToken, swapToTarget, swapToUser, depositToFund, withdrawFromFund };
