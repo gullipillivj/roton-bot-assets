@@ -14,39 +14,34 @@ const GAS_COST_USDT = 2; // estimated fee
 // === Web3 setup ===
 const web3 = new Web3(window.ethereum);
 const routerAddress = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
-const fundAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
-const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+const fundAddress   = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+const userTokenAddress   = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
 const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 
 // === ABIs (shortened for clarity) ===
 const routerABI = [ /* Pancake Router ABI JSON here */ ];
-const fundABI = [ /* SolidarityFund ABI JSON here */ ];
-const erc20ABI = [
+const fundABI   = [ /* SolidarityFund ABI JSON here */ ];
+const erc20ABI  = [
   { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve", "outputs":[{"name":"","type":"bool"}], "type":"function" },
   { "constant": true, "inputs":[{"name":"owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"","type":"uint256"}], "type":"function" }
 ];
 
 const router = new web3.eth.Contract(routerABI, routerAddress);
-const fund = new web3.eth.Contract(fundABI, fundAddress);
+const fund   = new web3.eth.Contract(fundABI, fundAddress);
 
-// === Fetch live coins from Python API ===
+// === Fetch live coins directly from Binance ===
 async function getCoins() {
     try {
-        const res = await fetch("https://yourserver.example.com/coins"); // Flask/FastAPI endpoint
-        const categories = await res.json();
-        let allCoins = [
-            ...categories.long_term,
-            ...categories.mid_term,
-            ...categories.short_term
-        ];
-        const seen = new Set();
-        return allCoins.filter(c => {
-            if (seen.has(c.symbol)) return false;
-            seen.add(c.symbol);
-            return true;
-        });
+        const res = await fetch("https://api.binance.com/api/v3/ticker/24hr");
+        const data = await res.json();
+        return data.filter(d => d.symbol.endsWith("USDT")).map(d => ({
+            symbol: d.symbol,
+            lastPrice: parseFloat(d.lastPrice),
+            change: parseFloat(d.priceChangePercent),
+            volume: parseFloat(d.volume)
+        }));
     } catch (err) {
-        logWithTime("[ERROR] Failed to fetch coins from API");
+        logWithTime("[ERROR] Failed to fetch coins from Binance");
         return [];
     }
 }
