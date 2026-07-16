@@ -1,40 +1,32 @@
 // main_run.txt — central loader
 logToPanel("main_run.txt loaded");
 
-(async () => {
-    await import("./logger.txt");
-    await import("./contracts.txt");
-    await import("./coins.txt");
-    await import("./config.txt");
-    await import("./trade_logic.txt");
-    await import("./db_access.txt");
-    await import("./chart.txt");
-    await import("./simulate_run.txt");
+// Wire UI after DOM is ready
+document.addEventListener("DOMContentLoaded", () => {
+    logToPanel("UI ready");
 
-    // Wire UI only after simulate_run is loaded
-    document.addEventListener("DOMContentLoaded", () => {
-        logToPanel("UI ready");
+    const startBtn = document.getElementById("startBtn");
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            if (typeof window.initBot_run === "function") {
+                // Use the active user set in db_access.txt
+                const user = window.activeUserId || "0xYourUserWallet";
+                window.initBot_run(10, user);
+            } else {
+                logToPanel("ERROR: initBot_run not found");
+            }
+        });
+    }
 
-        const startBtn = document.getElementById("startBtn");
-        if (startBtn) {
-            startBtn.addEventListener("click", () => {
-                if (typeof window.initBot_run === "function") {
-                    window.initBot_run(10, "0xYourUserWallet"); // pass user wallet
-                } else {
-                    logToPanel("ERROR: initBot_run not found");
-                }
-            });
-        }
-
-        const stopBtn = document.getElementById("stopBtn");
-        if (stopBtn) {
-            stopBtn.addEventListener("click", () => {
-                if (typeof window.stopBot_run === "function") {
-                    window.stopBot_run("0xYourUserWallet");
-                } else {
-                    logToPanel("ERROR: stopBot_run not found");
-                }
-            });
-        }
-    });
-})();
+    const stopBtn = document.getElementById("stopBtn");
+    if (stopBtn) {
+        stopBtn.addEventListener("click", () => {
+            if (typeof window.stopBot_run === "function") {
+                const user = window.activeUserId || "0xYourUserWallet";
+                window.stopBot_run(user);
+            } else {
+                logToPanel("ERROR: stopBot_run not found");
+            }
+        });
+    }
+});
