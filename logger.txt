@@ -1,9 +1,21 @@
+// logger.txt — Logging utilities
+logToPanel("logger.txt loaded");
+
 function logWithTime(msg) {
     const now = new Date();
     const timestamp = now.toLocaleTimeString();
-    console.log(`[${timestamp}] ${msg}`);
+
+    // Auto stringify objects for readability
+    let formatted;
+    if (typeof msg === "object") {
+        formatted = JSON.stringify(msg, null, 2);
+    } else {
+        formatted = msg;
+    }
+
+    console.log(`[${timestamp}] ${formatted}`);
     const panel = document.getElementById("logPanel");
-    if (panel) panel.value += `[${timestamp}] ${msg}\n`;
+    if (panel) panel.value += `[${timestamp}] ${formatted}\n`;
 }
 
 function logToPanel(msg) {
