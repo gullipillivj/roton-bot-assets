@@ -1,46 +1,48 @@
 // simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
-let initialBalance = 0; 
-let cycleCount = 0;
-let swapCount = 0;
-let lastTradeTimestamp = 0;
+const { spawn } = require("child_process");
 
-const HOLDING_PERIOD = 60; // 1 minute
-const MAX_CYCLES = 10;
-const MAX_SWAPS = 3;
-const GAS_COST_USDT = 2; // estimated fee
+let initialBalance = 0; // store starting balance
 
-// === Import Pancake + Fund functions ===
-import { approveToken, swapToTarget, swapToUser, depositToFund, withdrawFromFund } from "./pancake_calls.txt";
-import { categorize_coins } from "./coins.txt";
-
-// --- Helper: get coins from coins.txt ---
+// --- Helper: run coins.txt directly ---
 async function getCoins() {
-    const categories = categorize_coins();
-    let allCoins = [
-        ...categories.long_term,
-        ...categories.mid_term,
-        ...categories.short_term
-    ];
-    const seen = new Set();
-    return allCoins.filter(c => {
-        if (seen.has(c.symbol)) return false;
-        seen.add(c.symbol);
-        return true;
+    return new Promise((resolve, reject) => {
+        const process = spawn("python3", ["coins.txt"]);
+        let output = "";
+        process.stdout.on("data", data => output += data.toString());
+        process.on("close", code => {
+            if (code === 0) {
+                // coins.txt prints "Current BTCUSDT price: 30215.45"
+                const match = output.match(/([\d.]+)/);
+                if (match) {
+                    resolve([{ symbol: "BTCUSDT", address: "BTCUSDT", price: parseFloat(match[1]) }]);
+                } else {
+                    resolve([]);
+                }
+            } else {
+                reject(new Error("coins.txt failed"));
+            }
+        });
     });
 }
 
 // --- Randomize with seed ---
 function pickRandomCoin(coins, seed) {
     if (!coins || coins.length === 0) return null;
-    const rng = Math.abs(Math.sin(seed)) % 1;
+    const rng = Math.abs(Math.sin(seed)) % 1; // seeded RNG
     const idx = Math.floor(rng * coins.length);
     return coins[idx];
 }
 
+// --- PancakeSwap buy (simulated for now) ---
+async function pancakeBuy(tokenAddress, amount) {
+    logWithTime(`[PancakeSwap] Simulated trade: ${amount} USDT -> ${tokenAddress}`);
+    return { status: "success", spent: amount, gas: 0 };
+}
+
 // --- Single trading cycle ---
-async function simulateCycle(cycleNum, user) {
+async function simulateCycle(cycleNum) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
     let balanceBox = document.getElementById("amountBox");
@@ -51,17 +53,6 @@ async function simulateCycle(cycleNum, user) {
         return;
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    if (now < lastTradeTimestamp + HOLDING_PERIOD) {
-        logWithTime(`[Cycle ${cycleNum}] Skipped — holding period active`);
-        return;
-    }
-
-    if (swapCount >= MAX_SWAPS) {
-        logWithTime(`[Cycle ${cycleNum}] Skipped — max swaps reached`);
-        return;
-    }
-
     const coins = await getCoins();
     const chosenCoin = pickRandomCoin(coins, cycleNum);
     if (!chosenCoin) {
@@ -69,56 +60,67 @@ async function simulateCycle(cycleNum, user) {
         return;
     }
 
-    logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.lastPrice} USDT`);
+    logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Bought ${chosenCoin.symbol} at ${chosenCoin.price} USDT`);
 
-    const profit = balance - initialBalance;
-    if (profit > GAS_COST_USDT) {
-        await approveToken("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", balance, user);
-        await swapToTarget(balance, user);
-
+    const result = await pancakeBuy(chosenCoin.address, balance);
+    if (result.status === "success") {
+        balance -= (result.spent + result.gas);
         balanceBox.value = balance;
-        logWithTime(`[Cycle ${cycleNum}] Executed swap to ${chosenCoin.symbol}`);
 
-        swapCount++;
-        lastTradeTimestamp = now;
-    } else {
-        logWithTime(`[Cycle ${cycleNum}] No profitable swap, holding coin.`);
+        // --- Profit calculation ---
+        const profit = balance - initialBalance;
+        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT | Profit: ${profit.toFixed(2)} USDT`);
+
+        updateChart(cycleNum, balance);
     }
 
-    cycleCount++;
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
 // --- Start bot ---
-export async function initBot_run(cycles, user) {
+function initBot_run(cycles) {
     let balanceBox = document.getElementById("amountBox");
-    initialBalance = parseFloat(balanceBox.value) || 0;
-
-    if (initialBalance > 0) {
-        const tx = await depositToFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
-        logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund (tx: ${tx.transactionHash})`);
-    }
+    initialBalance = parseFloat(balanceBox.value) || 0; // capture starting balance
 
     let cycleNum = 1;
     logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
 
     window.botInterval = setInterval(async () => {
-        if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
-            stopBot_run(user);
+        if (cycleNum > cycles) {
+            stopBot_run();
             return;
         }
-        await simulateCycle(cycleNum, user);
+        await simulateCycle(cycleNum);
         cycleNum++;
-    }, 60000);
+    }, 30000); // 30 seconds
 }
 
 // --- Stop bot ---
-export async function stopBot_run(user) {
+function stopBot_run() {
     if (window.botInterval) {
         clearInterval(window.botInterval);
         logWithTime("[Bot] Stopped");
-
-        const tx = await withdrawFromFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
-        logWithTime(`[Bot] Withdrawn funds from SolidarityFund (tx: ${tx.transactionHash})`);
     }
 }
+
+// Expose globally for main_run.txt
+window.initBot_run = initBot_run;
+window.stopBot_run = stopBot_run;
+
+// Hook up Start/Stop buttons (IDs must match main_run.txt)
+document.addEventListener("DOMContentLoaded", () => {
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            initBot_run(10); // start with 10 cycles
+        });
+    }
+
+    if (stopBtn) {
+        stopBtn.addEventListener("click", () => {
+            stopBot_run();
+        });
+    }
+});
