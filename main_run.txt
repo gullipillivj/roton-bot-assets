@@ -1,7 +1,7 @@
 // main_run.txt — central loader
 logToPanel("main_run.txt loaded");
 
-// Define bot functions globally
+// Define bot functions directly on window
 window.initbot_run = function(cycles, user) {
     logToPanel("[InitBot] Simulation started for " + cycles + " cycles for " + user);
     // … trading loop logic …
@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (startBtn) {
         startBtn.addEventListener("click", () => {
             const user = "mockuser1";
-            initbot_run(10, user);
+            window.initbot_run(10, user);
         });
     }
 
@@ -38,7 +38,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
             const user = "mockuser1";
-            stopbot_run(user);
+            window.stopbot_run(user);
         });
     }
 
@@ -46,7 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (depositBtn) {
         depositBtn.addEventListener("click", () => {
             const user = "mockuser1";
-            deposit_run(user);
+            window.deposit_run(user);
         });
     }
 
@@ -54,7 +54,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (withdrawBtn) {
         withdrawBtn.addEventListener("click", () => {
             const user = "mockuser1";
-            withdraw_run(user);
+            window.withdraw_run(user);
         });
     }
 });
