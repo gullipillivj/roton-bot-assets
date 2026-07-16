@@ -125,5 +125,5 @@ async function stopBot_run(user) {
     }
 }
 
-window.initBot_run = initBot_run;
-window.stopBot_run = stopBot_run;
+window.initBot = initBot_run;
+window.stopBot = stopBot_run;
