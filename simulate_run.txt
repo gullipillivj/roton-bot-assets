@@ -90,11 +90,10 @@ async function simulateCycle(cycleNum, user) {
 }
 
 // --- Start bot ---
-async function initBot_run(cycles, user) {
+export async function initBot_run(cycles, user) {
     let balanceBox = document.getElementById("amountBox");
     initialBalance = parseFloat(balanceBox.value) || 0;
 
-    // Deposit into SolidarityFund before cycles start
     if (initialBalance > 0) {
         const tx = await depositToFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
         logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund (tx: ${tx.transactionHash})`);
@@ -114,23 +113,12 @@ async function initBot_run(cycles, user) {
 }
 
 // --- Stop bot ---
-async function stopBot_run(user) {
+export async function stopBot_run(user) {
     if (window.botInterval) {
         clearInterval(window.botInterval);
         logWithTime("[Bot] Stopped");
 
-        // Withdraw remaining funds
         const tx = await withdrawFromFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
         logWithTime(`[Bot] Withdrawn funds from SolidarityFund (tx: ${tx.transactionHash})`);
     }
-}
-
-// --- Expose globally so main_run.txt can find them ---
-if (typeof window !== "undefined") {
-    window.initBot_run = initBot_run;
-    window.stopBot_run = stopBot_run;
-
-    // Optional aliases
-    window.initBot = initBot_run;
-    window.stopBot = stopBot_run;
 }
