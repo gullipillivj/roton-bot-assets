@@ -1,12 +1,13 @@
 // pancake_calls.txt — PancakeSwap + SolidarityFund interaction layer
+logToPanel("pancake_calls.txt loaded");
 
-import Web3 from "https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js";
-
+// Ensure Web3 is available globally (include via <script> in HTML)
 const web3 = new Web3("http://127.0.0.1:8545"); // Brownie local chain RPC
+window.web3 = web3;
 
 // === Deployed contracts ===
-export const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
-export const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
+const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 const routerAddress = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
 const solidarityFundAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
 
@@ -19,30 +20,40 @@ const erc20ABI = [
 const fundABI = [ /* SolidarityFund ABI JSON here */ ];
 
 const router = new web3.eth.Contract(routerABI, routerAddress);
-export const fund = new web3.eth.Contract(fundABI, solidarityFundAddress);
+const fund = new web3.eth.Contract(fundABI, solidarityFundAddress);
 
 // === Functions ===
-export async function approveToken(token, amount, user) {
+async function approveToken(token, amount, user) {
   const tokenContract = new web3.eth.Contract(erc20ABI, token);
   return await tokenContract.methods.approve(routerAddress, amount).send({ from: user });
 }
 
-export async function swapToTarget(amount, user) {
+async function swapToTarget(amount, user) {
   const path = [userTokenAddress, targetTokenAddress];
   const deadline = Math.floor(Date.now() / 1000) + 600;
   return await router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user });
 }
 
-export async function swapToUser(amount, user) {
+async function swapToUser(amount, user) {
   const path = [targetTokenAddress, userTokenAddress];
   const deadline = Math.floor(Date.now() / 1000) + 600;
   return await router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user });
 }
 
-export async function depositToFund(token, amount, user) {
+async function depositToFund(token, amount, user) {
   return await fund.methods.deposit(token, amount).send({ from: user });
 }
 
-export async function withdrawFromFund(token, amount, user) {
+async function withdrawFromFund(token, amount, user) {
   return await fund.methods.withdraw(token, amount).send({ from: user });
 }
+
+// === Expose globally ===
+window.userTokenAddress = userTokenAddress;
+window.targetTokenAddress = targetTokenAddress;
+window.fund = fund;
+window.approveToken = approveToken;
+window.swapToTarget = swapToTarget;
+window.swapToUser = swapToUser;
+window.depositToFund = depositToFund;
+window.withdrawFromFund = withdrawFromFund;
