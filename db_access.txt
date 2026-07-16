@@ -1,4 +1,5 @@
-// db_access.txt
+// db_access.txt — Client database access
+logToPanel("db_access.txt loaded");
 
 const CLIENTS_URL = "https://almanac-sierra-rundown.ngrok-free.dev/clients";
 
@@ -29,6 +30,8 @@ async function parseClient(userid) {
             return null;
         }
         logWithTime(`[DB] Client ${userid} parsed successfully`);
+        // Set active user globally
+        window.activeUserId = client.userid;
         return client;
     } catch (err) {
         logWithTime(`[ERROR] parseClient(${userid}) failed: ${err}`);
@@ -57,3 +60,9 @@ async function withdraw(userid, amount) {
         return null;
     }
 }
+
+// === Expose globally ===
+window.connectClients = connectClients;
+window.parseClient    = parseClient;
+window.deposit        = deposit;
+window.withdraw       = withdraw;
