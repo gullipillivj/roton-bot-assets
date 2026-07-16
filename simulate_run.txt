@@ -1,30 +1,16 @@
 // simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
-const { spawn } = require("child_process");
+// --- Node spawn disabled in browser context ---
+// If you’re running this in a browser (via ngrok), require() isn’t supported.
+// Replace the spawn call with a simulated coin fetch instead.
 
 let initialBalance = 0; // store starting balance
 
-// --- Helper: run coins.txt directly ---
+// --- Helper: simulate coins.txt output ---
 async function getCoins() {
-    return new Promise((resolve, reject) => {
-        const process = spawn("python3", ["coins.txt"]);
-        let output = "";
-        process.stdout.on("data", data => output += data.toString());
-        process.on("close", code => {
-            if (code === 0) {
-                // coins.txt prints "Current BTCUSDT price: 30215.45"
-                const match = output.match(/([\d.]+)/);
-                if (match) {
-                    resolve([{ symbol: "BTCUSDT", address: "BTCUSDT", price: parseFloat(match[1]) }]);
-                } else {
-                    resolve([]);
-                }
-            } else {
-                reject(new Error("coins.txt failed"));
-            }
-        });
-    });
+    // Simulate the same output coins.txt would produce
+    return [{ symbol: "BTCUSDT", address: "BTCUSDT", price: 30215.45 }];
 }
 
 // --- Randomize with seed ---
@@ -45,7 +31,7 @@ async function pancakeBuy(tokenAddress, amount) {
 async function simulateCycle(cycleNum) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
-    let balanceBox = document.getElementById("amountBox");
+    const balanceBox = document.getElementById("amountBox");
     let balance = parseFloat(balanceBox.value);
 
     if (!balance || balance <= 0) {
@@ -79,7 +65,7 @@ async function simulateCycle(cycleNum) {
 
 // --- Start bot ---
 function initBot_run(cycles) {
-    let balanceBox = document.getElementById("amountBox");
+    const balanceBox = document.getElementById("amountBox");
     initialBalance = parseFloat(balanceBox.value) || 0; // capture starting balance
 
     let cycleNum = 1;
@@ -103,11 +89,11 @@ function stopBot_run() {
     }
 }
 
-// Expose globally for main_run.txt
+// --- Expose globally for main_run.txt ---
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
 
-// Hook up Start/Stop buttons (IDs must match main_run.txt)
+// --- Hook up Start/Stop buttons (IDs must match main_run.txt) ---
 document.addEventListener("DOMContentLoaded", () => {
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
