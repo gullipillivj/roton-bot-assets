@@ -1,3 +1,6 @@
+// trade_logic.txt — Trade cycle logic
+logToPanel("trade_logic.txt loaded");
+
 async function runCycle(userid) {
     const client = await getClientInfo(userid);
     if (!client || client.current_balance <= 0) {
@@ -18,3 +21,6 @@ async function runCycle(userid) {
 
     logWithTime(`[Result] Cycle for ${client.userid} — Profit ${profit.toFixed(2)} USDT`);
 }
+
+// === Expose globally ===
+window.runCycle = runCycle;
