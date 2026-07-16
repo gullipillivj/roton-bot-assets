@@ -1,112 +1,119 @@
-import requests
-import statistics
+// coins.txt — Coin scanner in JS (client-side)
 
-# === API endpoints ===
-BINANCE_INFO = "https://api.binance.com/api/v3/exchangeInfo"
-BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/24hr"
-BINANCE_KLINES = "https://api.binance.com/api/v3/klines"
-COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price"
-CHANGENOW_API = "https://api.changenow.io/v1/currencies"
-KRAKEN_API = "https://api.kraken.com/0/public/Ticker"
+// === API endpoints ===
+const BINANCE_INFO   = "https://api.binance.com/api/v3/exchangeInfo";
+const BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/24hr";
+const BINANCE_KLINES = "https://api.binance.com/api/v3/klines";
+const COINGECKO_API  = "https://api.coingecko.com/api/v3/simple/price";
+const CHANGENOW_API  = "https://api.changenow.io/v1/currencies";
+const KRAKEN_API     = "https://api.kraken.com/0/public/Ticker";
 
-# === Helpers ===
-def get_binance_pairs():
-    """Fetch all USDT trading pairs from Binance"""
-    try:
-        res = requests.get(BINANCE_INFO).json()
-        return [s["symbol"] for s in res["symbols"] if s["quoteAsset"] == "USDT"]
-    except Exception as e:
-        print("[WARN] Binance pairs fetch failed:", e)
-        return ["BTCUSDT","ETHUSDT","BNBUSDT"]
+// === Helpers ===
+export async function getBinancePairs() {
+  try {
+    const res = await fetch(BINANCE_INFO);
+    const data = await res.json();
+    return data.symbols.filter(s => s.quoteAsset === "USDT").map(s => s.symbol);
+  } catch (e) {
+    console.warn("[WARN] Binance pairs fetch failed:", e);
+    return ["BTCUSDT","ETHUSDT","BNBUSDT"];
+  }
+}
 
-def get_binance_stats(symbol):
-    try:
-        res = requests.get(BINANCE_TICKER, params={"symbol": symbol})
-        d = res.json()
-        return {
-            "symbol": symbol,
-            "lastPrice": float(d["lastPrice"]),
-            "priceChangePercent": float(d["priceChangePercent"]),
-            "volume": float(d["volume"])
-        }
-    except Exception as e:
-        print("[WARN] Binance stats failed:", e)
-        return None
-
-def get_binance_history(symbol, interval="1h", limit=200):
-    try:
-        res = requests.get(BINANCE_KLINES, params={"symbol": symbol, "interval": interval, "limit": limit})
-        klines = res.json()
-        return [float(k[4]) for k in klines]  # closing prices
-    except Exception as e:
-        print("[WARN] Binance history failed:", e)
-        return []
-
-def moving_average(closes, window):
-    if len(closes) < window:
-        return None
-    return statistics.mean(closes[-window:])
-
-def evaluate_coin(symbol):
-    stats = get_binance_stats(symbol)
-    closes = get_binance_history(symbol, "1h", 200)
-
-    ma20 = moving_average(closes, 20)
-    ma50 = moving_average(closes, 50)
-    ma100 = moving_average(closes, 100)
-
-    upward = ma20 and ma50 and ma20 > ma50
-
+export async function getBinanceStats(symbol) {
+  try {
+    const res = await fetch(`${BINANCE_TICKER}?symbol=${symbol}`);
+    const d = await res.json();
     return {
-        "symbol": symbol,
-        "lastPrice": stats["lastPrice"] if stats else None,
-        "24hr%": stats["priceChangePercent"] if stats else None,
-        "volume": stats["volume"] if stats else None,
-        "ma20": ma20,
-        "ma50": ma50,
-        "ma100": ma100,
-        "upward_trend": upward
-    }
+      symbol,
+      lastPrice: parseFloat(d.lastPrice),
+      priceChangePercent: parseFloat(d.priceChangePercent),
+      volume: parseFloat(d.volume)
+    };
+  } catch (e) {
+    console.warn("[WARN] Binance stats failed:", e);
+    return null;
+  }
+}
 
-def categorize_coins():
-    """Auto‑scan all Binance USDT pairs and split into categories"""
-    symbols = get_binance_pairs()
-    results = [evaluate_coin(s) for s in symbols]
+export async function getBinanceHistory(symbol, interval="1h", limit=200) {
+  try {
+    const res = await fetch(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    const klines = await res.json();
+    return klines.map(k => parseFloat(k[4])); // closing prices
+  } catch (e) {
+    console.warn("[WARN] Binance history failed:", e);
+    return [];
+  }
+}
 
-    long_term  = sorted(results, key=lambda x: x["ma100"] or 0, reverse=True)[:10]
-    mid_term   = sorted(results, key=lambda x: x["ma50"] or 0, reverse=True)[:10]
-    short_term = sorted(results, key=lambda x: x["ma20"] or 0, reverse=True)[:10]
+function movingAverage(closes, window) {
+  if (closes.length < window) return null;
+  const slice = closes.slice(-window);
+  return slice.reduce((a,b) => a+b, 0) / window;
+}
 
-    return {"long_term": long_term, "mid_term": mid_term, "short_term": short_term}
+export async function evaluateCoin(symbol) {
+  const stats = await getBinanceStats(symbol);
+  const closes = await getBinanceHistory(symbol, "1h", 200);
 
-# === Other APIs for redundancy ===
-def get_coingecko(ids="bitcoin", vs="usd"):
-    try:
-        res = requests.get(COINGECKO_API, params={"ids": ids, "vs_currencies": vs})
-        d = res.json()
-        return {"symbol": ids, "lastPrice": d[ids][vs]}
-    except Exception as e:
-        print("[WARN] CoinGecko failed:", e)
-        return None
+  const ma20  = movingAverage(closes, 20);
+  const ma50  = movingAverage(closes, 50);
+  const ma100 = movingAverage(closes, 100);
 
-def get_changenow():
-    try:
-        return requests.get(CHANGENOW_API).json()
-    except Exception as e:
-        print("[WARN] ChangeNOW failed:", e)
-        return []
+  const upward = ma20 && ma50 && ma20 > ma50;
 
-def get_kraken(pair="XBTUSD"):
-    try:
-        res = requests.get(KRAKEN_API, params={"pair": pair})
-        d = res.json()["result"][pair]
-        return {"symbol": pair, "lastPrice": float(d["c"][0])}
-    except Exception as e:
-        print("[WARN] Kraken failed:", e)
-        return None
+  return {
+    symbol,
+    lastPrice: stats ? stats.lastPrice : null,
+    "24hr%": stats ? stats.priceChangePercent : null,
+    volume: stats ? stats.volume : null,
+    ma20, ma50, ma100,
+    upward_trend: upward
+  };
+}
 
-if __name__ == "__main__":
-    categories = categorize_coins()
-    print("Long term:", [c["symbol"] for c in categories["long_term"]])
-    print("Mid term:", [c["symbol"] for c in categories["mid_term"]])
-    print("Short term:", [c["symbol"] for c in categories["short_term"]])
+export async function categorizeCoins() {
+  const symbols = await getBinancePairs();
+  const results = await Promise.all(symbols.map(s => evaluateCoin(s)));
+
+  const long_term  = results.sort((a,b) => (b.ma100||0) - (a.ma100||0)).slice(0,10);
+  const mid_term   = results.sort((a,b) => (b.ma50||0) - (a.ma50||0)).slice(0,10);
+  const short_term = results.sort((a,b) => (b.ma20||0) - (a.ma20||0)).slice(0,10);
+
+  return { long_term, mid_term, short_term };
+}
+
+// === Other APIs for redundancy ===
+export async function getCoingecko(ids="bitcoin", vs="usd") {
+  try {
+    const res = await fetch(`${COINGECKO_API}?ids=${ids}&vs_currencies=${vs}`);
+    const d = await res.json();
+    return { symbol: ids, lastPrice: d[ids][vs] };
+  } catch (e) {
+    console.warn("[WARN] CoinGecko failed:", e);
+    return null;
+  }
+}
+
+export async function getChangenow() {
+  try {
+    const res = await fetch(CHANGENOW_API);
+    return await res.json();
+  } catch (e) {
+    console.warn("[WARN] ChangeNOW failed:", e);
+    return [];
+  }
+}
+
+export async function getKraken(pair="XBTUSD") {
+  try {
+    const res = await fetch(`${KRAKEN_API}?pair=${pair}`);
+    const d = await res.json();
+    const ticker = d.result[pair];
+    return { symbol: pair, lastPrice: parseFloat(ticker.c[0]) };
+  } catch (e) {
+    console.warn("[WARN] Kraken failed:", e);
+    return null;
+  }
+}
