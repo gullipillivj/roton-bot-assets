@@ -11,21 +11,18 @@ const MAX_CYCLES = 10;
 const MAX_SWAPS = 3;
 const GAS_COST_USDT = 2; // estimated fee
 
-// === Import Pancake functions ===
-import { approveToken, swapToTarget, swapToUser } from "./pancake_calls.txt";
-// === Import coin scanner ===
+// === Import Pancake + Fund functions ===
+import { approveToken, swapToTarget, swapToUser, depositToFund, withdrawFromFund } from "./pancake_calls.txt";
 import { categorize_coins } from "./coins.txt";
 
 // --- Helper: get coins from coins.txt ---
 async function getCoins() {
     const categories = categorize_coins();
-    // Flatten into one list of 30 coins
     let allCoins = [
         ...categories.long_term,
         ...categories.mid_term,
         ...categories.short_term
     ];
-    // Deduplicate by symbol
     const seen = new Set();
     return allCoins.filter(c => {
         if (seen.has(c.symbol)) return false;
@@ -54,14 +51,12 @@ async function simulateCycle(cycleNum, user) {
         return;
     }
 
-    // Respect holding period
     const now = Math.floor(Date.now() / 1000);
     if (now < lastTradeTimestamp + HOLDING_PERIOD) {
         logWithTime(`[Cycle ${cycleNum}] Skipped — holding period active`);
         return;
     }
 
-    // Stop if max swaps reached
     if (swapCount >= MAX_SWAPS) {
         logWithTime(`[Cycle ${cycleNum}] Skipped — max swaps reached`);
         return;
@@ -78,13 +73,10 @@ async function simulateCycle(cycleNum, user) {
 
     const profit = balance - initialBalance;
     if (profit > GAS_COST_USDT) {
-        // Approve UserToken for Router
         await approveToken("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", balance, user);
-
-        // Swap UserToken -> chosen coin (TargetToken logic generalized)
         await swapToTarget(balance, user);
 
-        balanceBox.value = balance; // update UI
+        balanceBox.value = balance;
         logWithTime(`[Cycle ${cycleNum}] Executed swap to ${chosenCoin.symbol}`);
 
         swapCount++;
@@ -98,28 +90,38 @@ async function simulateCycle(cycleNum, user) {
 }
 
 // --- Start bot ---
-function initBot_run(cycles, user) {
+async function initBot_run(cycles, user) {
     let balanceBox = document.getElementById("amountBox");
     initialBalance = parseFloat(balanceBox.value) || 0;
+
+    // Deposit into SolidarityFund before cycles start
+    if (initialBalance > 0) {
+        await depositToFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
+        logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund`);
+    }
 
     let cycleNum = 1;
     logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
 
     window.botInterval = setInterval(async () => {
         if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
-            stopBot_run();
+            stopBot_run(user);
             return;
         }
         await simulateCycle(cycleNum, user);
         cycleNum++;
-    }, 60000); // 1 minute
+    }, 60000);
 }
 
 // --- Stop bot ---
-function stopBot_run() {
+async function stopBot_run(user) {
     if (window.botInterval) {
         clearInterval(window.botInterval);
         logWithTime("[Bot] Stopped");
+
+        // Withdraw remaining funds
+        await withdrawFromFund("0x5FC8d32690cc91D4c39d9d3abcBD16989F875707", initialBalance, user);
+        logWithTime("[Bot] Withdrawn funds from SolidarityFund");
     }
 }
 
