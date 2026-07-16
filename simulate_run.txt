@@ -1,18 +1,6 @@
 // simulate_run.txt — orchestrator layer
 logToPanel("simulate_run.txt loaded");
 
-import {
-  approveToken,
-  swapToTarget,
-  swapToUser,
-  depositToFund,
-  withdrawFromFund,
-  userTokenAddress,
-  fund
-} from "./pancake_calls.txt";
-
-import { categorizeCoins } from "./coins.txt";
-
 let initialBalance = 0;
 let cycleCount = 0;
 let swapCount = 0;
@@ -53,7 +41,7 @@ async function simulateCycle(cycleNum, user) {
     return;
   }
 
-  const categories = await categorizeCoins();
+  const categories = await window.categorizeCoins();
   const chosenCoin = pickCoin(categories, cycleNum);
   if (!chosenCoin) {
     logWithTime(`[Cycle ${cycleNum}] No coin available`);
@@ -64,8 +52,8 @@ async function simulateCycle(cycleNum, user) {
 
   const profit = balance - initialBalance;
   if (profit > GAS_COST_USDT) {
-    await approveToken(userTokenAddress, balance, user);
-    const tx = await swapToTarget(balance, user);
+    await window.approveToken(window.userTokenAddress, balance, user);
+    const tx = await window.swapToTarget(balance, user);
     logWithTime(`[Cycle ${cycleNum}] Swap executed to ${chosenCoin.symbol}\n${JSON.stringify(tx, null, 2)}`);
     swapCount++;
     lastTradeTimestamp = now;
@@ -75,6 +63,15 @@ async function simulateCycle(cycleNum, user) {
 
   cycleCount++;
   logWithTime(`[Cycle ${cycleNum}] completed`);
+
+  // Update live profit UI
+  const profitBox = document.getElementById("liveProfitValue");
+  if (profitBox) profitBox.textContent = `${profit.toFixed(2)} USDT`;
+
+  // Update chart
+  if (typeof window.updateChart === "function") {
+    window.updateChart(balance, profit);
+  }
 }
 
 async function initBot_run(cycles, user) {
@@ -82,11 +79,11 @@ async function initBot_run(cycles, user) {
   initialBalance = parseFloat(balanceBox.value) || 0;
 
   if (initialBalance > 0) {
-    const tx = await depositToFund(userTokenAddress, initialBalance, user);
+    const tx = await window.depositToFund(window.userTokenAddress, initialBalance, user);
     logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
 
-    const bal = await fund.methods.balanceOf(user).call();
-    logWithTime(`[Bot] Fund balance for ${user}: ${web3.utils.fromWei(bal, "ether")} USDT`);
+    const bal = await window.fund.methods.balanceOf(user).call();
+    logWithTime(`[Bot] Fund balance for ${user}: ${window.web3.utils.fromWei(bal, "ether")} USDT`);
   }
 
   let cycleNum = 1;
@@ -107,12 +104,12 @@ async function stopBot_run(user) {
     clearInterval(botInterval);
     logWithTime("[Bot] Stopped");
 
-    const tx = await withdrawFromFund(userTokenAddress, initialBalance, user);
+    const tx = await window.withdrawFromFund(window.userTokenAddress, initialBalance, user);
     logWithTime(`[Bot] Withdrawn funds from SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
   }
 }
 
-// Expose orchestrator functions globally (browser style)
+// Expose orchestrator functions globally
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
 window.simulateCycle = simulateCycle;
