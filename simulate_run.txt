@@ -1,31 +1,26 @@
 // simulate_run.txt — orchestrator
 logToPanel("simulate_run.txt loaded");
 
-let initialBalance = 0; // store starting balance
+let initialBalance = 0; 
+let cycleCount = 0;
+let swapCount = 0;
+let lastTradeTimestamp = 0;
 
-// --- Helper: get coins (direct BTC for now) ---
+const HOLDING_PERIOD = 60; // 1 minute
+const MAX_CYCLES = 10;
+const MAX_SWAPS = 3;
+const GAS_COST_USDT = 2; // estimated fee
+
+// --- Import Pancake functions ---
+import { approveToken, swapToToken, swapToUSDT } from "./pancake_calls.txt";
+
+// --- Helper: get coins (Binance API later) ---
 async function getCoins() {
-    // For now, just return BTCUSDT with a dummy price
-    // Replace with coins.txt integration if needed
-    return [{ symbol: "BTCUSDT", address: "BTCUSDT", price: 30000 }];
-}
-
-// --- Randomize with seed ---
-function pickRandomCoin(coins, seed) {
-    if (!coins || coins.length === 0) return null;
-    const rng = Math.abs(Math.sin(seed)) % 1;
-    const idx = Math.floor(rng * coins.length);
-    return coins[idx];
-}
-
-// --- PancakeSwap buy (simulated) ---
-async function pancakeBuy(tokenAddress, amount) {
-    logWithTime(`[PancakeSwap] Simulated trade: ${amount} USDT -> ${tokenAddress}`);
-    return { status: "success", spent: amount, gas: 0 };
+    return [{ symbol: "BTCUSDT", address: "0xBTCAddress", price: 30000 }];
 }
 
 // --- Single trading cycle ---
-async function simulateCycle(cycleNum) {
+async function simulateCycle(cycleNum, user) {
     logWithTime(`[Cycle ${cycleNum}] started`);
 
     let balanceBox = document.getElementById("amountBox");
@@ -36,31 +31,47 @@ async function simulateCycle(cycleNum) {
         return;
     }
 
-    const coins = await getCoins();
-    const chosenCoin = pickRandomCoin(coins, cycleNum);
-    if (!chosenCoin) {
-        logWithTime(`[Cycle ${cycleNum}] No coin available`);
+    // Respect holding period
+    const now = Math.floor(Date.now() / 1000);
+    if (now < lastTradeTimestamp + HOLDING_PERIOD) {
+        logWithTime(`[Cycle ${cycleNum}] Skipped — holding period active`);
         return;
     }
 
-    logWithTime(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycleNum}: Bought ${chosenCoin.symbol} at ${chosenCoin.price} USDT`);
-
-    const result = await pancakeBuy(chosenCoin.address, balance);
-    if (result.status === "success") {
-        balance -= (result.spent + result.gas);
-        balanceBox.value = balance;
-
-        const profit = balance - initialBalance;
-        logWithTime(`[Cycle ${cycleNum}] New balance: ${balance} USDT | Profit: ${profit.toFixed(2)} USDT`);
-
-        updateChart(cycleNum, balance);
+    // Stop if max swaps reached
+    if (swapCount >= MAX_SWAPS) {
+        logWithTime(`[Cycle ${cycleNum}] Skipped — max swaps reached`);
+        return;
     }
 
+    const coins = await getCoins();
+    const chosenCoin = coins[0]; // BTC for now
+
+    logWithTime(`[INFO] Cycle ${cycleNum}: Evaluating ${chosenCoin.symbol} at ${chosenCoin.price} USDT`);
+
+    const profit = balance - initialBalance;
+    if (profit > GAS_COST_USDT) {
+        // Approve USDT for Pancake router
+        await approveToken("0xUSDTAddress", balance, user);
+
+        // Swap USDT -> Coin
+        await swapToToken("0xUSDTAddress", chosenCoin.address, balance, user);
+
+        balanceBox.value = balance; // update UI
+        logWithTime(`[Cycle ${cycleNum}] Executed swap to ${chosenCoin.symbol}`);
+
+        swapCount++;
+        lastTradeTimestamp = now;
+    } else {
+        logWithTime(`[Cycle ${cycleNum}] No profitable swap, holding coin.`);
+    }
+
+    cycleCount++;
     logWithTime(`[Cycle ${cycleNum}] completed`);
 }
 
 // --- Start bot ---
-function initBot_run(cycles) {
+function initBot_run(cycles, user) {
     let balanceBox = document.getElementById("amountBox");
     initialBalance = parseFloat(balanceBox.value) || 0;
 
@@ -68,13 +79,13 @@ function initBot_run(cycles) {
     logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
 
     window.botInterval = setInterval(async () => {
-        if (cycleNum > cycles) {
+        if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
             stopBot_run();
             return;
         }
-        await simulateCycle(cycleNum);
+        await simulateCycle(cycleNum, user);
         cycleNum++;
-    }, 30000); // 30 seconds
+    }, 60000); // 1 minute
 }
 
 // --- Stop bot ---
@@ -85,6 +96,5 @@ function stopBot_run() {
     }
 }
 
-// --- Expose globally so main_run.txt can call them ---
 window.initBot_run = initBot_run;
 window.stopBot_run = stopBot_run;
