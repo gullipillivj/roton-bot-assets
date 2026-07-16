@@ -1,7 +1,6 @@
 // main_run.txt — central loader
 logToPanel("main_run.txt loaded");
 
-// Load child modules in order so globals are ready
 (async () => {
     await import("./logger.txt");
     await import("./contracts.txt");
@@ -11,32 +10,31 @@ logToPanel("main_run.txt loaded");
     await import("./db_access.txt");
     await import("./chart.txt");
     await import("./simulate_run.txt");
+
+    // Wire UI only after simulate_run is loaded
+    document.addEventListener("DOMContentLoaded", () => {
+        logToPanel("UI ready");
+
+        const startBtn = document.getElementById("startBtn");
+        if (startBtn) {
+            startBtn.addEventListener("click", () => {
+                if (typeof window.initBot_run === "function") {
+                    window.initBot_run(10, "0xYourUserWallet"); // pass user wallet
+                } else {
+                    logToPanel("ERROR: initBot_run not found");
+                }
+            });
+        }
+
+        const stopBtn = document.getElementById("stopBtn");
+        if (stopBtn) {
+            stopBtn.addEventListener("click", () => {
+                if (typeof window.stopBot_run === "function") {
+                    window.stopBot_run("0xYourUserWallet");
+                } else {
+                    logToPanel("ERROR: stopBot_run not found");
+                }
+            });
+        }
+    });
 })();
-
-document.addEventListener("DOMContentLoaded", () => {
-    logToPanel("UI ready");
-
-    // Start Trading button
-    const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            if (typeof window.initBot_run === "function") {
-                window.initBot_run(10); // always run 10 cycles
-            } else {
-                logToPanel("ERROR: initBot not found");
-            }
-        });
-    }
-
-    // Stop Trading button
-    const stopBtn = document.getElementById("stopBtn");
-    if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-            if (typeof window.stopBot_run === "function") {
-                window.stopBot_run();
-            } else {
-                logToPanel("ERROR: stopBot not found");
-            }
-        });
-    }
-});
