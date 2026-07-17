@@ -1,115 +1,79 @@
-// simulate_run.txt — orchestrator layer
-logToPanel("simulate_run.txt loaded");
+logToPanel("simulate.txt loaded");
 
-let initialBalance = 0;
-let cycleCount = 0;
-let swapCount = 0;
-let lastTradeTimestamp = 0;
-let botInterval = null;
+let currentCycle = 1;
+let cycleTimer = null;
 
-const HOLDING_PERIOD = 60; // seconds
-const MAX_CYCLES = 10;
-const MAX_SWAPS = 3;
-const GAS_COST_USDT = 2;
+async function simulateCycle(cycle) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
 
-function pickCoin(categories, cycleNum) {
-  const pool = [...categories.short_term, ...categories.mid_term, ...categories.long_term];
-  if (pool.length === 0) return null;
-  const idx = cycleNum % pool.length;
-  return pool[idx];
-}
+    // Pick coin from Binance pairs
+    const coin = await pickRandomCoin();
+    const stats = await window.getBinanceStats(coin);
 
-async function simulateCycle(cycleNum, user) {
-  logWithTime(`[Cycle ${cycleNum}] started`);
-
-  const balanceBox = document.getElementById("amountBox");
-  let balance = parseFloat(balanceBox.value);
-
-  if (!balance || balance <= 0) {
-    logWithTime(`[Cycle ${cycleNum}] Skipped — balance is zero`);
-    return;
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (now < lastTradeTimestamp + HOLDING_PERIOD) {
-    logWithTime(`[Cycle ${cycleNum}] Skipped — holding period active`);
-    return;
-  }
-
-  if (swapCount >= MAX_SWAPS) {
-    logWithTime(`[Cycle ${cycleNum}] Skipped — max swaps reached`);
-    return;
-  }
-
-  const categories = await window.categorizeCoins();
-  const chosenCoin = pickCoin(categories, cycleNum);
-  if (!chosenCoin) {
-    logWithTime(`[Cycle ${cycleNum}] No coin available`);
-    return;
-  }
-
-  logWithTime(`[INFO] Cycle ${cycleNum}: Coin data\n${JSON.stringify(chosenCoin, null, 2)}`);
-
-  const profit = balance - initialBalance;
-  if (profit > GAS_COST_USDT) {
-    await window.approveToken(window.userTokenAddress, balance, user);
-    const tx = await window.swapToTarget(balance, user);
-    logWithTime(`[Cycle ${cycleNum}] Swap executed to ${chosenCoin.symbol}\n${JSON.stringify(tx, null, 2)}`);
-    swapCount++;
-    lastTradeTimestamp = now;
-  } else {
-    logWithTime(`[Cycle ${cycleNum}] No profitable swap, holding coin.`);
-  }
-
-  cycleCount++;
-  logWithTime(`[Cycle ${cycleNum}] completed`);
-
-  // Update live profit UI
-  const profitBox = document.getElementById("liveProfitValue");
-  if (profitBox) profitBox.textContent = `${profit.toFixed(2)} USDT`;
-
-  // Update chart
-  if (typeof window.updateChart === "function") {
-    window.updateChart(balance, profit);
-  }
-}
-
-async function initBot_run(cycles, user) {
-  const balanceBox = document.getElementById("amountBox");
-  initialBalance = parseFloat(balanceBox.value) || 0;
-
-  if (initialBalance > 0) {
-    const tx = await window.depositToFund(window.userTokenAddress, initialBalance, user);
-    logWithTime(`[Bot] Deposited ${initialBalance} UserToken into SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
-
-    const bal = await window.fund.methods.balanceOf(user).call();
-    logWithTime(`[Bot] Fund balance for ${user}: ${window.web3.utils.fromWei(bal, "ether")} USDT`);
-  }
-
-  let cycleNum = 1;
-  logWithTime(`[Bot] Starting for ${cycles} cycles with initial balance ${initialBalance} USDT`);
-
-  botInterval = setInterval(async () => {
-    if (cycleNum > cycles || cycleCount >= MAX_CYCLES) {
-      stopBot_run(user);
-      return;
+    if (!stats) {
+        logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
+        return;
     }
-    await simulateCycle(cycleNum, user);
-    cycleNum++;
-  }, 60000);
+
+    const buyPrice = stats.lastPrice;
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT`);
+
+    // Profit/loss based on actual 24hr % change
+    const result = calculatePnL(buyPrice, stats.priceChangePercent);
+
+    if (result >= 0) {
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit ${result.toFixed(2)} USDT`);
+    } else {
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
+    }
+
+    updateChart(buyPrice, result);
+
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
 }
 
-async function stopBot_run(user) {
-  if (botInterval) {
-    clearInterval(botInterval);
-    logWithTime("[Bot] Stopped");
+function startSimulation(totalCycles) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
-    const tx = await window.withdrawFromFund(window.userTokenAddress, initialBalance, user);
-    logWithTime(`[Bot] Withdrawn funds from SolidarityFund\n${JSON.stringify(tx, null, 2)}`);
-  }
+    currentCycle = 1;
+    cycleTimer = setInterval(async () => {
+        if (currentCycle > totalCycles) {
+            clearInterval(cycleTimer);
+            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
+            return;
+        }
+
+        await simulateCycle(currentCycle);
+        currentCycle++;
+    }, 60000);
 }
 
-// Expose orchestrator functions globally
-window.initBot_run = initBot_run;
-window.stopBot_run = stopBot_run;
+function initBot(totalCycles = 10) {
+    startSimulation(totalCycles);
+}
+
+// === Helpers ===
+async function pickRandomCoin() {
+    try {
+        const pairs = await window.getBinancePairs();
+        if (!pairs || pairs.length === 0) {
+            logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
+            return "BTCUSDT";
+        }
+        return pairs[Math.floor(Math.random() * pairs.length)];
+    } catch (e) {
+        logToPanel("[ERROR] pickRandomCoin failed: " + e);
+        return "BTCUSDT";
+    }
+}
+
+function calculatePnL(price, percentChange) {
+    if (!percentChange) return 0;
+    const changeFactor = percentChange / 100;
+    return price * changeFactor;
+}
+
+// Expose globally
+window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
+window.initBot = initBot;
