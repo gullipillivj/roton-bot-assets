@@ -1,60 +1,30 @@
-// main_run.txt — central loader
-logToPanel("main_run.txt loaded");
+// main.txt — UI glue
+logToPanel("main.txt loaded");
 
-// Define bot functions directly on window
-window.initbot_run = function(cycles, user) {
-    logToPanel("[InitBot] Simulation started for " + cycles + " cycles for " + user);
-    // … trading loop logic …
-};
-
-window.stopbot_run = function(user) {
-    logToPanel("[StopBot] Stopping bot for " + user);
-    // … cleanup logic …
-};
-
-window.deposit_run = function(user) {
-    logToPanel("[Deposit] Depositing funds for " + user);
-    // … deposit logic …
-};
-
-window.withdraw_run = function(user) {
-    logToPanel("[Withdraw] Withdrawing funds for " + user);
-    // … withdraw logic …
-};
-
-// Wire UI after DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
 
+    // Start Trading button
     const startBtn = document.getElementById("startBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
-            const user = "mockuser1";
-            window.initbot_run(10, user);
+            if (typeof window.initBot === "function") {
+                window.initBot(10); // always run 10 cycles
+            } else {
+                logToPanel("ERROR: initBot not found");
+            }
         });
     }
 
+    // Stop Trading button
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
-            const user = "mockuser1";
-            window.stopbot_run(user);
-        });
-    }
-
-    const depositBtn = document.getElementById("depositBtn");
-    if (depositBtn) {
-        depositBtn.addEventListener("click", () => {
-            const user = "mockuser1";
-            window.deposit_run(user);
-        });
-    }
-
-    const withdrawBtn = document.getElementById("withdrawBtn");
-    if (withdrawBtn) {
-        withdrawBtn.addEventListener("click", () => {
-            const user = "mockuser1";
-            window.withdraw_run(user);
+            if (typeof window.stopBot === "function") {
+                window.stopBot();
+            } else {
+                logToPanel("ERROR: stopBot not found");
+            }
         });
     }
 });
