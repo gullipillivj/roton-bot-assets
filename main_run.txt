@@ -53,7 +53,7 @@ function setButtonStates(state) {
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
             startBalanceBox.readOnly = true;
-            depositBox.disabled = false;
+            depositBox.disabled = false;   // deposit always editable until bot runs
             withdrawBox.disabled = true;
             statusLabel.textContent = "STATE: INIT";
             statusLabel.style.color = "gray";
@@ -66,7 +66,7 @@ function setButtonStates(state) {
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
             startBalanceBox.readOnly = true;
-            depositBox.disabled = false;
+            depositBox.disabled = false;   // still editable
             withdrawBox.disabled = true;
             statusLabel.textContent = "STATE: AFTER DEPOSIT";
             statusLabel.style.color = "blue";
@@ -79,7 +79,7 @@ function setButtonStates(state) {
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
             startBalanceBox.disabled = true;
-            depositBox.disabled = true;
+            depositBox.disabled = true;    // lock textboxes while bot runs
             withdrawBox.disabled = true;
             statusLabel.textContent = "STATE: RUNNING";
             statusLabel.style.color = "red";
@@ -126,6 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
                 await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
 
+                // Update Initial Balance textbox
                 const startBalanceBox = document.getElementById("startBalance");
                 const currentBalance = parseFloat(startBalanceBox.value) || 0;
                 startBalanceBox.value = currentBalance + netAmount;
@@ -170,6 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
 
+                // Update Initial Balance textbox
                 const startBalanceBox = document.getElementById("startBalance");
                 const currentBalance = parseFloat(startBalanceBox.value) || 0;
                 startBalanceBox.value = currentBalance - amount;
