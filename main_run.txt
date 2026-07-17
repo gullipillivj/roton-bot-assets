@@ -1,72 +1,100 @@
-logToPanel("main_run.txt loaded");
+function setButtonStates(state) {
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const depositBtn = document.getElementById("depositBtn");
+    const withdrawBtn = document.getElementById("withdrawBtn");
+    const changeUserBtn = document.getElementById("changeUserBtn");
 
-// === Load client data function ===
-async function loadClientData(username = "mockuser1") {
-    try {
-        const response = await fetch("/clients");
-        const data = await response.json();
-        if (!data.clients || data.clients.length === 0) {
-            logToPanel("[WARN] No clients found in DB");
-            return;
-        }
+    switch(state) {
+        case "init":
+            startBtn.disabled = true;
+            stopBtn.disabled = true;
+            depositBtn.disabled = false;
+            withdrawBtn.disabled = true;
+            changeUserBtn.disabled = true;
+            document.getElementById("startBalance").readOnly = true;
+            break;
 
-        // Match by userid or name
-        const client = data.clients.find(c => c.userid === username || c.name === username);
-        if (!client) {
-            logToPanel(`[WARN] ${username} not found in DB`);
-            return;
-        }
+        case "afterDeposit":
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            depositBtn.disabled = false;
+            withdrawBtn.disabled = true;
+            changeUserBtn.disabled = true;
+            break;
 
-        // Fill controls with client data
-        document.getElementById("startBalance").value = client.amount_deposited || 0;
-        document.getElementById("investBalance").value = client.current_balance || 0;
-        document.getElementById("profitTarget").value = client.profit_target || 1;
-        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
-        document.getElementById("currentUserLabel").textContent = client.name;
-    } catch (e) {
-        logToPanel("[ERROR] loadClientData failed: " + e);
+        case "running":
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            depositBtn.disabled = true;
+            withdrawBtn.disabled = true;
+            changeUserBtn.disabled = true;
+            break;
+
+        case "completed":
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            depositBtn.disabled = false;
+            withdrawBtn.disabled = false;
+            changeUserBtn.disabled = false;
+            break;
     }
 }
 
 // === UI glue ===
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
-
-    // Autofill mockuser1 on load
     loadClientData("mockuser1");
+    setButtonStates("init");
 
-    // Start Trading button
-    const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            if (typeof window.initBot === "function") {
-                window.initBot(10); // always run 10 cycles
-            } else {
-                logToPanel("ERROR: initBot not found");
+    // Deposit button
+    const depositBtn = document.getElementById("depositBtn");
+    if (depositBtn) {
+        depositBtn.addEventListener("click", async () => {
+            try {
+                const amount = parseFloat(document.getElementById("depositAmount").value) || 0;
+                const currentUser = "mockuser1";
+                const commission = 5;
+                const netAmount = amount - commission;
+
+                if (amount <= commission) {
+                    logToPanel("[WARN] Deposit amount must be greater than commission fee");
+                    return;
+                }
+
+                await window.approveToken(window.userTokenAddress, amount, currentUser);
+                await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
+                await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
+
+                logToPanel(`[INFO] ${currentUser} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
+
+                // Enable Start Bot after deposit
+                setButtonStates("afterDeposit");
+            } catch (err) {
+                logToPanel("[ERROR] Deposit failed: " + err);
             }
         });
     }
 
-    // Stop Trading button
+    // Start Bot button
+    const startBtn = document.getElementById("startBtn");
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            if (typeof window.initBot === "function") {
+                window.initBot(10);
+                setButtonStates("running");
+            }
+        });
+    }
+
+    // Stop Bot button
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
             if (typeof window.stopBot === "function") {
                 window.stopBot();
-            } else {
-                logToPanel("ERROR: stopBot not found");
+                setButtonStates("completed");
             }
-        });
-    }
-
-    // Change User button
-    const changeUserBtn = document.getElementById("changeUserBtn");
-    const userSelect = document.getElementById("userSelect");
-    if (changeUserBtn && userSelect) {
-        changeUserBtn.addEventListener("click", () => {
-            const selectedUser = userSelect.value;
-            logToPanel(`[INFO] Current user changed to ${selectedUser}`);
-            loadClientData(selectedUser);
         });
     }
 });
