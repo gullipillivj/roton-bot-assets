@@ -44,6 +44,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (depositBtn) {
         depositBtn.addEventListener("click", async () => {
             try {
+                // Auto-set values on click
+                document.getElementById("depositAmount").value = 5000;
+                document.getElementById("withdrawAmount").value = 1000;
+
                 const amount = parseFloat(document.getElementById("depositAmount").value) || 0;
                 const username = "mockuser1";
                 const currentUser = userAddressMap[username];
@@ -64,9 +68,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 startBalanceBox.value = currentBalance + netAmount;
 
                 logToPanel(`[INFO] ${username} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
-
-                // Reset deposit textbox back to 5000 for repeated testing
-                document.getElementById("depositAmount").value = 5000;
             } catch (err) {
                 logToPanel("[ERROR] Deposit failed: " + err);
             }
@@ -102,8 +103,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 startBalanceBox.value = currentBalance - amount;
 
                 logToPanel(`[INFO] Withdrawn ${amount} tokens for ${username} from SolidarityFund`);
-
-                document.getElementById("withdrawAmount").value = 0;
             } catch (err) {
                 logToPanel("[ERROR] Withdraw failed: " + err);
             }
