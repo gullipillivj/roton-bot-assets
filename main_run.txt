@@ -40,29 +40,7 @@ document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
     window.loadClientData("mockuser1"); // auto‑populate fields
 
-    // Deposit button
-    const depositBtn = document.getElementById("depositBtn");
-    if (depositBtn) {
-        depositBtn.addEventListener("click", () => {
-            if (window.runDeposit) {
-                window.runDeposit("mockuser1", 5000);
-            } else {
-                logToPanel("[ERROR] runDeposit not loaded yet");
-            }
-        });
-    }
 
-    // Withdraw button
-    const withdrawBtn = document.getElementById("withdrawBtn");
-    if (withdrawBtn) {
-        withdrawBtn.addEventListener("click", () => {
-            const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-            if (window.runWithdraw) {
-                window.runWithdraw("mockuser1", amt);
-            } else {
-                logToPanel("[ERROR] runWithdraw not loaded yet");
-            }
-        });
     }
 
     // Bot controls
