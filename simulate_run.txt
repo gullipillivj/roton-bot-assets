@@ -1,5 +1,19 @@
 logToPanel("simulate_run.txt loaded");
 
+
+function stopBot() {
+    if (window.botInterval) {
+        clearInterval(window.botInterval);
+        window.botInterval = null;
+        logToPanel("[INFO] Bot stopped");
+    } else {
+        logToPanel("[WARN] Bot was not running");
+    }
+}
+
+
+
+
 let currentCycle = 1;
 let cycleTimer = null;
 
@@ -90,3 +104,4 @@ function calculatePnL(price, percentChange) {
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
 window.initBot = initBot;
+window.stopBot = stopBot;
