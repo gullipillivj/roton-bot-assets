@@ -1,103 +1,126 @@
+// simulate_run.txt — Bot cycle simulation with event logging
 logToPanel("simulate_run.txt loaded");
 
-
-function stopBot() {
-    if (window.botInterval) {
-        clearInterval(window.botInterval);
-        window.botInterval = null;
-        logToPanel("[INFO] Bot stopped");
-    } else {
-        logToPanel("[WARN] Bot was not running");
-    }
+function setStatus(state) {
+  const label = document.getElementById("statusLabel");
+  if (label) label.textContent = `STATE: ${state}`;
 }
 
+function logReceipt(action, receipt) {
+  const txHash = receipt.transactionHash || "N/A";
+  const block  = receipt.blockNumber || "N/A";
+  const gas    = receipt.gasUsed || "N/A";
+  const status = receipt.status ? "SUCCESS" : "FAILED";
+  logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+}
 
-
+function stopBot() {
+  if (window.botInterval) {
+    clearInterval(window.botInterval);
+    window.botInterval = null;
+    setStatus("STOPPED");
+    logToPanel("[INFO] Bot stopped");
+  } else {
+    logToPanel("[WARN] Bot was not running");
+  }
+}
 
 let currentCycle = 1;
 let cycleTimer = null;
 
 async function simulateCycle(cycle) {
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
+  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
 
-    // Pick coin from Binance pairs
-    const coin = await pickRandomCoin();
-    const stats = await window.getBinanceStats(coin);
+  const coin = await pickRandomCoin();
+  const stats = await window.getBinanceStats(coin);
 
-    if (!stats) {
-        logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
-        return;
-    }
+  if (!stats) {
+    logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
+    return;
+  }
 
-    const buyPrice = parseFloat(stats.lastPrice || 0);
-    if (isNaN(buyPrice) || buyPrice <= 0) {
-        logToPanel(`[WARN] Cycle ${cycle}: Invalid price for ${coin}, skipping`);
-        return;
-    }
+  const buyPrice = parseFloat(stats.lastPrice || 0);
+  if (isNaN(buyPrice) || buyPrice <= 0) {
+    logToPanel(`[WARN] Cycle ${cycle}: Invalid price for ${coin}, skipping`);
+    return;
+  }
 
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
+  logToPanel(`[INFO] Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
 
-    // Profit/loss based on actual 24hr % change
-    const percentChange = parseFloat(stats.priceChangePercent || 0);
-    const result = calculatePnL(buyPrice, percentChange);
+  // Example: simulate swap to target and back
+  swapToTarget(buyPrice, window.userAddress)
+    .on('transactionHash', hash => logToPanel(`[INFO] Cycle ${cycle}: SwapToTarget submitted: ${hash}`))
+    .on('receipt', receipt => logReceipt(`Cycle ${cycle} SwapToTarget`, receipt))
+    .on('confirmation', (conf, receipt) => logToPanel(`[DEBUG] Cycle ${cycle}: SwapToTarget confirmation #${conf}`))
+    .on('error', err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToTarget failed: ${err.message}`));
 
-    if (result >= 0) {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit ${result.toFixed(2)} USDT`);
-    } else {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
-    }
+  swapToUser(buyPrice, window.userAddress)
+    .on('transactionHash', hash => logToPanel(`[INFO] Cycle ${cycle}: SwapToUser submitted: ${hash}`))
+    .on('receipt', receipt => logReceipt(`Cycle ${cycle} SwapToUser`, receipt))
+    .on('confirmation', (conf, receipt) => logToPanel(`[DEBUG] Cycle ${cycle}: SwapToUser confirmation #${conf}`))
+    .on('error', err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToUser failed: ${err.message}`));
 
-    // Update chart with valid values
-    updateChart(buyPrice, result);
+  // Profit/loss based on actual 24hr % change
+  const percentChange = parseFloat(stats.priceChangePercent || 0);
+  const result = calculatePnL(buyPrice, percentChange);
 
-    // Update live profit box
-    const liveProfitBox = document.getElementById("liveProfitValue");
-    if (liveProfitBox) {
-        liveProfitBox.textContent = `${result.toFixed(2)} USDT`;
-    }
+  if (result >= 0) {
+    logToPanel(`[INFO] Cycle ${cycle}: Profit ${result.toFixed(2)} USDT`);
+  } else {
+    logToPanel(`[INFO] Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
+  }
 
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
+  updateChart(buyPrice, result);
+
+  const liveProfitBox = document.getElementById("liveProfitValue");
+  if (liveProfitBox) {
+    liveProfitBox.textContent = `${result.toFixed(2)} USDT`;
+  }
+
+  logToPanel(`[INFO] simulateCycle(${cycle}) complete`);
 }
 
 function startSimulation(totalCycles) {
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
+  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
-    currentCycle = 1;
-    cycleTimer = setInterval(async () => {
-        if (currentCycle > totalCycles) {
-            clearInterval(cycleTimer);
-            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
-            return;
-        }
+  currentCycle = 1;
+  cycleTimer = setInterval(async () => {
+    if (currentCycle > totalCycles) {
+      clearInterval(cycleTimer);
+      logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
+      setStatus("STOPPED");
+      return;
+    }
 
-        await simulateCycle(currentCycle);
-        currentCycle++;
-    }, 60000);
+    await simulateCycle(currentCycle);
+    currentCycle++;
+  }, 60000);
 }
 
 function initBot(totalCycles = 10) {
-    startSimulation(totalCycles);
+  setStatus("RUNNING");
+  startSimulation(totalCycles);
 }
 
 // === Helpers ===
 async function pickRandomCoin() {
-    try {
-        const pairs = await window.getBinancePairs();
-        if (!pairs || pairs.length === 0) {
-            logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
-            return "BTCUSDT";
-        }
-        return pairs[Math.floor(Math.random() * pairs.length)];
-    } catch (e) {
-        logToPanel("[ERROR] pickRandomCoin failed: " + e);
-        return "BTCUSDT";
+  try {
+    const pairs = await window.getBinancePairs();
+    if (!pairs || pairs.length === 0) {
+      logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
+      return "BTCUSDT";
     }
+    return pairs[Math.floor(Math.random() * pairs.length)];
+  } catch (e) {
+    logToPanel("[ERROR] pickRandomCoin failed: " + e);
+    return "BTCUSDT";
+  }
 }
 
 function calculatePnL(price, percentChange) {
-    if (!percentChange) return 0;
-    const changeFactor = percentChange / 100;
-    return price * changeFactor;
+  if (!percentChange) return 0;
+  const changeFactor = percentChange / 100;
+  return price * changeFactor;
 }
 
 // Expose globally
