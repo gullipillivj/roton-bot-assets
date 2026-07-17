@@ -1,5 +1,10 @@
 logToPanel("main_run.txt loaded");
 
+// === User address mapping ===
+const userAddressMap = {
+    mockuser1: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707" // Brownie-deployed user address
+};
+
 // === Load client data function ===
 async function loadClientData(username = "mockuser1") {
     try {
@@ -107,7 +112,8 @@ document.addEventListener("DOMContentLoaded", () => {
         depositBtn.addEventListener("click", async () => {
             try {
                 const amount = parseFloat(document.getElementById("depositAmount").value) || 0;
-                const currentUser = "mockuser1";
+                const username = "mockuser1";
+                const currentUser = userAddressMap[username];
                 const commission = 5;
                 const netAmount = amount - commission;
 
@@ -124,7 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const currentBalance = parseFloat(startBalanceBox.value) || 0;
                 startBalanceBox.value = currentBalance + netAmount;
 
-                logToPanel(`[INFO] ${currentUser} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
+                logToPanel(`[INFO] ${username} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
 
                 // Reset deposit textbox
                 document.getElementById("depositAmount").value = 0;
@@ -143,10 +149,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (withdrawBtn) {
         withdrawBtn.addEventListener("click", async () => {
             try {
-                const currentUser = "mockuser1";
+                const username = "mockuser1";
+                const currentUser = userAddressMap[username];
                 const amount = parseFloat(document.getElementById("withdrawAmount").value) || 0;
 
-                logToPanel(`[INFO] Checking available balance for ${currentUser} in SolidarityFund...`);
+                logToPanel(`[INFO] Checking available balance for ${username} in SolidarityFund...`);
                 const available = await window.fund.methods.balanceOf(currentUser).call();
                 const availableAmount = parseFloat(available) || 0;
 
@@ -155,11 +162,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
                 if (availableAmount < amount) {
-                    logToPanel(`[WARN] Requested ${amount} exceeds available ${availableAmount} for ${currentUser}`);
+                    logToPanel(`[WARN] Requested ${amount} exceeds available ${availableAmount} for ${username}`);
                     return;
                 }
 
-                logToPanel(`[INFO] Ledger shows ${availableAmount} tokens available for ${currentUser}`);
+                logToPanel(`[INFO] Ledger shows ${availableAmount} tokens available for ${username}`);
 
                 await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
 
@@ -167,7 +174,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const currentBalance = parseFloat(startBalanceBox.value) || 0;
                 startBalanceBox.value = currentBalance - amount;
 
-                logToPanel(`[INFO] Withdrawn ${amount} tokens for ${currentUser} from SolidarityFund`);
+                logToPanel(`[INFO] Withdrawn ${amount} tokens for ${username} from SolidarityFund`);
 
                 // Reset withdraw textbox
                 document.getElementById("withdrawAmount").value = 0;
