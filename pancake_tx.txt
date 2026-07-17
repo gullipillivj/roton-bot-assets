@@ -1,10 +1,10 @@
 logToPanel("pancake_tx.txt loaded");
 
 // === Config ===
-const COMMISSION = 5; // commission fee
-const ROUTER_ADDRESS = "0x9ac64cc6e4415144c455bd8e4837fea55603e5c3"; // Pancake testnet router
-const CONFIRM_DELAY = 7000; // delay in ms before checking balance
-const SLIPPAGE = 1; // slippage tolerance
+const COMMISSION = 5;
+const ROUTER_ADDRESS = "0x9ac64cc6e4415144c455bd8e4837fea55603e5c3";
+const CONFIRM_DELAY = 7000;
+const SLIPPAGE = 1;
 
 // Shared confirmation helper
 async function confirmTransaction(beforeAmount, expectedDelta, type, currentUser) {
@@ -37,12 +37,10 @@ async function runDeposit(username, amount) {
             return;
         }
 
-        // Balance before
         const beforeBal = await window.fund.methods.balanceOf(currentUser).call();
         const beforeAmount = parseFloat(beforeBal) || 0;
         startBalanceBox.value = beforeAmount;
 
-        // JSON payload
         const payload = {
             token_out: window.userTokenAddress,
             amount_bnb: netAmount,
@@ -56,7 +54,6 @@ async function runDeposit(username, amount) {
             body: JSON.stringify(payload)
         });
 
-        // Confirm
         confirmTransaction(beforeAmount, netAmount, "Deposit", currentUser);
     } catch (err) {
         logToPanel("[ERROR] Deposit failed: " + err.message);
@@ -74,12 +71,10 @@ async function runWithdraw(username, amount) {
             return;
         }
 
-        // Balance before
         const beforeBal = await window.fund.methods.balanceOf(currentUser).call();
         const beforeAmount = parseFloat(beforeBal) || 0;
         startBalanceBox.value = beforeAmount;
 
-        // JSON payload
         const payload = {
             token_in: window.userTokenAddress,
             amount_in: amount,
@@ -93,9 +88,12 @@ async function runWithdraw(username, amount) {
             body: JSON.stringify(payload)
         });
 
-        // Confirm
         confirmTransaction(beforeAmount, amount, "Withdraw", currentUser);
     } catch (err) {
         logToPanel("[ERROR] Withdraw failed: " + err.message);
     }
 }
+
+// Expose globally
+window.runDeposit = runDeposit;
+window.runWithdraw = runWithdraw;
