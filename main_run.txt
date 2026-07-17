@@ -10,18 +10,19 @@ async function loadClientData(username = "mockuser1") {
             return;
         }
 
-        const client = data.clients.find(c => c.profile.name === username);
+        // Match by userid or name
+        const client = data.clients.find(c => c.userid === username || c.name === username);
         if (!client) {
             logToPanel(`[WARN] ${username} not found in DB`);
             return;
         }
 
-        // Fill controls with selected user data
-        document.getElementById("startBalance").value = client.wallet.balance || 0;
-        document.getElementById("investBalance").value = client.wallet.balance / 2 || 0;
-        document.getElementById("profitTarget").value = client.settings.profit_target || 1;
-        document.getElementById("stopLoss").value = client.settings.stop_loss || 0.5;
-        document.getElementById("currentUserLabel").textContent = client.profile.name;
+        // Fill controls with client data
+        document.getElementById("startBalance").value = client.amount_deposited || 0;
+        document.getElementById("investBalance").value = client.current_balance || 0;
+        document.getElementById("profitTarget").value = client.profit_target || 1;
+        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
+        document.getElementById("currentUserLabel").textContent = client.name;
     } catch (e) {
         logToPanel("[ERROR] loadClientData failed: " + e);
     }
