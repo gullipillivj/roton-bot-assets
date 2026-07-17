@@ -1,4 +1,4 @@
-// simulate_run.txt — Bot cycle simulation with event logging
+// simulate_run.txt — Bot cycle simulation with PancakeSwap calls
 logToPanel("simulate_run.txt loaded");
 
 function setStatus(state) {
@@ -47,7 +47,7 @@ async function simulateCycle(cycle) {
 
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
 
-  // Example: simulate swap to target and back
+  // === PancakeSwap interaction ===
   swapToTarget(buyPrice, window.userAddress)
     .on('transactionHash', hash => logToPanel(`[INFO] Cycle ${cycle}: SwapToTarget submitted: ${hash}`))
     .on('receipt', receipt => logReceipt(`Cycle ${cycle} SwapToTarget`, receipt))
@@ -60,7 +60,7 @@ async function simulateCycle(cycle) {
     .on('confirmation', (conf, receipt) => logToPanel(`[DEBUG] Cycle ${cycle}: SwapToUser confirmation #${conf}`))
     .on('error', err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToUser failed: ${err.message}`));
 
-  // Profit/loss based on actual 24hr % change
+  // === Profit/loss calculation ===
   const percentChange = parseFloat(stats.priceChangePercent || 0);
   const result = calculatePnL(buyPrice, percentChange);
 
@@ -99,6 +99,7 @@ function startSimulation(totalCycles) {
 
 function initBot(totalCycles = 10) {
   setStatus("RUNNING");
+  logToPanel("[INFO] Bot started");
   startSimulation(totalCycles);
 }
 
