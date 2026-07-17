@@ -59,9 +59,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                console.log("approveToken:", typeof window.approveToken);
-                console.log("depositToFund:", typeof window.depositToFund);
-                console.log("userTokenAddress:", window.userTokenAddress);
+                // Debug info shown in log panel
+                logToPanel("approveToken: " + typeof window.approveToken);
+                logToPanel("depositToFund: " + typeof window.depositToFund);
+                logToPanel("userTokenAddress: " + window.userTokenAddress);
 
                 await window.approveToken(window.userTokenAddress, amount, currentUser);
                 await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
@@ -74,7 +75,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 logToPanel(`[INFO] ${username} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
             } catch (err) {
                 logToPanel("[ERROR] Deposit failed: " + err.message);
-                console.error(err);
             }
         });
     }
@@ -91,6 +91,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 logToPanel(`[INFO] Checking available balance for ${username} in SolidarityFund...`);
                 const available = await window.fund.methods.balanceOf(currentUser).call();
                 const availableAmount = parseFloat(available) || 0;
+
+                // Debug info shown in log panel
+                logToPanel("withdrawFromFund: " + typeof window.withdrawFromFund);
+                logToPanel("available balance: " + availableAmount);
 
                 if (amount <= 0) {
                     logToPanel("[WARN] Withdraw amount must be greater than 0");
@@ -110,7 +114,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 logToPanel(`[INFO] Withdrawn ${amount} tokens for ${username} from SolidarityFund`);
             } catch (err) {
                 logToPanel("[ERROR] Withdraw failed: " + err.message);
-                console.error(err);
             }
         });
     }
@@ -128,7 +131,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } catch (err) {
                 logToPanel("[ERROR] Bot start failed: " + err.message);
-                console.error(err);
             }
         });
     }
@@ -146,7 +148,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } catch (err) {
                 logToPanel("[ERROR] Bot stop failed: " + err.message);
-                console.error(err);
             }
         });
     }
