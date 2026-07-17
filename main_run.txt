@@ -27,7 +27,7 @@ async function loadClientData(username = "mockuser1") {
         document.getElementById("stopLoss").value = client.stop_loss || 0.5;
         document.getElementById("currentUserLabel").textContent = client.name;
     } catch (e) {
-        logToPanel("[ERROR] loadClientData failed: " + e);
+        logToPanel("[ERROR] loadClientData failed: " + e.message);
     }
 }
 
@@ -59,6 +59,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
+                console.log("approveToken:", typeof window.approveToken);
+                console.log("depositToFund:", typeof window.depositToFund);
+                console.log("userTokenAddress:", window.userTokenAddress);
+
                 await window.approveToken(window.userTokenAddress, amount, currentUser);
                 await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
                 await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
@@ -69,7 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 logToPanel(`[INFO] ${username} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
             } catch (err) {
-                logToPanel("[ERROR] Deposit failed: " + err);
+                logToPanel("[ERROR] Deposit failed: " + err.message);
+                console.error(err);
             }
         });
     }
@@ -104,7 +109,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 logToPanel(`[INFO] Withdrawn ${amount} tokens for ${username} from SolidarityFund`);
             } catch (err) {
-                logToPanel("[ERROR] Withdraw failed: " + err);
+                logToPanel("[ERROR] Withdraw failed: " + err.message);
+                console.error(err);
             }
         });
     }
@@ -113,9 +119,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const startBtn = document.getElementById("startBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
-            if (typeof window.initBot === "function") {
-                window.initBot(10);
-                logToPanel("[INFO] Bot started");
+            try {
+                if (typeof window.initBot === "function") {
+                    window.initBot(10);
+                    logToPanel("[INFO] Bot started");
+                } else {
+                    logToPanel("[ERROR] initBot function not found");
+                }
+            } catch (err) {
+                logToPanel("[ERROR] Bot start failed: " + err.message);
+                console.error(err);
             }
         });
     }
@@ -124,9 +137,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
-            if (typeof window.stopBot === "function") {
-                window.stopBot();
-                logToPanel("[INFO] Bot stopped");
+            try {
+                if (typeof window.stopBot === "function") {
+                    window.stopBot();
+                    logToPanel("[INFO] Bot stopped");
+                } else {
+                    logToPanel("[ERROR] stopBot function not found");
+                }
+            } catch (err) {
+                logToPanel("[ERROR] Bot stop failed: " + err.message);
+                console.error(err);
             }
         });
     }
