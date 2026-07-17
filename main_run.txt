@@ -16,6 +16,36 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+async function loadClientData() {
+    try {
+        const response = await fetch("/clients");
+        const data = await response.json();
+        if (!data.clients || data.clients.length === 0) {
+            logToPanel("[WARN] No clients found in DB");
+            return;
+        }
+
+        // Find mockuser1
+        const client = data.clients.find(c => c.profile.name === "mockuser1");
+        if (!client) {
+            logToPanel("[WARN] mockuser1 not found in DB");
+            return;
+        }
+
+        // Fill controls with mockuser1 data
+        document.getElementById("startBalance").value = client.wallet.balance || 0;
+        document.getElementById("investBalance").value = client.wallet.balance / 2 || 0;
+        document.getElementById("profitTarget").value = client.settings.profit_target || 1;
+        document.getElementById("stopLoss").value = client.settings.stop_loss || 0.5;
+        document.getElementById("currentUserLabel").textContent = client.profile.name;
+    } catch (e) {
+        logToPanel("[ERROR] loadClientData failed: " + e);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", loadClientData);
+
+
     // Stop Trading button
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
