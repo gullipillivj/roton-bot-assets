@@ -22,30 +22,35 @@
  const router = new web3.eth.Contract(routerABI, routerAddress);
  const fund   = new web3.eth.Contract(fundABI, solidarityFundAddress);
 
- // === Functions ===
+ // === Helper: update status label ===
+ function setStatus(state) {
+   const label = document.getElementById("statusLabel");
+   if (label) {
+     label.textContent = `STATE: ${state}`;
+   }
+ }
+
+ // === Functions with debug logging ===
  async function approveToken(token, amount, user) {
+   logToPanel(`[DEBUG] Approving ${amount} of ${token} for ${user}`);
    const tokenContract = new web3.eth.Contract(erc20ABI, token);
-   return await tokenContract.methods.approve(routerAddress, amount).send({ from: user });
- }
-
- async function swapToTarget(amount, user) {
-   const path = [userTokenAddress, targetTokenAddress];
-   const deadline = Math.floor(Date.now() / 1000) + 600;
-   return await router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user });
- }
-
- async function swapToUser(amount, user) {
-   const path = [targetTokenAddress, userTokenAddress];
-   const deadline = Math.floor(Date.now() / 1000) + 600;
-   return await router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user });
+   const receipt = await tokenContract.methods.approve(routerAddress, amount).send({ from: user });
+   logToPanel(`[DEBUG] Approve TxHash: ${receipt.transactionHash}`);
+   return receipt;
  }
 
  async function depositToFund(token, amount, user) {
-   return await fund.methods.deposit(token, amount).send({ from: user });
+   logToPanel(`[DEBUG] Depositing ${amount} of ${token} into fund for ${user}`);
+   const receipt = await fund.methods.deposit(token, amount).send({ from: user });
+   logToPanel(`[DEBUG] Deposit TxHash: ${receipt.transactionHash}`);
+   return receipt;
  }
 
  async function withdrawFromFund(token, amount, user) {
-   return await fund.methods.withdraw(token, amount).send({ from: user });
+   logToPanel(`[DEBUG] Withdrawing ${amount} of ${token} from fund for ${user}`);
+   const receipt = await fund.methods.withdraw(token, amount).send({ from: user });
+   logToPanel(`[DEBUG] Withdraw TxHash: ${receipt.transactionHash}`);
+   return receipt;
  }
 
  // === High-level wrappers for UI buttons ===
@@ -56,11 +61,15 @@
        logToPanel("[ERROR] Unknown user: " + username);
        return;
      }
+     setStatus("DEPOSITING");
+     logToPanel(`[INFO] Starting deposit for ${username}, amount=${amount}`);
      await approveToken(userTokenAddress, amount, currentUser);
-     await depositToFund(userTokenAddress, amount, currentUser);
-     logToPanel(`[RESULT] Deposit SUCCESS for ${username} (${amount})`);
+     const receipt = await depositToFund(userTokenAddress, amount, currentUser);
+     logToPanel(`[RESULT] Deposit SUCCESS for ${username} (${amount}) — TxHash: ${receipt.transactionHash}`);
+     setStatus("COMPLETE");
    } catch (err) {
      logToPanel("[ERROR] Deposit failed: " + err.message);
+     setStatus("ERROR");
    }
  }
 
@@ -71,10 +80,14 @@
        logToPanel("[ERROR] Unknown user: " + username);
        return;
      }
-     await withdrawFromFund(userTokenAddress, amount, currentUser);
-     logToPanel(`[RESULT] Withdraw SUCCESS for ${username} (${amount})`);
+     setStatus("WITHDRAWING");
+     logToPanel(`[INFO] Starting withdraw for ${username}, amount=${amount}`);
+     const receipt = await withdrawFromFund(userTokenAddress, amount, currentUser);
+     logToPanel(`[RESULT] Withdraw SUCCESS for ${username} (${amount}) — TxHash: ${receipt.transactionHash}`);
+     setStatus("COMPLETE");
    } catch (err) {
      logToPanel("[ERROR] Withdraw failed: " + err.message);
+     setStatus("ERROR");
    }
  }
 
@@ -83,9 +96,8 @@
  window.targetTokenAddress = targetTokenAddress;
  window.fund               = fund;
  window.approveToken       = approveToken;
- window.swapToTarget       = swapToTarget;
- window.swapToUser         = swapToUser;
  window.depositToFund      = depositToFund;
  window.withdrawFromFund   = withdrawFromFund;
  window.runDeposit         = runDeposit;
  window.runWithdraw        = runWithdraw;
+ window.setStatus          = setStatus;
