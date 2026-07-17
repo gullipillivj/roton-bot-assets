@@ -1,166 +1,47 @@
 logToPanel("main_run.txt loaded");
 
-// === User address mapping ===
-const userAddressMap = {
-    mockuser1: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
-};
-
-// === Load client data function ===
-async function loadClientData(username = "mockuser1") {
-    try {
-        const response = await fetch("/clients");
-        const data = await response.json();
-        if (!data.clients || data.clients.length === 0) {
-            logToPanel("[WARN] No clients found in DB");
-            return;
-        }
-
-        const client = data.clients.find(c => c.userid === username || c.name === username);
-        if (!client) {
-            logToPanel(`[WARN] ${username} not found in DB`);
-            return;
-        }
-
-        document.getElementById("startBalance").value = client.amount_deposited || 0;
-        document.getElementById("investBalance").value = client.current_balance || 0;
-        document.getElementById("profitTarget").value = client.profit_target || 1;
-        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
-        document.getElementById("currentUserLabel").textContent = client.name;
-    } catch (e) {
-        logToPanel("[ERROR] loadClientData failed: " + e.message);
-    }
-}
-
-// === UI glue ===
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
     loadClientData("mockuser1");
 
-    // Pre-fill deposit textbox with 5000 for testing
-    document.getElementById("depositAmount").value = 5000;
-
     // Deposit button
     const depositBtn = document.getElementById("depositBtn");
     if (depositBtn) {
-        depositBtn.addEventListener("click", async () => {
-            try {
-                // Auto-set values on click
-                document.getElementById("depositAmount").value = 5000;
-                document.getElementById("withdrawAmount").value = 1000;
-
-                const amount = parseFloat(document.getElementById("depositAmount").value) || 0;
-                const username = "mockuser1";
-                const currentUser = userAddressMap[username];
-                const commission = 5;
-                const netAmount = amount - commission;
-
-                if (amount <= commission) {
-                    logToPanel("[WARN] Deposit amount must be greater than commission fee");
-                    return;
-                }
-
-                // Debug info
-                logToPanel("approveToken: " + typeof window.approveToken);
-                logToPanel("depositToFund: " + typeof window.depositToFund);
-                logToPanel("userTokenAddress: " + window.userTokenAddress);
-
-                // Await each transaction and log results
-                const tx1 = await window.approveToken(window.userTokenAddress, amount, currentUser);
-                logToPanel("approveToken result: " + JSON.stringify(tx1, null, 2));
-
-                const tx2 = await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
-                logToPanel("depositToFund result: " + JSON.stringify(tx2, null, 2));
-
-                const tx3 = await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
-                logToPanel("commission result: " + JSON.stringify(tx3, null, 2));
-
-                // Update balance only if deposit confirmed
-                if (tx2 && tx2.status) {
-                    const startBalanceBox = document.getElementById("startBalance");
-                    const currentBalance = parseFloat(startBalanceBox.value) || 0;
-                    startBalanceBox.value = currentBalance + netAmount;
-                    logToPanel(`[INFO] Balance updated: +${netAmount}`);
-                } else {
-                    logToPanel("[WARN] Deposit transaction did not confirm yet.");
-                }
-            } catch (err) {
-                logToPanel("[ERROR] Deposit failed: " + err.message);
-            }
+        depositBtn.addEventListener("click", () => {
+            runDeposit("mockuser1", 5000);
         });
     }
 
     // Withdraw button
     const withdrawBtn = document.getElementById("withdrawBtn");
     if (withdrawBtn) {
-        withdrawBtn.addEventListener("click", async () => {
-            try {
-                const username = "mockuser1";
-                const currentUser = userAddressMap[username];
-                const amount = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-
-                logToPanel(`[INFO] Checking available balance for ${username} in SolidarityFund...`);
-                const available = await window.fund.methods.balanceOf(currentUser).call();
-                const availableAmount = parseFloat(available) || 0;
-
-                logToPanel("withdrawFromFund: " + typeof window.withdrawFromFund);
-                logToPanel("available balance: " + availableAmount);
-
-                if (amount <= 0) {
-                    logToPanel("[WARN] Withdraw amount must be greater than 0");
-                    return;
-                }
-                if (availableAmount < amount) {
-                    logToPanel(`[WARN] Requested ${amount} exceeds available ${availableAmount} for ${username}`);
-                    return;
-                }
-
-                const txW = await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
-                logToPanel("withdraw result: " + JSON.stringify(txW, null, 2));
-
-                if (txW && txW.status) {
-                    const startBalanceBox = document.getElementById("startBalance");
-                    const currentBalance = parseFloat(startBalanceBox.value) || 0;
-                    startBalanceBox.value = currentBalance - amount;
-                    logToPanel(`[INFO] Balance updated: -${amount}`);
-                } else {
-                    logToPanel("[WARN] Withdraw transaction did not confirm yet.");
-                }
-            } catch (err) {
-                logToPanel("[ERROR] Withdraw failed: " + err.message);
-            }
+        withdrawBtn.addEventListener("click", () => {
+            const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+            runWithdraw("mockuser1", amt);
         });
     }
 
-    // Start Bot button
+    // Bot controls
     const startBtn = document.getElementById("startBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
-            try {
-                if (typeof window.initBot === "function") {
-                    window.initBot(10);
-                    logToPanel("[INFO] Bot started");
-                } else {
-                    logToPanel("[ERROR] initBot function not found");
-                }
-            } catch (err) {
-                logToPanel("[ERROR] Bot start failed: " + err.message);
+            if (typeof window.initBot === "function") {
+                window.initBot(10);
+                logToPanel("[INFO] Bot started");
+            } else {
+                logToPanel("[ERROR] initBot function not found");
             }
         });
     }
 
-    // Stop Bot button
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
-            try {
-                if (typeof window.stopBot === "function") {
-                    window.stopBot();
-                    logToPanel("[INFO] Bot stopped");
-                } else {
-                    logToPanel("[ERROR] stopBot function not found");
-                }
-            } catch (err) {
-                logToPanel("[ERROR] Bot stop failed: " + err.message);
+            if (typeof window.stopBot === "function") {
+                window.stopBot();
+                logToPanel("[INFO] Bot stopped");
+            } else {
+                logToPanel("[ERROR] stopBot function not found");
             }
         });
     }
