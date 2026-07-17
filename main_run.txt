@@ -2,7 +2,7 @@ logToPanel("main_run.txt loaded");
 
 // === User address mapping ===
 const userAddressMap = {
-    mockuser1: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707" // Brownie-deployed user address
+    mockuser1: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
 };
 
 // === Load client data function ===
@@ -21,7 +21,6 @@ async function loadClientData(username = "mockuser1") {
             return;
         }
 
-        // Fill controls with client data
         document.getElementById("startBalance").value = client.amount_deposited || 0;
         document.getElementById("investBalance").value = client.current_balance || 0;
         document.getElementById("profitTarget").value = client.profit_target || 1;
@@ -32,78 +31,10 @@ async function loadClientData(username = "mockuser1") {
     }
 }
 
-// === State machine ===
-function setButtonStates(state) {
-    const startBtn = document.getElementById("startBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const depositBtn = document.getElementById("depositBtn");
-    const withdrawBtn = document.getElementById("withdrawBtn");
-    const changeUserBtn = document.getElementById("changeUserBtn");
-
-    const startBalanceBox = document.getElementById("startBalance");
-    const depositBox = document.getElementById("depositAmount");
-    const withdrawBox = document.getElementById("withdrawAmount");
-    const statusLabel = document.getElementById("statusLabel");
-
-    // Initial balance is always read-only
-    startBalanceBox.readOnly = true;
-
-    switch(state) {
-        case "init":
-            startBtn.disabled = true;
-            stopBtn.disabled = true;
-            depositBtn.disabled = false;
-            withdrawBtn.disabled = true;
-            changeUserBtn.disabled = true;
-            depositBox.disabled = false;   // editable
-            withdrawBox.disabled = true;
-            statusLabel.textContent = "STATE: INIT";
-            statusLabel.style.color = "gray";
-            break;
-
-        case "afterDeposit":
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            depositBtn.disabled = false;
-            withdrawBtn.disabled = true;
-            changeUserBtn.disabled = true;
-            depositBox.disabled = false;   // still editable
-            withdrawBox.disabled = true;
-            statusLabel.textContent = "STATE: AFTER DEPOSIT";
-            statusLabel.style.color = "blue";
-            break;
-
-        case "running":
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            depositBtn.disabled = true;
-            withdrawBtn.disabled = true;
-            changeUserBtn.disabled = true;
-            depositBox.disabled = true;    // lock during bot run
-            withdrawBox.disabled = true;
-            statusLabel.textContent = "STATE: RUNNING";
-            statusLabel.style.color = "red";
-            break;
-
-        case "completed":
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            depositBtn.disabled = false;
-            withdrawBtn.disabled = false;
-            changeUserBtn.disabled = false;
-            depositBox.disabled = false;   // editable again
-            withdrawBox.disabled = false;  // now enabled
-            statusLabel.textContent = "STATE: COMPLETED";
-            statusLabel.style.color = "green";
-            break;
-    }
-}
-
 // === UI glue ===
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
     loadClientData("mockuser1");
-    setButtonStates("init");
 
     // Deposit button
     const depositBtn = document.getElementById("depositBtn");
@@ -125,19 +56,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
                 await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
 
-                // Update Initial Balance textbox
                 const startBalanceBox = document.getElementById("startBalance");
                 const currentBalance = parseFloat(startBalanceBox.value) || 0;
                 startBalanceBox.value = currentBalance + netAmount;
 
                 logToPanel(`[INFO] ${username} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
 
-                // Reset deposit textbox
                 document.getElementById("depositAmount").value = 0;
-
-                if (parseFloat(startBalanceBox.value) > 0) {
-                    setButtonStates("afterDeposit");
-                }
             } catch (err) {
                 logToPanel("[ERROR] Deposit failed: " + err);
             }
@@ -166,18 +91,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                logToPanel(`[INFO] Ledger shows ${availableAmount} tokens available for ${username}`);
-
                 await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
 
-                // Update Initial Balance textbox
                 const startBalanceBox = document.getElementById("startBalance");
                 const currentBalance = parseFloat(startBalanceBox.value) || 0;
                 startBalanceBox.value = currentBalance - amount;
 
                 logToPanel(`[INFO] Withdrawn ${amount} tokens for ${username} from SolidarityFund`);
 
-                // Reset withdraw textbox
                 document.getElementById("withdrawAmount").value = 0;
             } catch (err) {
                 logToPanel("[ERROR] Withdraw failed: " + err);
@@ -191,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
         startBtn.addEventListener("click", () => {
             if (typeof window.initBot === "function") {
                 window.initBot(10);
-                setButtonStates("running");
+                logToPanel("[INFO] Bot started");
             }
         });
     }
@@ -202,7 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
         stopBtn.addEventListener("click", () => {
             if (typeof window.stopBot === "function") {
                 window.stopBot();
-                setButtonStates("completed");
+                logToPanel("[INFO] Bot stopped");
             }
         });
     }
