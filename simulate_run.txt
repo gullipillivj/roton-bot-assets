@@ -1,4 +1,4 @@
-logToPanel("simulate.txt loaded");
+logToPanel("simulate_run.txt loaded");
 
 let currentCycle = 1;
 let cycleTimer = null;
