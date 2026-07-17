@@ -1,99 +1,89 @@
-logToPanel("pancake_tx.txt loaded");
+logToPanel("pancake_tx.txt loaded")
 
-// === Config ===
-const COMMISSION = 5;
-const ROUTER_ADDRESS = "0x9ac64cc6e4415144c455bd8e4837fea55603e5c3";
-const CONFIRM_DELAY = 7000;
-const SLIPPAGE = 1;
+# === Config ===
+COMMISSION = 5
+ROUTER_ADDRESS = "0x9ac64cc6e4415144c455bd8e4837fea55603e5c3"
+CONFIRM_DELAY = 7000
+SLIPPAGE = 1
 
-// Shared confirmation helper
-async function confirmTransaction(beforeAmount, expectedDelta, type, currentUser) {
-    const startBalanceBox = document.getElementById("startBalance");
+# === Confirm helper ===
+async def confirmTransaction(beforeAmount, expectedDelta, type, currentUser):
+    startBalanceBox = document.getElementById("startBalance")
 
     setTimeout(async () => {
-        const afterBal = await window.fund.methods.balanceOf(currentUser).call();
-        const afterAmount = parseFloat(afterBal) || 0;
-        startBalanceBox.value = afterAmount;
+        afterBal = await window.fund.methods.balanceOf(currentUser).call()
+        afterAmount = parseFloat(afterBal) || 0
+        startBalanceBox.value = afterAmount
 
-        const diff = type === "Deposit" ? afterAmount - beforeAmount : beforeAmount - afterAmount;
+        diff = type == "Deposit" ? afterAmount - beforeAmount : beforeAmount - afterAmount
 
-        if (Math.abs(diff - expectedDelta) < 0.0001) {
-            logToPanel(`[RESULT] ${type}: SUCCESS (Δ=${diff})`);
-        } else {
-            logToPanel(`[RESULT] ${type}: FAILED (Δ=${diff}, expected ${expectedDelta})`);
+        if (Math.abs(diff - expectedDelta) < 0.0001):
+            logToPanel("[RESULT] " + type + ": SUCCESS (Δ=" + diff + ")")
+        else:
+            logToPanel("[RESULT] " + type + ": FAILED (Δ=" + diff + ", expected " + expectedDelta + ")")
+    }, CONFIRM_DELAY)
+
+# === Deposit ===
+async def runDeposit(username, amount):
+    try:
+        currentUser = userAddressMap[username]
+        netAmount = amount - COMMISSION
+
+        if (amount <= COMMISSION):
+            logToPanel("[WARN] Deposit amount must be greater than commission fee")
+            return
+
+        beforeBal = await window.fund.methods.balanceOf(currentUser).call()
+        beforeAmount = parseFloat(beforeBal) || 0
+        document.getElementById("startBalance").value = beforeAmount
+
+        payload = {
+            "token_out": window.userTokenAddress,
+            "amount_bnb": netAmount,
+            "slippage": SLIPPAGE,
+            "router_address": ROUTER_ADDRESS
         }
-    }, CONFIRM_DELAY);
-}
-
-// Deposit
-async function runDeposit(username, amount) {
-    try {
-        const currentUser = userAddressMap[username];
-        const netAmount = amount - COMMISSION;
-        const startBalanceBox = document.getElementById("startBalance");
-
-        if (amount <= COMMISSION) {
-            logToPanel("[WARN] Deposit amount must be greater than commission fee");
-            return;
-        }
-
-        const beforeBal = await window.fund.methods.balanceOf(currentUser).call();
-        const beforeAmount = parseFloat(beforeBal) || 0;
-        startBalanceBox.value = beforeAmount;
-
-        const payload = {
-            token_out: window.userTokenAddress,
-            amount_bnb: netAmount,
-            slippage: SLIPPAGE,
-            router_address: ROUTER_ADDRESS
-        };
 
         await fetch("/api/deposit", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
+            "method": "POST",
+            "headers": { "Content-Type": "application/json" },
+            "body": JSON.stringify(payload)
+        })
 
-        confirmTransaction(beforeAmount, netAmount, "Deposit", currentUser);
-    } catch (err) {
-        logToPanel("[ERROR] Deposit failed: " + err.message);
-    }
-}
+        confirmTransaction(beforeAmount, netAmount, "Deposit", currentUser)
+    except err:
+        logToPanel("[ERROR] Deposit failed: " + err.message)
 
-// Withdraw
-async function runWithdraw(username, amount) {
-    try {
-        const currentUser = userAddressMap[username];
-        const startBalanceBox = document.getElementById("startBalance");
+# === Withdraw ===
+async def runWithdraw(username, amount):
+    try:
+        currentUser = userAddressMap[username]
 
-        if (amount <= 0) {
-            logToPanel("[WARN] Withdraw amount must be greater than 0");
-            return;
+        if (amount <= 0):
+            logToPanel("[WARN] Withdraw amount must be greater than 0")
+            return
+
+        beforeBal = await window.fund.methods.balanceOf(currentUser).call()
+        beforeAmount = parseFloat(beforeBal) || 0
+        document.getElementById("startBalance").value = beforeAmount
+
+        payload = {
+            "token_in": window.userTokenAddress,
+            "amount_in": amount,
+            "slippage": SLIPPAGE,
+            "router_address": ROUTER_ADDRESS
         }
 
-        const beforeBal = await window.fund.methods.balanceOf(currentUser).call();
-        const beforeAmount = parseFloat(beforeBal) || 0;
-        startBalanceBox.value = beforeAmount;
-
-        const payload = {
-            token_in: window.userTokenAddress,
-            amount_in: amount,
-            slippage: SLIPPAGE,
-            router_address: ROUTER_ADDRESS
-        };
-
         await fetch("/api/withdraw", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
+            "method": "POST",
+            "headers": { "Content-Type": "application/json" },
+            "body": JSON.stringify(payload)
+        })
 
-        confirmTransaction(beforeAmount, amount, "Withdraw", currentUser);
-    } catch (err) {
-        logToPanel("[ERROR] Withdraw failed: " + err.message);
-    }
-}
+        confirmTransaction(beforeAmount, amount, "Withdraw", currentUser)
+    except err:
+        logToPanel("[ERROR] Withdraw failed: " + err.message)
 
-// Expose globally
-window.runDeposit = runDeposit;
-window.runWithdraw = runWithdraw;
+# === Expose globally (coins.txt style) ===
+window.runDeposit = runDeposit
+window.runWithdraw = runWithdraw
