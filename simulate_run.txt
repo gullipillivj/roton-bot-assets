@@ -15,11 +15,17 @@ async function simulateCycle(cycle) {
         return;
     }
 
-    const buyPrice = stats.lastPrice;
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT`);
+    const buyPrice = parseFloat(stats.lastPrice || 0);
+    if (isNaN(buyPrice) || buyPrice <= 0) {
+        logToPanel(`[WARN] Cycle ${cycle}: Invalid price for ${coin}, skipping`);
+        return;
+    }
+
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
 
     // Profit/loss based on actual 24hr % change
-    const result = calculatePnL(buyPrice, stats.priceChangePercent);
+    const percentChange = parseFloat(stats.priceChangePercent || 0);
+    const result = calculatePnL(buyPrice, percentChange);
 
     if (result >= 0) {
         logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit ${result.toFixed(2)} USDT`);
@@ -27,7 +33,14 @@ async function simulateCycle(cycle) {
         logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
     }
 
+    // Update chart with valid values
     updateChart(buyPrice, result);
+
+    // Update live profit box
+    const liveProfitBox = document.getElementById("liveProfitValue");
+    if (liveProfitBox) {
+        liveProfitBox.textContent = `${result.toFixed(2)} USDT`;
+    }
 
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
 }
