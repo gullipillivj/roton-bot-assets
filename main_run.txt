@@ -1,10 +1,5 @@
 logToPanel("main_run.txt loaded");
 
-// === User address mapping ===
-const userAddressMap = {
-    mockuser1: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
-};
-
 // === Load client data function ===
 async function loadClientData(username = "mockuser1") {
     try {
@@ -58,13 +53,14 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Account actions
+    // Account actions — direct Anvil address
     const depositBtn = document.getElementById("depositBtn");
     if (depositBtn) {
         depositBtn.addEventListener("click", () => {
+            const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
             if (window.runDeposit) {
-                const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-                window.runDeposit("mockuser1", amt);
+                // Use Anvil account #0 directly
+                window.runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
             } else {
                 logToPanel("[ERROR] runDeposit not available");
             }
@@ -76,7 +72,8 @@ document.addEventListener("DOMContentLoaded", () => {
         withdrawBtn.addEventListener("click", () => {
             const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
             if (window.runWithdraw) {
-                window.runWithdraw("mockuser1", amt);
+                // Use Anvil account #0 directly
+                window.runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
             } else {
                 logToPanel("[ERROR] runWithdraw not available");
             }
