@@ -1,9 +1,44 @@
+logToPanel("main_run.txt loaded");
+
+// === Load client data function ===
+async function loadClientData(username = "mockuser1") {
+    try {
+        const response = await fetch("/clients");
+        const data = await response.json();
+        if (!data.clients || data.clients.length === 0) {
+            logToPanel("[WARN] No clients found in DB");
+            return;
+        }
+
+        const client = data.clients.find(c => c.userid === username || c.name === username);
+        if (!client) {
+            logToPanel(`[WARN] ${username} not found in DB`);
+            return;
+        }
+
+        // Fill controls with client data
+        document.getElementById("startBalance").value = client.amount_deposited || 0;
+        document.getElementById("investBalance").value = client.current_balance || 0;
+        document.getElementById("profitTarget").value = client.profit_target || 1;
+        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
+        document.getElementById("currentUserLabel").textContent = client.name;
+    } catch (e) {
+        logToPanel("[ERROR] loadClientData failed: " + e);
+    }
+}
+
+// === State machine ===
 function setButtonStates(state) {
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const depositBtn = document.getElementById("depositBtn");
     const withdrawBtn = document.getElementById("withdrawBtn");
     const changeUserBtn = document.getElementById("changeUserBtn");
+
+    const startBalanceBox = document.getElementById("startBalance");
+    const depositBox = document.getElementById("depositAmount");
+    const withdrawBox = document.getElementById("withdrawAmount");
+    const statusLabel = document.getElementById("statusLabel");
 
     switch(state) {
         case "init":
@@ -12,7 +47,11 @@ function setButtonStates(state) {
             depositBtn.disabled = false;
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
-            document.getElementById("startBalance").readOnly = true;
+            startBalanceBox.readOnly = true;
+            depositBox.disabled = false;
+            withdrawBox.disabled = true;
+            statusLabel.textContent = "STATE: INIT";
+            statusLabel.style.color = "gray";
             break;
 
         case "afterDeposit":
@@ -21,6 +60,11 @@ function setButtonStates(state) {
             depositBtn.disabled = false;
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
+            startBalanceBox.readOnly = true;
+            depositBox.disabled = false;
+            withdrawBox.disabled = true;
+            statusLabel.textContent = "STATE: AFTER DEPOSIT";
+            statusLabel.style.color = "blue";
             break;
 
         case "running":
@@ -29,6 +73,11 @@ function setButtonStates(state) {
             depositBtn.disabled = true;
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
+            startBalanceBox.disabled = true;
+            depositBox.disabled = true;
+            withdrawBox.disabled = true;
+            statusLabel.textContent = "STATE: RUNNING";
+            statusLabel.style.color = "red";
             break;
 
         case "completed":
@@ -37,6 +86,11 @@ function setButtonStates(state) {
             depositBtn.disabled = false;
             withdrawBtn.disabled = false;
             changeUserBtn.disabled = false;
+            startBalanceBox.disabled = false; // still read-only
+            depositBox.disabled = false;
+            withdrawBox.disabled = false;
+            statusLabel.textContent = "STATE: COMPLETED";
+            statusLabel.style.color = "green";
             break;
     }
 }
@@ -66,12 +120,59 @@ document.addEventListener("DOMContentLoaded", () => {
                 await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
                 await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
 
+                const startBalanceBox = document.getElementById("startBalance");
+                const currentBalance = parseFloat(startBalanceBox.value) || 0;
+                startBalanceBox.value = currentBalance + netAmount;
+
                 logToPanel(`[INFO] ${currentUser} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
 
-                // Enable Start Bot after deposit
-                setButtonStates("afterDeposit");
+                // Reset deposit textbox
+                document.getElementById("depositAmount").value = 0;
+
+                if (parseFloat(startBalanceBox.value) > 0) {
+                    setButtonStates("afterDeposit");
+                }
             } catch (err) {
                 logToPanel("[ERROR] Deposit failed: " + err);
+            }
+        });
+    }
+
+    // Withdraw button
+    const withdrawBtn = document.getElementById("withdrawBtn");
+    if (withdrawBtn) {
+        withdrawBtn.addEventListener("click", async () => {
+            try {
+                const currentUser = "mockuser1";
+                const amount = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+
+                logToPanel(`[INFO] Checking available balance for ${currentUser} in SolidarityFund...`);
+                const available = await window.fund.methods.balanceOf(currentUser).call();
+                const availableAmount = parseFloat(available) || 0;
+
+                if (amount <= 0) {
+                    logToPanel("[WARN] Withdraw amount must be greater than 0");
+                    return;
+                }
+                if (availableAmount < amount) {
+                    logToPanel(`[WARN] Requested ${amount} exceeds available ${availableAmount} for ${currentUser}`);
+                    return;
+                }
+
+                logToPanel(`[INFO] Ledger shows ${availableAmount} tokens available for ${currentUser}`);
+
+                await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
+
+                const startBalanceBox = document.getElementById("startBalance");
+                const currentBalance = parseFloat(startBalanceBox.value) || 0;
+                startBalanceBox.value = currentBalance - amount;
+
+                logToPanel(`[INFO] Withdrawn ${amount} tokens for ${currentUser} from SolidarityFund`);
+
+                // Reset withdraw textbox
+                document.getElementById("withdrawAmount").value = 0;
+            } catch (err) {
+                logToPanel("[ERROR] Withdraw failed: " + err);
             }
         });
     }
