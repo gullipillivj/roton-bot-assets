@@ -40,9 +40,6 @@ document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
     window.loadClientData("mockuser1"); // auto‑populate fields
 
-
-    }
-
     // Bot controls
     const startBtn = document.getElementById("startBtn");
     if (startBtn) {
@@ -64,6 +61,31 @@ document.addEventListener("DOMContentLoaded", () => {
                 logToPanel("[INFO] Bot stopped");
             } else {
                 logToPanel("[ERROR] stopBot function not found");
+            }
+        });
+    }
+
+    // Account actions
+    const depositBtn = document.getElementById("depositBtn");
+    if (depositBtn) {
+        depositBtn.addEventListener("click", () => {
+            if (window.runDeposit) {
+                const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
+                window.runDeposit("mockuser1", amt);
+            } else {
+                logToPanel("[ERROR] runDeposit not loaded yet");
+            }
+        });
+    }
+
+    const withdrawBtn = document.getElementById("withdrawBtn");
+    if (withdrawBtn) {
+        withdrawBtn.addEventListener("click", () => {
+            const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+            if (window.runWithdraw) {
+                window.runWithdraw("mockuser1", amt);
+            } else {
+                logToPanel("[ERROR] runWithdraw not loaded yet");
             }
         });
     }
