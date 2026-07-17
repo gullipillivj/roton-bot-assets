@@ -1,103 +1,121 @@
 // pancake_calls.txt — PancakeSwap + SolidarityFund interaction layer
- logToPanel("pancake_calls.txt loaded");
+logToPanel("pancake_calls.txt loaded");
 
- // Ensure Web3 is available globally (include via <script> in HTML)
- const web3 = new Web3("http://127.0.0.1:8545"); // Brownie local chain RPC
- window.web3 = web3;
+// Ensure Web3 is available globally (include via <script> in HTML)
+const web3 = new Web3("http://127.0.0.1:8545"); // Brownie local chain RPC
+window.web3 = web3;
 
- // === Deployed contracts ===
- const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
- const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
- const routerAddress      = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
- const solidarityFundAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
+// === Deployed contracts ===
+const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+const targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
+const routerAddress      = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
+const solidarityFundAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
 
- // === ABIs ===
- const routerABI = [ /* Pancake Router ABI JSON here */ ];
- const erc20ABI = [
-   { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve", "outputs":[{"name":"","type":"bool"}], "type":"function" },
-   { "constant": true, "inputs":[{"name":"owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"balance","type":"uint256"}], "type":"function" }
- ];
- const fundABI = [ /* SolidarityFund ABI JSON here */ ];
+// === ABIs ===
+const routerABI = [ /* Pancake Router ABI JSON here */ ];
+const erc20ABI = [
+  { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve", "outputs":[{"name":"","type":"bool"}], "type":"function" },
+  { "constant": true, "inputs":[{"name":"owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"balance","type":"uint256"}], "type":"function" }
+];
+const fundABI = [ /* SolidarityFund ABI JSON here */ ];
 
- const router = new web3.eth.Contract(routerABI, routerAddress);
- const fund   = new web3.eth.Contract(fundABI, solidarityFundAddress);
+const router = new web3.eth.Contract(routerABI, routerAddress);
+const fund   = new web3.eth.Contract(fundABI, solidarityFundAddress);
 
- // === Helper: update status label ===
- function setStatus(state) {
-   const label = document.getElementById("statusLabel");
-   if (label) {
-     label.textContent = `STATE: ${state}`;
-   }
- }
+// === Helper: update status label ===
+function setStatus(state) {
+  const label = document.getElementById("statusLabel");
+  if (label) {
+    label.textContent = `STATE: ${state}`;
+  }
+}
 
- // === Functions with debug logging ===
- async function approveToken(token, amount, user) {
-   logToPanel(`[DEBUG] Approving ${amount} of ${token} for ${user}`);
-   const tokenContract = new web3.eth.Contract(erc20ABI, token);
-   const receipt = await tokenContract.methods.approve(routerAddress, amount).send({ from: user });
-   logToPanel(`[DEBUG] Approve TxHash: ${receipt.transactionHash}`);
-   return receipt;
- }
+// === Helper: pretty-print receipt ===
+function logReceipt(action, receipt) {
+  if (!receipt) {
+    logToPanel(`[WARN] No receipt returned for ${action}`);
+    return;
+  }
+  const txHash = receipt.transactionHash || "N/A";
+  const block  = receipt.blockNumber || "N/A";
+  const gas    = receipt.gasUsed || "N/A";
+  const status = receipt.status ? "SUCCESS" : "FAILED";
 
- async function depositToFund(token, amount, user) {
-   logToPanel(`[DEBUG] Depositing ${amount} of ${token} into fund for ${user}`);
-   const receipt = await fund.methods.deposit(token, amount).send({ from: user });
-   logToPanel(`[DEBUG] Deposit TxHash: ${receipt.transactionHash}`);
-   return receipt;
- }
+  logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+}
 
- async function withdrawFromFund(token, amount, user) {
-   logToPanel(`[DEBUG] Withdrawing ${amount} of ${token} from fund for ${user}`);
-   const receipt = await fund.methods.withdraw(token, amount).send({ from: user });
-   logToPanel(`[DEBUG] Withdraw TxHash: ${receipt.transactionHash}`);
-   return receipt;
- }
+// === Functions with debug logging ===
+async function approveToken(token, amount, user) {
+  logToPanel(`[DEBUG] Approving ${amount} of ${token} for ${user}`);
+  const tokenContract = new web3.eth.Contract(erc20ABI, token);
+  const receipt = await tokenContract.methods.approve(routerAddress, amount).send({ from: user });
+  logReceipt("Approve", receipt);
+  return receipt;
+}
 
- // === High-level wrappers for UI buttons ===
- async function runDeposit(username, amount) {
-   try {
-     const currentUser = userAddressMap[username];
-     if (!currentUser) {
-       logToPanel("[ERROR] Unknown user: " + username);
-       return;
-     }
-     setStatus("DEPOSITING");
-     logToPanel(`[INFO] Starting deposit for ${username}, amount=${amount}`);
-     await approveToken(userTokenAddress, amount, currentUser);
-     const receipt = await depositToFund(userTokenAddress, amount, currentUser);
-     logToPanel(`[RESULT] Deposit SUCCESS for ${username} (${amount}) — TxHash: ${receipt.transactionHash}`);
-     setStatus("COMPLETE");
-   } catch (err) {
-     logToPanel("[ERROR] Deposit failed: " + err.message);
-     setStatus("ERROR");
-   }
- }
+async function depositToFund(token, amount, user) {
+  logToPanel(`[DEBUG] Depositing ${amount} of ${token} into fund for ${user}`);
+  const receipt = await fund.methods.deposit(token, amount).send({ from: user });
+  logReceipt("Deposit", receipt);
+  return receipt;
+}
 
- async function runWithdraw(username, amount) {
-   try {
-     const currentUser = userAddressMap[username];
-     if (!currentUser) {
-       logToPanel("[ERROR] Unknown user: " + username);
-       return;
-     }
-     setStatus("WITHDRAWING");
-     logToPanel(`[INFO] Starting withdraw for ${username}, amount=${amount}`);
-     const receipt = await withdrawFromFund(userTokenAddress, amount, currentUser);
-     logToPanel(`[RESULT] Withdraw SUCCESS for ${username} (${amount}) — TxHash: ${receipt.transactionHash}`);
-     setStatus("COMPLETE");
-   } catch (err) {
-     logToPanel("[ERROR] Withdraw failed: " + err.message);
-     setStatus("ERROR");
-   }
- }
+async function withdrawFromFund(token, amount, user) {
+  logToPanel(`[DEBUG] Withdrawing ${amount} of ${token} from fund for ${user}`);
+  const receipt = await fund.methods.withdraw(token, amount).send({ from: user });
+  logReceipt("Withdraw", receipt);
+  return receipt;
+}
 
- // === Expose globally ===
- window.userTokenAddress   = userTokenAddress;
- window.targetTokenAddress = targetTokenAddress;
- window.fund               = fund;
- window.approveToken       = approveToken;
- window.depositToFund      = depositToFund;
- window.withdrawFromFund   = withdrawFromFund;
- window.runDeposit         = runDeposit;
- window.runWithdraw        = runWithdraw;
- window.setStatus          = setStatus;
+// === High-level wrappers for UI buttons ===
+async function runDeposit(username, amount) {
+  try {
+    const currentUser = userAddressMap[username];
+    if (!currentUser) {
+      logToPanel("[ERROR] Unknown user: " + username);
+      return;
+    }
+    setStatus("DEPOSITING");
+    logToPanel(`[INFO] Starting deposit for ${username}, amount=${amount}`);
+
+    const approveReceipt = await approveToken(userTokenAddress, amount, currentUser);
+    const depositReceipt = await depositToFund(userTokenAddress, amount, currentUser);
+
+    logReceipt("Deposit Final", depositReceipt);
+    setStatus("COMPLETE");
+  } catch (err) {
+    logToPanel("[ERROR] Deposit failed: " + err.message);
+    setStatus("ERROR");
+  }
+}
+
+async function runWithdraw(username, amount) {
+  try {
+    const currentUser = userAddressMap[username];
+    if (!currentUser) {
+      logToPanel("[ERROR] Unknown user: " + username);
+      return;
+    }
+    setStatus("WITHDRAWING");
+    logToPanel(`[INFO] Starting withdraw for ${username}, amount=${amount}`);
+
+    const withdrawReceipt = await withdrawFromFund(userTokenAddress, amount, currentUser);
+
+    logReceipt("Withdraw Final", withdrawReceipt);
+    setStatus("COMPLETE");
+  } catch (err) {
+    logToPanel("[ERROR] Withdraw failed: " + err.message);
+    setStatus("ERROR");
+  }
+}
+
+// === Expose globally ===
+window.userTokenAddress   = userTokenAddress;
+window.targetTokenAddress = targetTokenAddress;
+window.fund               = fund;
+window.approveToken       = approveToken;
+window.depositToFund      = depositToFund;
+window.withdrawFromFund   = withdrawFromFund;
+window.runDeposit         = runDeposit;
+window.runWithdraw        = runWithdraw;
+window.setStatus          = setStatus;
