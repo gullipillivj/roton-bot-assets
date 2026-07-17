@@ -1,8 +1,37 @@
 logToPanel("main_run.txt loaded");
 
+// === User address mapping ===
+const userAddressMap = {
+    mockuser1: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
+};
+
+// === Load client data function ===
+async function loadClientData(username = "mockuser1") {
+    try {
+        const response = await fetch("/clients");
+        const data = await response.json();
+        const client = data.clients.find(c => c.userid === username || c.name === username);
+        if (!client) {
+            logToPanel(`[WARN] ${username} not found in DB`);
+            return;
+        }
+
+        document.getElementById("startBalance").value = client.amount_deposited || 0;
+        document.getElementById("investBalance").value = client.current_balance || 0;
+        document.getElementById("profitTarget").value = client.profit_target || 1;
+        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
+        document.getElementById("currentUserLabel").textContent = client.name;
+    } catch (e) {
+        logToPanel("[ERROR] loadClientData failed: " + e.message);
+    }
+}
+
+// Expose globally
+window.loadClientData = loadClientData;
+
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
-    loadClientData("mockuser1");
+    window.loadClientData("mockuser1"); // auto‑populate fields
 
     // Deposit button
     const depositBtn = document.getElementById("depositBtn");
