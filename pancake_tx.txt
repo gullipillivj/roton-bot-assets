@@ -4,6 +4,7 @@ logToPanel("pancake_tx.txt loaded");
 const COMMISSION = 5; // commission fee
 const ROUTER_ADDRESS = "0x9ac64cc6e4415144c455bd8e4837fea55603e5c3"; // Pancake testnet router
 const CONFIRM_DELAY = 7000; // delay in ms before checking balance
+const SLIPPAGE = 1; // slippage tolerance
 
 // Shared confirmation helper
 async function confirmTransaction(beforeAmount, expectedDelta, type, currentUser) {
@@ -45,7 +46,7 @@ async function runDeposit(username, amount) {
         const payload = {
             token_out: window.userTokenAddress,
             amount_bnb: netAmount,
-            slippage: 1,
+            slippage: SLIPPAGE,
             router_address: ROUTER_ADDRESS
         };
 
@@ -82,7 +83,7 @@ async function runWithdraw(username, amount) {
         const payload = {
             token_in: window.userTokenAddress,
             amount_in: amount,
-            slippage: 1,
+            slippage: SLIPPAGE,
             router_address: ROUTER_ADDRESS
         };
 
