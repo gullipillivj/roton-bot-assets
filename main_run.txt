@@ -59,20 +59,30 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                // Debug info shown in log panel
+                // Debug info
                 logToPanel("approveToken: " + typeof window.approveToken);
                 logToPanel("depositToFund: " + typeof window.depositToFund);
                 logToPanel("userTokenAddress: " + window.userTokenAddress);
 
-                await window.approveToken(window.userTokenAddress, amount, currentUser);
-                await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
-                await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
+                // Await each transaction and log results
+                const tx1 = await window.approveToken(window.userTokenAddress, amount, currentUser);
+                logToPanel("approveToken result: " + JSON.stringify(tx1, null, 2));
 
-                const startBalanceBox = document.getElementById("startBalance");
-                const currentBalance = parseFloat(startBalanceBox.value) || 0;
-                startBalanceBox.value = currentBalance + netAmount;
+                const tx2 = await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
+                logToPanel("depositToFund result: " + JSON.stringify(tx2, null, 2));
 
-                logToPanel(`[INFO] ${username} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
+                const tx3 = await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
+                logToPanel("commission result: " + JSON.stringify(tx3, null, 2));
+
+                // Update balance only if deposit confirmed
+                if (tx2 && tx2.status) {
+                    const startBalanceBox = document.getElementById("startBalance");
+                    const currentBalance = parseFloat(startBalanceBox.value) || 0;
+                    startBalanceBox.value = currentBalance + netAmount;
+                    logToPanel(`[INFO] Balance updated: +${netAmount}`);
+                } else {
+                    logToPanel("[WARN] Deposit transaction did not confirm yet.");
+                }
             } catch (err) {
                 logToPanel("[ERROR] Deposit failed: " + err.message);
             }
@@ -92,7 +102,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 const available = await window.fund.methods.balanceOf(currentUser).call();
                 const availableAmount = parseFloat(available) || 0;
 
-                // Debug info shown in log panel
                 logToPanel("withdrawFromFund: " + typeof window.withdrawFromFund);
                 logToPanel("available balance: " + availableAmount);
 
@@ -105,13 +114,17 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
-                await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
+                const txW = await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
+                logToPanel("withdraw result: " + JSON.stringify(txW, null, 2));
 
-                const startBalanceBox = document.getElementById("startBalance");
-                const currentBalance = parseFloat(startBalanceBox.value) || 0;
-                startBalanceBox.value = currentBalance - amount;
-
-                logToPanel(`[INFO] Withdrawn ${amount} tokens for ${username} from SolidarityFund`);
+                if (txW && txW.status) {
+                    const startBalanceBox = document.getElementById("startBalance");
+                    const currentBalance = parseFloat(startBalanceBox.value) || 0;
+                    startBalanceBox.value = currentBalance - amount;
+                    logToPanel(`[INFO] Balance updated: -${amount}`);
+                } else {
+                    logToPanel("[WARN] Withdraw transaction did not confirm yet.");
+                }
             } catch (err) {
                 logToPanel("[ERROR] Withdraw failed: " + err.message);
             }
