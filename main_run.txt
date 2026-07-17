@@ -1,5 +1,5 @@
 // main.txt — UI glue
-logToPanel("main.txt loaded");
+logToPanel("main_run.txt loaded");
 
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
