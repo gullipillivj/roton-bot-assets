@@ -45,6 +45,9 @@ function setButtonStates(state) {
     const withdrawBox = document.getElementById("withdrawAmount");
     const statusLabel = document.getElementById("statusLabel");
 
+    // Initial balance is always read-only
+    startBalanceBox.readOnly = true;
+
     switch(state) {
         case "init":
             startBtn.disabled = true;
@@ -52,8 +55,7 @@ function setButtonStates(state) {
             depositBtn.disabled = false;
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
-            startBalanceBox.readOnly = true;
-            depositBox.disabled = false;   // deposit always editable until bot runs
+            depositBox.disabled = false;   // editable
             withdrawBox.disabled = true;
             statusLabel.textContent = "STATE: INIT";
             statusLabel.style.color = "gray";
@@ -65,7 +67,6 @@ function setButtonStates(state) {
             depositBtn.disabled = false;
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
-            startBalanceBox.readOnly = true;
             depositBox.disabled = false;   // still editable
             withdrawBox.disabled = true;
             statusLabel.textContent = "STATE: AFTER DEPOSIT";
@@ -78,8 +79,7 @@ function setButtonStates(state) {
             depositBtn.disabled = true;
             withdrawBtn.disabled = true;
             changeUserBtn.disabled = true;
-            startBalanceBox.disabled = true;
-            depositBox.disabled = true;    // lock textboxes while bot runs
+            depositBox.disabled = true;    // lock during bot run
             withdrawBox.disabled = true;
             statusLabel.textContent = "STATE: RUNNING";
             statusLabel.style.color = "red";
@@ -91,9 +91,8 @@ function setButtonStates(state) {
             depositBtn.disabled = false;
             withdrawBtn.disabled = false;
             changeUserBtn.disabled = false;
-            startBalanceBox.disabled = false; // still read-only
-            depositBox.disabled = false;
-            withdrawBox.disabled = false;
+            depositBox.disabled = false;   // editable again
+            withdrawBox.disabled = false;  // now enabled
             statusLabel.textContent = "STATE: COMPLETED";
             statusLabel.style.color = "green";
             break;
