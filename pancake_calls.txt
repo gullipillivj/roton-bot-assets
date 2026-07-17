@@ -25,11 +25,15 @@ function setStatus(state) {
 }
 
 function logReceipt(action, receipt) {
-  const txHash = receipt.transactionHash || "N/A";
-  const block  = receipt.blockNumber || "N/A";
-  const gas    = receipt.gasUsed || "N/A";
-  const status = receipt.status ? "SUCCESS" : "FAILED";
-  logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+  try {
+    const txHash = receipt.transactionHash || "N/A";
+    const block  = receipt.blockNumber || "N/A";
+    const gas    = receipt.gasUsed || "N/A";
+    const status = receipt.status ? "SUCCESS" : "FAILED";
+    logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+  } catch (e) {
+    logToPanel(`[DEBUG] Raw receipt for ${action}: ${JSON.stringify(receipt)}`);
+  }
 }
 
 // === Functions with PromiEvent logging ===
