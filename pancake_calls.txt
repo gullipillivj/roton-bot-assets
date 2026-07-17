@@ -1,7 +1,7 @@
 // pancake_calls.txt — PancakeSwap + SolidarityFund interaction layer
 logToPanel("pancake_calls.txt loaded");
 
-const web3 = new Web3("http://127.0.0.1:5003");
+const web3 = new Web3("http://127.0.0.1:5050");
 window.web3 = web3;
 
 const userTokenAddress = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
