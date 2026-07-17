@@ -1,12 +1,5 @@
 logToPanel("main_run.txt loaded");
 
-// Dynamically load pancake_tx.txt
-(function loadScripts() {
-    const script = document.createElement("script");
-    script.src = "pancake_tx.txt"; // must be served by your app
-    document.head.appendChild(script);
-})();
-
 // === User address mapping ===
 const userAddressMap = {
     mockuser1: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707"
@@ -73,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
                 window.runDeposit("mockuser1", amt);
             } else {
-                logToPanel("[ERROR] runDeposit not loaded yet");
+                logToPanel("[ERROR] runDeposit not available");
             }
         });
     }
@@ -85,7 +78,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (window.runWithdraw) {
                 window.runWithdraw("mockuser1", amt);
             } else {
-                logToPanel("[ERROR] runWithdraw not loaded yet");
+                logToPanel("[ERROR] runWithdraw not available");
             }
         });
     }
