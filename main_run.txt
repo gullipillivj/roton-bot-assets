@@ -36,6 +36,9 @@ document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
     loadClientData("mockuser1");
 
+    // Pre-fill deposit textbox with 5000 for testing
+    document.getElementById("depositAmount").value = 5000;
+
     // Deposit button
     const depositBtn = document.getElementById("depositBtn");
     if (depositBtn) {
@@ -62,7 +65,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 logToPanel(`[INFO] ${username} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
 
-                document.getElementById("depositAmount").value = 0;
+                // Reset deposit textbox back to 5000 for repeated testing
+                document.getElementById("depositAmount").value = 5000;
             } catch (err) {
                 logToPanel("[ERROR] Deposit failed: " + err);
             }
