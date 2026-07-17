@@ -44,27 +44,50 @@ function logReceipt(action, receipt) {
   logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
 }
 
-// === Functions with debug logging ===
+// === Functions with PromiEvent logging ===
 async function approveToken(token, amount, user) {
   logToPanel(`[DEBUG] Approving ${amount} of ${token} for ${user}`);
   const tokenContract = new web3.eth.Contract(erc20ABI, token);
-  const receipt = await tokenContract.methods.approve(routerAddress, amount).send({ from: user });
-  logReceipt("Approve", receipt);
-  return receipt;
+  return tokenContract.methods.approve(routerAddress, amount).send({ from: user })
+    .on('transactionHash', hash => logToPanel(`[INFO] Approve submitted: ${hash}`))
+    .on('receipt', receipt => logReceipt("Approve", receipt))
+    .on('error', err => logToPanel(`[ERROR] Approve failed: ${err.message}`));
 }
 
 async function depositToFund(token, amount, user) {
   logToPanel(`[DEBUG] Depositing ${amount} of ${token} into fund for ${user}`);
-  const receipt = await fund.methods.deposit(token, amount).send({ from: user });
-  logReceipt("Deposit", receipt);
-  return receipt;
+  return fund.methods.deposit(token, amount).send({ from: user })
+    .on('transactionHash', hash => logToPanel(`[INFO] Deposit submitted: ${hash}`))
+    .on('receipt', receipt => logReceipt("Deposit", receipt))
+    .on('error', err => logToPanel(`[ERROR] Deposit failed: ${err.message}`));
 }
 
 async function withdrawFromFund(token, amount, user) {
   logToPanel(`[DEBUG] Withdrawing ${amount} of ${token} from fund for ${user}`);
-  const receipt = await fund.methods.withdraw(token, amount).send({ from: user });
-  logReceipt("Withdraw", receipt);
-  return receipt;
+  return fund.methods.withdraw(token, amount).send({ from: user })
+    .on('transactionHash', hash => logToPanel(`[INFO] Withdraw submitted: ${hash}`))
+    .on('receipt', receipt => logReceipt("Withdraw", receipt))
+    .on('error', err => logToPanel(`[ERROR] Withdraw failed: ${err.message}`));
+}
+
+async function swapToTarget(amount, user) {
+  logToPanel(`[DEBUG] Swapping ${amount} ${userTokenAddress} -> ${targetTokenAddress} for ${user}`);
+  const path = [userTokenAddress, targetTokenAddress];
+  const deadline = Math.floor(Date.now() / 1000) + 600;
+  return router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user })
+    .on('transactionHash', hash => logToPanel(`[INFO] SwapToTarget submitted: ${hash}`))
+    .on('receipt', receipt => logReceipt("SwapToTarget", receipt))
+    .on('error', err => logToPanel(`[ERROR] SwapToTarget failed: ${err.message}`));
+}
+
+async function swapToUser(amount, user) {
+  logToPanel(`[DEBUG] Swapping ${amount} ${targetTokenAddress} -> ${userTokenAddress} for ${user}`);
+  const path = [targetTokenAddress, userTokenAddress];
+  const deadline = Math.floor(Date.now() / 1000) + 600;
+  return router.methods.swapExactTokensForTokens(amount, 0, path, user, deadline).send({ from: user })
+    .on('transactionHash', hash => logToPanel(`[INFO] SwapToUser submitted: ${hash}`))
+    .on('receipt', receipt => logReceipt("SwapToUser", receipt))
+    .on('error', err => logToPanel(`[ERROR] SwapToUser failed: ${err.message}`));
 }
 
 // === High-level wrappers for UI buttons ===
@@ -78,10 +101,9 @@ async function runDeposit(username, amount) {
     setStatus("DEPOSITING");
     logToPanel(`[INFO] Starting deposit for ${username}, amount=${amount}`);
 
-    const approveReceipt = await approveToken(userTokenAddress, amount, currentUser);
-    const depositReceipt = await depositToFund(userTokenAddress, amount, currentUser);
+    await approveToken(userTokenAddress, amount, currentUser);
+    await depositToFund(userTokenAddress, amount, currentUser);
 
-    logReceipt("Deposit Final", depositReceipt);
     setStatus("COMPLETE");
   } catch (err) {
     logToPanel("[ERROR] Deposit failed: " + err.message);
@@ -99,9 +121,8 @@ async function runWithdraw(username, amount) {
     setStatus("WITHDRAWING");
     logToPanel(`[INFO] Starting withdraw for ${username}, amount=${amount}`);
 
-    const withdrawReceipt = await withdrawFromFund(userTokenAddress, amount, currentUser);
+    await withdrawFromFund(userTokenAddress, amount, currentUser);
 
-    logReceipt("Withdraw Final", withdrawReceipt);
     setStatus("COMPLETE");
   } catch (err) {
     logToPanel("[ERROR] Withdraw failed: " + err.message);
@@ -116,6 +137,8 @@ window.fund               = fund;
 window.approveToken       = approveToken;
 window.depositToFund      = depositToFund;
 window.withdrawFromFund   = withdrawFromFund;
+window.swapToTarget       = swapToTarget;
+window.swapToUser         = swapToUser;
 window.runDeposit         = runDeposit;
 window.runWithdraw        = runWithdraw;
 window.setStatus          = setStatus;
