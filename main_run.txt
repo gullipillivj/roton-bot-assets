@@ -5,13 +5,17 @@ window.checkBalances = async function(userAddress) {
     try {
         const response = await fetch("/balances");
         const data = await response.json();
+        if (data.status === "error") {
+            logToPanel(`[ERROR] balances route failed: ${data.message}`);
+            return;
+        }
         logToPanel(`[BALANCES] Donor UserToken=${data.donor_balance_user_token}, Donor TargetToken=${data.donor_balance_target_token}, Fund UserToken=${data.fund_balance_user_token}, Fund TargetToken=${data.fund_balance_target_token}, Charity UserToken=${data.charity_balance_user_token}, Charity TargetToken=${data.charity_balance_target_token}`);
     } catch (e) {
         logToPanel("[ERROR] checkBalances failed: " + e.message);
     }
 };
 
-// === Deposit function using helpers with receipt logging ===
+// === Deposit with receipt + polling ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         const amtWei = web3.utils.toWei(amount.toString());
@@ -27,15 +31,38 @@ window.runDeposit = async function(userAddress, amount) {
                 logToPanel(`[RESULT] Deposit — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
             });
 
-        logToPanel(`[SUCCESS] Deposit ${amount} → Fund`);
+        // Poll fund balance until updated
+        let initialBalance = 0;
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+            pollCount++;
+            try {
+                const response = await fetch("/balances");
+                const data = await response.json();
+                const fundBalance = parseInt(data.fund_balance_user_token);
 
-        await window.checkBalances(userAddress);
+                if (initialBalance === 0) {
+                    initialBalance = fundBalance;
+                    logToPanel(`[DEBUG] Initial fund balance=${initialBalance}`);
+                } else if (fundBalance > initialBalance) {
+                    clearInterval(pollInterval);
+                    logToPanel(`[SUCCESS] Amount deposited ${amount} | Fund balance now=${fundBalance}`);
+                } else if (pollCount > 10) {
+                    clearInterval(pollInterval);
+                    logToPanel(`[WARN] Deposit not reflected after polling. Last balance=${fundBalance}`);
+                }
+            } catch (e) {
+                logToPanel(`[ERROR] Balance poll failed: ${e.message}`);
+                clearInterval(pollInterval);
+            }
+        }, 5000);
+
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
 };
 
-// === Withdraw function using helpers with receipt logging ===
+// === Withdraw with receipt + polling ===
 window.runWithdraw = async function(userAddress, amount) {
     try {
         const amtWei = web3.utils.toWei(amount.toString());
@@ -50,9 +77,32 @@ window.runWithdraw = async function(userAddress, amount) {
                 logToPanel(`[RESULT] Withdraw — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
             });
 
-        logToPanel(`[SUCCESS] Withdraw ${amount} | User=${userAddress}`);
+        // Poll donor balance until updated
+        let initialBalance = 0;
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+            pollCount++;
+            try {
+                const response = await fetch("/balances");
+                const data = await response.json();
+                const donorBalance = parseInt(data.donor_balance_user_token);
 
-        await window.checkBalances(userAddress);
+                if (initialBalance === 0) {
+                    initialBalance = donorBalance;
+                    logToPanel(`[DEBUG] Initial donor balance=${initialBalance}`);
+                } else if (donorBalance < initialBalance) {
+                    clearInterval(pollInterval);
+                    logToPanel(`[SUCCESS] Amount withdrawn ${amount} | Donor balance now=${donorBalance}`);
+                } else if (pollCount > 10) {
+                    clearInterval(pollInterval);
+                    logToPanel(`[WARN] Withdraw not reflected after polling. Last balance=${donorBalance}`);
+                }
+            } catch (e) {
+                logToPanel(`[ERROR] Balance poll failed: ${e.message}`);
+                clearInterval(pollInterval);
+            }
+        }, 5000);
+
     } catch (e) {
         logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
     }
