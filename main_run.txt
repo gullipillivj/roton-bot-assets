@@ -1,19 +1,5 @@
 logToPanel("main_run.txt loaded");
 
-// === Save log entries to server ===
-async function saveLog(entry) {
-    try {
-        const response = await fetch("/log", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ entry })
-        });
-        if (!response.ok) throw new Error("Log save failed");
-    } catch (e) {
-        logToPanel("[ERROR] saveLog failed: " + e.message);
-    }
-}
-
 // === Balance check helper ===
 window.checkBalances = async function(userAddress) {
     try {
@@ -31,7 +17,7 @@ window.checkBalances = async function(userAddress) {
     }
 };
 
-// === Deposit function with commission + logging ===
+// === Deposit function with commission ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         const amtWei = web3.utils.toWei(amount.toString());
@@ -57,20 +43,16 @@ window.runDeposit = async function(userAddress, amount) {
             .depositFunds(userTokenAddress, netWei)
             .send({ from: userAddress });
 
+        logToPanel(`[SUCCESS] Deposit ${amount} | Net ${netAmount} → Fund | Commission ${commission} → Operator`);
+
         // Auto‑check balances
         await window.checkBalances(userAddress);
-
-        const logEntry = `[SUCCESS] Deposit ${amount} | Net ${netAmount} → Fund | Commission ${commission} → Operator | Time=${new Date().toISOString()}`;
-        logToPanel(logEntry);
-        saveLog(logEntry);
     } catch (e) {
-        const logEntry = `[FAILURE] Deposit ${amount} | Error=${e.message} | Time=${new Date().toISOString()}`;
-        logToPanel(logEntry);
-        saveLog(logEntry);
+        logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
 };
 
-// === Withdraw function with logging ===
+// === Withdraw function ===
 window.runWithdraw = async function(userAddress, amount) {
     try {
         const amtWei = web3.utils.toWei(amount.toString());
@@ -79,16 +61,12 @@ window.runWithdraw = async function(userAddress, amount) {
             .withdrawFunds(userTokenAddress, amtWei)
             .send({ from: userAddress });
 
+        logToPanel(`[SUCCESS] Withdraw ${amount} | User=${userAddress}`);
+
         // Auto‑check balances
         await window.checkBalances(userAddress);
-
-        const logEntry = `[SUCCESS] Withdraw ${amount} | User=${userAddress} | Time=${new Date().toISOString()}`;
-        logToPanel(logEntry);
-        saveLog(logEntry);
     } catch (e) {
-        const logEntry = `[FAILURE] Withdraw ${amount} | Error=${e.message} | Time=${new Date().toISOString()}`;
-        logToPanel(logEntry);
-        saveLog(logEntry);
+        logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
     }
 };
 
