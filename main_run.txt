@@ -4,8 +4,14 @@ logToPanel("main_run.txt loaded");
 window.checkBalances = async function(userAddress) {
     try {
         const response = await fetch("/balances");
-        const text = await response.text();   // no JSON parsing
-        logToPanel(`[BALANCES] ${text}`);
+        const text = await response.text();   // raw text only
+        // Trap scientific notation or integer balances
+        const match = text.match(/\b\d+E[+-]?\d+\b|\b\d+\b/);
+        if (match) {
+            logToPanel(`[BALANCE DETECTED] ${match[0]}`);
+        } else {
+            logToPanel(`[BALANCES] ${text}`);
+        }
     } catch (e) {
         logToPanel("[ERROR] checkBalances failed: " + e.message);
     }
@@ -23,7 +29,7 @@ window.runDeposit = async function(userAddress, amount) {
                 logToPanel(`[RESULT] Deposit TxHash=${receipt.transactionHash || "N/A"}`);
             });
 
-        // Poll balances until updated
+        // Start polling only after deposit click
         let initialText = "";
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
@@ -64,7 +70,7 @@ window.runWithdraw = async function(userAddress, amount) {
                 logToPanel(`[RESULT] Withdraw TxHash=${receipt.transactionHash || "N/A"}`);
             });
 
-        // Poll balances until updated
+        // Start polling only after withdraw click
         let initialText = "";
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
@@ -94,12 +100,19 @@ window.runWithdraw = async function(userAddress, amount) {
     }
 };
 
-// === Load client data (raw text) ===
+// === Load client data silently (no logview JSON) ===
 async function loadClientData(username = "mockuser1") {
     try {
         const response = await fetch("/clients");
-        const text = await response.text();
-        logToPanel(`[CLIENT DATA] ${text}`);
+        const data = await response.json();
+        const client = data.clients.find(c => c.userid === username || c.name === username);
+        if (!client) return;
+
+        document.getElementById("startBalance").value = client.amount_deposited || 0;
+        document.getElementById("investBalance").value = client.current_balance || 0;
+        document.getElementById("profitTarget").value = client.profit_target || 1;
+        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
+        document.getElementById("currentUserLabel").textContent = client.name;
     } catch (e) {
         logToPanel("[ERROR] loadClientData failed: " + e.message);
     }
@@ -152,9 +165,4 @@ document.addEventListener("DOMContentLoaded", () => {
             window.runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
         });
     }
-
-    // Global balance polling every 10 seconds
-    setInterval(() => {
-        window.checkBalances("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
-    }, 10000);
 });
