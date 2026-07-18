@@ -1,15 +1,11 @@
 logToPanel("main_run.txt loaded");
 
-// === Balance check helper ===
+// === Balance check helper (raw text) ===
 window.checkBalances = async function(userAddress) {
     try {
         const response = await fetch("/balances");
-        const data = await response.json();
-        if (data.status === "error") {
-            logToPanel(`[ERROR] balances route failed: ${data.message}`);
-            return;
-        }
-        logToPanel(`[BALANCES] Donor UserToken=${data.donor_balance_user_token}, Donor TargetToken=${data.donor_balance_target_token}, Fund UserToken=${data.fund_balance_user_token}, Fund TargetToken=${data.fund_balance_target_token}, Charity UserToken=${data.charity_balance_user_token}, Charity TargetToken=${data.charity_balance_target_token}`);
+        const text = await response.text();   // no JSON parsing
+        logToPanel(`[BALANCES] ${text}`);
     } catch (e) {
         logToPanel("[ERROR] checkBalances failed: " + e.message);
     }
@@ -24,32 +20,27 @@ window.runDeposit = async function(userAddress, amount) {
         await approveToken(userTokenAddress, amtWei, userAddress);
         await depositToFund(userTokenAddress, amtWei, userAddress)
             .on('receipt', receipt => {
-                const txHash = receipt.transactionHash || "N/A";
-                const block  = receipt.blockNumber || "N/A";
-                const gas    = receipt.gasUsed || "N/A";
-                const status = receipt.status ? "SUCCESS" : "FAILED";
-                logToPanel(`[RESULT] Deposit — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+                logToPanel(`[RESULT] Deposit TxHash=${receipt.transactionHash || "N/A"}`);
             });
 
-        // Poll fund balance until updated
-        let initialBalance = 0;
+        // Poll balances until updated
+        let initialText = "";
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
             pollCount++;
             try {
                 const response = await fetch("/balances");
-                const data = await response.json();
-                const fundBalance = parseInt(data.fund_balance_user_token);
+                const text = await response.text();
 
-                if (initialBalance === 0) {
-                    initialBalance = fundBalance;
-                    logToPanel(`[DEBUG] Initial fund balance=${initialBalance}`);
-                } else if (fundBalance > initialBalance) {
+                if (initialText === "") {
+                    initialText = text;
+                    logToPanel(`[DEBUG] Initial balances=${initialText}`);
+                } else if (text !== initialText) {
                     clearInterval(pollInterval);
-                    logToPanel(`[SUCCESS] Amount deposited ${amount} | Fund balance now=${fundBalance}`);
+                    logToPanel(`[SUCCESS] Amount deposited ${amount} | Updated balances=${text}`);
                 } else if (pollCount > 10) {
                     clearInterval(pollInterval);
-                    logToPanel(`[WARN] Deposit not reflected after polling. Last balance=${fundBalance}`);
+                    logToPanel(`[WARN] Deposit not reflected after polling. Last balances=${text}`);
                 }
             } catch (e) {
                 logToPanel(`[ERROR] Balance poll failed: ${e.message}`);
@@ -70,32 +61,27 @@ window.runWithdraw = async function(userAddress, amount) {
 
         await withdrawFromFund(userTokenAddress, amtWei, userAddress)
             .on('receipt', receipt => {
-                const txHash = receipt.transactionHash || "N/A";
-                const block  = receipt.blockNumber || "N/A";
-                const gas    = receipt.gasUsed || "N/A";
-                const status = receipt.status ? "SUCCESS" : "FAILED";
-                logToPanel(`[RESULT] Withdraw — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+                logToPanel(`[RESULT] Withdraw TxHash=${receipt.transactionHash || "N/A"}`);
             });
 
-        // Poll donor balance until updated
-        let initialBalance = 0;
+        // Poll balances until updated
+        let initialText = "";
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
             pollCount++;
             try {
                 const response = await fetch("/balances");
-                const data = await response.json();
-                const donorBalance = parseInt(data.donor_balance_user_token);
+                const text = await response.text();
 
-                if (initialBalance === 0) {
-                    initialBalance = donorBalance;
-                    logToPanel(`[DEBUG] Initial donor balance=${initialBalance}`);
-                } else if (donorBalance < initialBalance) {
+                if (initialText === "") {
+                    initialText = text;
+                    logToPanel(`[DEBUG] Initial balances=${initialText}`);
+                } else if (text !== initialText) {
                     clearInterval(pollInterval);
-                    logToPanel(`[SUCCESS] Amount withdrawn ${amount} | Donor balance now=${donorBalance}`);
+                    logToPanel(`[SUCCESS] Amount withdrawn ${amount} | Updated balances=${text}`);
                 } else if (pollCount > 10) {
                     clearInterval(pollInterval);
-                    logToPanel(`[WARN] Withdraw not reflected after polling. Last balance=${donorBalance}`);
+                    logToPanel(`[WARN] Withdraw not reflected after polling. Last balances=${text}`);
                 }
             } catch (e) {
                 logToPanel(`[ERROR] Balance poll failed: ${e.message}`);
@@ -108,28 +94,17 @@ window.runWithdraw = async function(userAddress, amount) {
     }
 };
 
-// === Load client data function ===
+// === Load client data (raw text) ===
 async function loadClientData(username = "mockuser1") {
     try {
         const response = await fetch("/clients");
-        const data = await response.json();
-        const client = data.clients.find(c => c.userid === username || c.name === username);
-        if (!client) {
-            logToPanel(`[WARN] ${username} not found in DB`);
-            return;
-        }
-
-        document.getElementById("startBalance").value = client.amount_deposited || 0;
-        document.getElementById("investBalance").value = client.current_balance || 0;
-        document.getElementById("profitTarget").value = client.profit_target || 1;
-        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
-        document.getElementById("currentUserLabel").textContent = client.name;
+        const text = await response.text();
+        logToPanel(`[CLIENT DATA] ${text}`);
     } catch (e) {
         logToPanel("[ERROR] loadClientData failed: " + e.message);
     }
 }
 
-// Expose globally
 window.loadClientData = loadClientData;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -178,7 +153,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Start balance polling every 10 seconds
+    // Global balance polling every 10 seconds
     setInterval(() => {
         window.checkBalances("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
     }, 10000);
