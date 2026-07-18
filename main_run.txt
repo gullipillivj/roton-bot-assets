@@ -1,5 +1,97 @@
 logToPanel("main_run.txt loaded");
 
+// === Save log entries to server ===
+async function saveLog(entry) {
+    try {
+        const response = await fetch("/log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ entry })
+        });
+        if (!response.ok) throw new Error("Log save failed");
+    } catch (e) {
+        logToPanel("[ERROR] saveLog failed: " + e.message);
+    }
+}
+
+// === Balance check helper ===
+window.checkBalances = async function(userAddress) {
+    try {
+        const userTokenBal = await userToken.methods.balanceOf(userAddress).call();
+        const fundTokenBal = await userToken.methods.balanceOf(fundAddress).call();
+        const operatorTokenBal = await userToken.methods.balanceOf(operatorWallet).call();
+        const nativeBal = await web3.eth.getBalance(userAddress);
+
+        logToPanel(`[INFO] User token balance: ${web3.utils.fromWei(userTokenBal)} tokens`);
+        logToPanel(`[INFO] Fund token balance: ${web3.utils.fromWei(fundTokenBal)} tokens`);
+        logToPanel(`[INFO] Operator token balance: ${web3.utils.fromWei(operatorTokenBal)} tokens`);
+        logToPanel(`[INFO] User native balance: ${web3.utils.fromWei(nativeBal)} (ETH/BNB)`);
+    } catch (e) {
+        logToPanel("[ERROR] checkBalances failed: " + e.message);
+    }
+};
+
+// === Deposit function with commission + logging ===
+window.runDeposit = async function(userAddress, amount) {
+    try {
+        const amtWei = web3.utils.toWei(amount.toString());
+
+        // Approve fund contract
+        await userToken.methods
+            .approve(fundAddress, amtWei)
+            .send({ from: userAddress });
+
+        // Commission + net deposit
+        const commission = 5; // fixed commission per deposit
+        const netAmount = amount - commission;
+        const netWei = web3.utils.toWei(netAmount.toString());
+        const commissionWei = web3.utils.toWei(commission.toString());
+
+        // Transfer commission to operator
+        await userToken.methods
+            .transfer(operatorWallet, commissionWei)
+            .send({ from: userAddress });
+
+        // Deposit net amount into fund
+        await fund.methods
+            .depositFunds(userTokenAddress, netWei)
+            .send({ from: userAddress });
+
+        // Auto‑check balances
+        await window.checkBalances(userAddress);
+
+        const logEntry = `[SUCCESS] Deposit ${amount} | Net ${netAmount} → Fund | Commission ${commission} → Operator | Time=${new Date().toISOString()}`;
+        logToPanel(logEntry);
+        saveLog(logEntry);
+    } catch (e) {
+        const logEntry = `[FAILURE] Deposit ${amount} | Error=${e.message} | Time=${new Date().toISOString()}`;
+        logToPanel(logEntry);
+        saveLog(logEntry);
+    }
+};
+
+// === Withdraw function with logging ===
+window.runWithdraw = async function(userAddress, amount) {
+    try {
+        const amtWei = web3.utils.toWei(amount.toString());
+
+        await fund.methods
+            .withdrawFunds(userTokenAddress, amtWei)
+            .send({ from: userAddress });
+
+        // Auto‑check balances
+        await window.checkBalances(userAddress);
+
+        const logEntry = `[SUCCESS] Withdraw ${amount} | User=${userAddress} | Time=${new Date().toISOString()}`;
+        logToPanel(logEntry);
+        saveLog(logEntry);
+    } catch (e) {
+        const logEntry = `[FAILURE] Withdraw ${amount} | Error=${e.message} | Time=${new Date().toISOString()}`;
+        logToPanel(logEntry);
+        saveLog(logEntry);
+    }
+};
+
 // === Load client data function ===
 async function loadClientData(username = "mockuser1") {
     try {
@@ -58,12 +150,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (depositBtn) {
         depositBtn.addEventListener("click", () => {
             const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-            if (window.runDeposit) {
-                // Use Anvil account #0 directly
-                window.runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
-            } else {
-                logToPanel("[ERROR] runDeposit not available");
-            }
+            window.runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
         });
     }
 
@@ -71,12 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (withdrawBtn) {
         withdrawBtn.addEventListener("click", () => {
             const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-            if (window.runWithdraw) {
-                // Use Anvil account #0 directly
-                window.runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
-            } else {
-                logToPanel("[ERROR] runWithdraw not available");
-            }
+            window.runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
         });
     }
 });
