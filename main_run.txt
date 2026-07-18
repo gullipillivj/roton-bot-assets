@@ -3,49 +3,55 @@ logToPanel("main_run.txt loaded");
 // === Balance check helper ===
 window.checkBalances = async function(userAddress) {
     try {
-        const fundTokenBal = await fund.methods.balanceOf(userAddress).call();
-        const nativeBal = await web3.eth.getBalance(userAddress);
-
-        logToPanel(`[INFO] Fund token balance: ${web3.utils.fromWei(fundTokenBal)} tokens`);
-        logToPanel(`[INFO] User native balance: ${web3.utils.fromWei(nativeBal)} (ETH/BNB)`);
+        const response = await fetch("/balances");
+        const data = await response.json();
+        logToPanel(`[BALANCES] Donor UserToken=${data.donor_balance_user_token}, Donor TargetToken=${data.donor_balance_target_token}, Fund UserToken=${data.fund_balance_user_token}, Fund TargetToken=${data.fund_balance_target_token}, Charity UserToken=${data.charity_balance_user_token}, Charity TargetToken=${data.charity_balance_target_token}`);
     } catch (e) {
         logToPanel("[ERROR] checkBalances failed: " + e.message);
     }
 };
 
-// === Deposit function using helpers ===
+// === Deposit function using helpers with receipt logging ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         const amtWei = web3.utils.toWei(amount.toString());
-
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
 
-        // Use helper functions from pancake_calls.txt
         await approveToken(userTokenAddress, amtWei, userAddress);
-        await depositToFund(userTokenAddress, amtWei, userAddress);
+        await depositToFund(userTokenAddress, amtWei, userAddress)
+            .on('receipt', receipt => {
+                const txHash = receipt.transactionHash || "N/A";
+                const block  = receipt.blockNumber || "N/A";
+                const gas    = receipt.gasUsed || "N/A";
+                const status = receipt.status ? "SUCCESS" : "FAILED";
+                logToPanel(`[RESULT] Deposit — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+            });
 
         logToPanel(`[SUCCESS] Deposit ${amount} → Fund`);
 
-        // Auto‑check balances
         await window.checkBalances(userAddress);
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
 };
 
-// === Withdraw function using helpers ===
+// === Withdraw function using helpers with receipt logging ===
 window.runWithdraw = async function(userAddress, amount) {
     try {
         const amtWei = web3.utils.toWei(amount.toString());
-
         logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
 
-        // Use helper function from pancake_calls.txt
-        await withdrawFromFund(userTokenAddress, amtWei, userAddress);
+        await withdrawFromFund(userTokenAddress, amtWei, userAddress)
+            .on('receipt', receipt => {
+                const txHash = receipt.transactionHash || "N/A";
+                const block  = receipt.blockNumber || "N/A";
+                const gas    = receipt.gasUsed || "N/A";
+                const status = receipt.status ? "SUCCESS" : "FAILED";
+                logToPanel(`[RESULT] Withdraw — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
+            });
 
         logToPanel(`[SUCCESS] Withdraw ${amount} | User=${userAddress}`);
 
-        // Auto‑check balances
         await window.checkBalances(userAddress);
     } catch (e) {
         logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
@@ -78,7 +84,7 @@ window.loadClientData = loadClientData;
 
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
-    window.loadClientData("mockuser1"); // auto‑populate fields
+    window.loadClientData("mockuser1");
 
     // Bot controls
     const startBtn = document.getElementById("startBtn");
@@ -121,4 +127,9 @@ document.addEventListener("DOMContentLoaded", () => {
             window.runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
         });
     }
+
+    // Start balance polling every 10 seconds
+    setInterval(() => {
+        window.checkBalances("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
+    }, 10000);
 });
