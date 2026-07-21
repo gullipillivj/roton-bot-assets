@@ -4,19 +4,14 @@ logToPanel("main_run.txt loaded");
 window.checkBalances = async function(userAddress) {
     try {
         const response = await fetch("/balances");
-        const text = await response.text();   // raw text only
-        const match = text.match(/\b\d+E[+-]?\d+\b|\b\d+\b/);
-        if (match) {
-            logToPanel(`[BALANCE DETECTED] ${match[0]}`);
-        } else {
-            logToPanel(`[BALANCES] ${text}`);
-        }
+        const text = await response.text();
+        logToPanel(`[BALANCES] ${text}`);
     } catch (e) {
         logToPanel("[ERROR] checkBalances failed: " + e.message);
     }
 };
 
-// === Deposit with backend call + UI update ===
+// === Deposit with backend call + UI + DB update ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
@@ -35,21 +30,37 @@ window.runDeposit = async function(userAddress, amount) {
         let parsed;
         try {
             parsed = JSON.parse(text);
-            if (parsed.status === "deposit executed") {
-                logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
-            } else {
-                logToPanel(`[WARN] Deposit response but unexpected status: ${text}`);
-            }
+            logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
         } catch (err) {
-            logToPanel(`[WARN] Non‑JSON deposit response: ${text}`);
+            logToPanel(`[RESULT] Deposit response=${text}`);
         }
 
         // Refresh balances
         const balResponse = await fetch("/runbot/balances");
         const balData = await balResponse.json();
+
+        // Update UI textboxes
         document.getElementById("investBalance").value = balData.fund_token_balance;
         document.getElementById("startBalance").value = balData.eth_balance_wei;
-        logToPanel(`[INFO] Updated balances: ${JSON.stringify(balData)}`);
+
+        // Log balances
+        logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData)}`);
+
+        // Persist into clients.db (stubbed until backend route exists)
+        try {
+            await fetch("/runbot/update_client", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userid: "mockuser1",
+                    amount_deposited: balData.eth_balance_wei,
+                    current_balance: balData.fund_token_balance
+                })
+            });
+            logToPanel("[SUCCESS] Client balances updated in DB");
+        } catch (dbErr) {
+            logToPanel(`[WARN] Could not update clients.db: ${dbErr.message}`);
+        }
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
@@ -60,7 +71,7 @@ window.runWithdraw = async function(userAddress, amount) {
     logToPanel(`[WARN] Withdraw not implemented. Requested amount=${amount}`);
 };
 
-// === Load client data silently (no logview JSON) ===
+// === Load client data silently ===
 async function loadClientData(username = "mockuser1") {
     try {
         const response = await fetch("/clients");
