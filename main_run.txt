@@ -30,46 +30,34 @@ window.runDeposit = async function(userAddress, amount) {
                 amount: amount
             })
         });
+
         const text = await response.text();
-        logToPanel(`[RESULT] Deposit response=${text}`);
+        let parsed;
+        try {
+            parsed = JSON.parse(text);
+            if (parsed.status === "deposit executed") {
+                logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
+            } else {
+                logToPanel(`[WARN] Deposit response but unexpected status: ${text}`);
+            }
+        } catch (err) {
+            logToPanel(`[WARN] Non‑JSON deposit response: ${text}`);
+        }
 
         // Refresh balances
         const balResponse = await fetch("/runbot/balances");
         const balData = await balResponse.json();
         document.getElementById("investBalance").value = balData.fund_token_balance;
         document.getElementById("startBalance").value = balData.eth_balance_wei;
-        logToPanel(`[SUCCESS] Updated balances: ${JSON.stringify(balData)}`);
+        logToPanel(`[INFO] Updated balances: ${JSON.stringify(balData)}`);
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
 };
 
-// === Withdraw with backend call + UI update ===
+// === Withdraw stub (not implemented yet) ===
 window.runWithdraw = async function(userAddress, amount) {
-    try {
-        logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
-
-        const response = await fetch("/runbot/withdraw", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                wallet_address: userAddress,
-                private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-                amount: amount
-            })
-        });
-        const text = await response.text();
-        logToPanel(`[RESULT] Withdraw response=${text}`);
-
-        // Refresh balances
-        const balResponse = await fetch("/runbot/balances");
-        const balData = await balResponse.json();
-        document.getElementById("investBalance").value = balData.fund_token_balance;
-        document.getElementById("startBalance").value = balData.eth_balance_wei;
-        logToPanel(`[SUCCESS] Updated balances: ${JSON.stringify(balData)}`);
-    } catch (e) {
-        logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
-    }
+    logToPanel(`[WARN] Withdraw not implemented. Requested amount=${amount}`);
 };
 
 // === Load client data silently (no logview JSON) ===
