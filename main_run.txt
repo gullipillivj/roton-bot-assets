@@ -27,9 +27,8 @@ window.runDeposit = async function(userAddress, amount) {
         });
 
         const text = await response.text();
-        let parsed;
         try {
-            parsed = JSON.parse(text);
+            const parsed = JSON.parse(text);
             logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
         } catch (err) {
             logToPanel(`[RESULT] Deposit response=${text}`);
@@ -37,14 +36,19 @@ window.runDeposit = async function(userAddress, amount) {
 
         // Refresh balances
         const balResponse = await fetch("/runbot/balances");
-        const balData = await balResponse.json();
+        const balText = await balResponse.text();
+        let balData;
+        try {
+            balData = JSON.parse(balText);
 
-        // Update UI textboxes
-        document.getElementById("investBalance").value = balData.fund_token_balance;
-        document.getElementById("startBalance").value = balData.eth_balance_wei;
+            // Update UI textboxes
+            document.getElementById("investBalance").value = balData.fund_token_balance;
+            document.getElementById("startBalance").value = balData.eth_balance_wei;
 
-        // Log balances
-        logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData)}`);
+            logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData)}`);
+        } catch (err) {
+            logToPanel(`[BALANCES AFTER DEPOSIT] ${balText}`);
+        }
 
         // Persist into clients.db (stubbed until backend route exists)
         try {
@@ -53,8 +57,8 @@ window.runDeposit = async function(userAddress, amount) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     userid: "mockuser1",
-                    amount_deposited: balData.eth_balance_wei,
-                    current_balance: balData.fund_token_balance
+                    amount_deposited: balData ? balData.eth_balance_wei : null,
+                    current_balance: balData ? balData.fund_token_balance : null
                 })
             });
             logToPanel("[SUCCESS] Client balances updated in DB");
@@ -71,19 +75,25 @@ window.runWithdraw = async function(userAddress, amount) {
     logToPanel(`[WARN] Withdraw not implemented. Requested amount=${amount}`);
 };
 
-// === Load client data silently ===
+// === Load client data safely ===
 async function loadClientData(username = "mockuser1") {
     try {
         const response = await fetch("/clients");
-        const data = await response.json();
-        const client = data.clients.find(c => c.userid === username || c.name === username);
-        if (!client) return;
+        const text = await response.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+            const client = data.clients.find(c => c.userid === username || c.name === username);
+            if (!client) return;
 
-        document.getElementById("startBalance").value = client.amount_deposited || 0;
-        document.getElementById("investBalance").value = client.current_balance || 0;
-        document.getElementById("profitTarget").value = client.profit_target || 1;
-        document.getElementById("stopLoss").value = client.stop_loss || 0.5;
-        document.getElementById("currentUserLabel").textContent = client.name;
+            document.getElementById("startBalance").value = client.amount_deposited || 0;
+            document.getElementById("investBalance").value = client.current_balance || 0;
+            document.getElementById("profitTarget").value = client.profit_target || 1;
+            document.getElementById("stopLoss").value = client.stop_loss || 0.5;
+            document.getElementById("currentUserLabel").textContent = client.name;
+        } catch (err) {
+            logToPanel(`[WARN] Non‑JSON client data: ${text}`);
+        }
     } catch (e) {
         logToPanel("[ERROR] loadClientData failed: " + e.message);
     }
