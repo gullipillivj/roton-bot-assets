@@ -9,6 +9,10 @@ const COINGECKO_API  = "https://api.coingecko.com/api/v3/simple/price";
 const CHANGENOW_API  = "https://api.changenow.io/v1/currencies";
 const KRAKEN_API     = "https://api.kraken.com/0/public/Ticker";
 
+// === New Gas Fee APIs ===
+const ETHERSCAN_GAS  = "https://api.etherscan.io/api?module=gastracker&action=gasoracle";
+const BSC_GAS        = "https://api.bscscan.com/api?module=gastracker&action=gasoracle";
+
 // === Helpers ===
 async function getBinancePairs() {
   try {
@@ -119,6 +123,42 @@ async function getKraken(pair="XBTUSD") {
   }
 }
 
+// === Gas Fee Fetcher ===
+async function getGasFees(network="eth") {
+  try {
+    const url = network === "bsc" ? BSC_GAS : ETHERSCAN_GAS;
+    const res = await fetch(url);
+    const d = await res.json();
+    const gasPrice = parseFloat(d.result.SafeGasPrice); // gwei
+    // Approximate USD cost per swap (gas * 21000 units * ETH/BSC price)
+    const ethPrice = await getCoingecko("ethereum","usd");
+    const bnbPrice = await getCoingecko("binancecoin","usd");
+    const basePrice = network === "bsc" ? bnbPrice.lastPrice : ethPrice.lastPrice;
+    const usdCost = (gasPrice * 21000 * 1e-9) * basePrice;
+    return { network, gasPrice, usdCost };
+  } catch (e) {
+    console.warn("[WARN] Gas fee fetch failed:", e);
+    return { network, gasPrice: null, usdCost: null };
+  }
+}
+
+// === PancakeSwap Fee Tier Mapper ===
+function getPancakeFeeTier(symbol) {
+  // Simplified mapping: stablecoins lowest, majors mid, others standard
+  if (/USDT|USDC|BUSD/.test(symbol)) return 0.01;
+  if (/BTC|ETH|BNB/.test(symbol)) return 0.05;
+  return 0.25;
+}
+
+// === Effective Trade Cost Calculator ===
+async function calculateTradeCost(symbol, tradeValueUSD, network="bsc") {
+  const gas = await getGasFees(network);
+  const feeTier = getPancakeFeeTier(symbol);
+  const swapFee = tradeValueUSD * (feeTier / 100);
+  const totalCost = (gas.usdCost || 0) + swapFee;
+  return { symbol, tradeValueUSD, feeTier, gasFeeUSD: gas.usdCost, totalCost };
+}
+
 // === Expose globally ===
 window.getBinancePairs = getBinancePairs;
 window.getBinanceStats = getBinanceStats;
@@ -128,3 +168,6 @@ window.categorizeCoins = categorizeCoins;
 window.getCoingecko = getCoingecko;
 window.getChangenow = getChangenow;
 window.getKraken = getKraken;
+window.getGasFees = getGasFees;
+window.getPancakeFeeTier = getPancakeFeeTier;
+window.calculateTradeCost = calculateTradeCost;
