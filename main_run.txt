@@ -5,7 +5,6 @@ window.checkBalances = async function(userAddress) {
     try {
         const response = await fetch("/balances");
         const text = await response.text();   // raw text only
-        // Trap scientific notation or integer balances
         const match = text.match(/\b\d+E[+-]?\d+\b|\b\d+\b/);
         if (match) {
             logToPanel(`[BALANCE DETECTED] ${match[0]}`);
@@ -17,84 +16,57 @@ window.checkBalances = async function(userAddress) {
     }
 };
 
-// === Deposit with receipt + polling ===
+// === Deposit with backend call + UI update ===
 window.runDeposit = async function(userAddress, amount) {
     try {
-        const amtWei = web3.utils.toWei(amount.toString());
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
 
-        await approveToken(userTokenAddress, amtWei, userAddress);
-        await depositToFund(userTokenAddress, amtWei, userAddress)
-            .on('receipt', receipt => {
-                logToPanel(`[RESULT] Deposit TxHash=${receipt.transactionHash || "N/A"}`);
-            });
+        const response = await fetch("/runbot/deposit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                wallet_address: userAddress,
+                private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+                amount: amount
+            })
+        });
+        const result = await response.json();
+        logToPanel(`[RESULT] Deposit TxHash=${result.tx_hash}`);
 
-        // Start polling only after deposit click
-        let initialText = "";
-        let pollCount = 0;
-        const pollInterval = setInterval(async () => {
-            pollCount++;
-            try {
-                const response = await fetch("/balances");
-                const text = await response.text();
-
-                if (initialText === "") {
-                    initialText = text;
-                    logToPanel(`[DEBUG] Initial balances=${initialText}`);
-                } else if (text !== initialText) {
-                    clearInterval(pollInterval);
-                    logToPanel(`[SUCCESS] Amount deposited ${amount} | Updated balances=${text}`);
-                } else if (pollCount > 10) {
-                    clearInterval(pollInterval);
-                    logToPanel(`[WARN] Deposit not reflected after polling. Last balances=${text}`);
-                }
-            } catch (e) {
-                logToPanel(`[ERROR] Balance poll failed: ${e.message}`);
-                clearInterval(pollInterval);
-            }
-        }, 5000);
-
+        // Refresh balances
+        const balResponse = await fetch("/runbot/balances");
+        const balData = await balResponse.json();
+        document.getElementById("investBalance").value = balData.fund_token_balance;
+        document.getElementById("startBalance").value = balData.eth_balance_wei;
+        logToPanel(`[SUCCESS] Updated balances: ${JSON.stringify(balData)}`);
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
 };
 
-// === Withdraw with receipt + polling ===
+// === Withdraw with backend call + UI update ===
 window.runWithdraw = async function(userAddress, amount) {
     try {
-        const amtWei = web3.utils.toWei(amount.toString());
         logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
 
-        await withdrawFromFund(userTokenAddress, amtWei, userAddress)
-            .on('receipt', receipt => {
-                logToPanel(`[RESULT] Withdraw TxHash=${receipt.transactionHash || "N/A"}`);
-            });
+        const response = await fetch("/runbot/withdraw", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                wallet_address: userAddress,
+                private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+                amount: amount
+            })
+        });
+        const result = await response.json();
+        logToPanel(`[RESULT] Withdraw TxHash=${result.tx_hash}`);
 
-        // Start polling only after withdraw click
-        let initialText = "";
-        let pollCount = 0;
-        const pollInterval = setInterval(async () => {
-            pollCount++;
-            try {
-                const response = await fetch("/balances");
-                const text = await response.text();
-
-                if (initialText === "") {
-                    initialText = text;
-                    logToPanel(`[DEBUG] Initial balances=${initialText}`);
-                } else if (text !== initialText) {
-                    clearInterval(pollInterval);
-                    logToPanel(`[SUCCESS] Amount withdrawn ${amount} | Updated balances=${text}`);
-                } else if (pollCount > 10) {
-                    clearInterval(pollInterval);
-                    logToPanel(`[WARN] Withdraw not reflected after polling. Last balances=${text}`);
-                }
-            } catch (e) {
-                logToPanel(`[ERROR] Balance poll failed: ${e.message}`);
-                clearInterval(pollInterval);
-            }
-        }, 5000);
-
+        // Refresh balances
+        const balResponse = await fetch("/runbot/balances");
+        const balData = await balResponse.json();
+        document.getElementById("investBalance").value = balData.fund_token_balance;
+        document.getElementById("startBalance").value = balData.eth_balance_wei;
+        logToPanel(`[SUCCESS] Updated balances: ${JSON.stringify(balData)}`);
     } catch (e) {
         logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
     }
