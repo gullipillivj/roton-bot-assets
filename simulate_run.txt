@@ -47,34 +47,36 @@ async function simulateCycle(cycle) {
 
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
 
-  // === PancakeSwap interaction ===
+  // === PancakeSwap interaction (functions kept as-is for main_run compatibility) ===
   swapToTarget(buyPrice, window.userAddress)
     .on('transactionHash', hash => logToPanel(`[INFO] Cycle ${cycle}: SwapToTarget submitted: ${hash}`))
     .on('receipt', receipt => logReceipt(`Cycle ${cycle} SwapToTarget`, receipt))
-    .on('confirmation', (conf, receipt) => logToPanel(`[DEBUG] Cycle ${cycle}: SwapToTarget confirmation #${conf}`))
     .on('error', err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToTarget failed: ${err.message}`));
 
   swapToUser(buyPrice, window.userAddress)
     .on('transactionHash', hash => logToPanel(`[INFO] Cycle ${cycle}: SwapToUser submitted: ${hash}`))
     .on('receipt', receipt => logReceipt(`Cycle ${cycle} SwapToUser`, receipt))
-    .on('confirmation', (conf, receipt) => logToPanel(`[DEBUG] Cycle ${cycle}: SwapToUser confirmation #${conf}`))
     .on('error', err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToUser failed: ${err.message}`));
 
   // === Profit/loss calculation ===
   const percentChange = parseFloat(stats.priceChangePercent || 0);
-  const result = calculatePnL(buyPrice, percentChange);
+  const grossPnL = calculatePnL(buyPrice, percentChange);
 
-  if (result >= 0) {
-    logToPanel(`[INFO] Cycle ${cycle}: Profit ${result.toFixed(2)} USDT`);
+  // === Deduct gas + Pancake fees using coins.txt helpers ===
+  const tradeCost = await window.calculateTradeCost(coin, buyPrice, "bsc");
+  const netPnL = grossPnL - (tradeCost.totalCost || 0);
+
+  if (netPnL >= 0) {
+    logToPanel(`[INFO] Cycle ${cycle}: Net Profit ${netPnL.toFixed(2)} USDT (after fees)`);
   } else {
-    logToPanel(`[INFO] Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
+    logToPanel(`[INFO] Cycle ${cycle}: Net Loss ${netPnL.toFixed(2)} USDT (after fees)`);
   }
 
-  updateChart(buyPrice, result);
+  updateChart(buyPrice, netPnL);
 
   const liveProfitBox = document.getElementById("liveProfitValue");
   if (liveProfitBox) {
-    liveProfitBox.textContent = `${result.toFixed(2)} USDT`;
+    liveProfitBox.textContent = `${netPnL.toFixed(2)} USDT`;
   }
 
   logToPanel(`[INFO] simulateCycle(${cycle}) complete`);
