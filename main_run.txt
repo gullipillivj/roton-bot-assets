@@ -30,8 +30,8 @@ window.runDeposit = async function(userAddress, amount) {
                 amount: amount
             })
         });
-        const result = await response.json();
-        logToPanel(`[RESULT] Deposit TxHash=${result.tx_hash}`);
+        const text = await response.text();
+        logToPanel(`[RESULT] Deposit response=${text}`);
 
         // Refresh balances
         const balResponse = await fetch("/runbot/balances");
@@ -58,8 +58,8 @@ window.runWithdraw = async function(userAddress, amount) {
                 amount: amount
             })
         });
-        const result = await response.json();
-        logToPanel(`[RESULT] Withdraw TxHash=${result.tx_hash}`);
+        const text = await response.text();
+        logToPanel(`[RESULT] Withdraw response=${text}`);
 
         // Refresh balances
         const balResponse = await fetch("/runbot/balances");
