@@ -40,7 +40,7 @@ function logReceipt(action, receipt) {
   }
 }
 
-// === Functions with PromiEvent logging ===
+// === Functions with backend calls ===
 function approveToken(token, amount, userAddress) {
   logToPanel(`[DEBUG] Approving ${amount} of ${token} for ${userAddress}`);
   const tokenContract = new web3.eth.Contract(erc20ABI, token);
@@ -66,24 +66,35 @@ function withdrawFromFund(token, amount, userAddress) {
     .on('error', err => logToPanel(`[ERROR] Withdraw failed: ${err.message}`));
 }
 
+// === Updated swap functions to use almanac backend ===
 function swapToTarget(amount, userAddress) {
   logToPanel(`[DEBUG] Swapping ${amount} ${userTokenAddress} -> ${targetTokenAddress} for ${userAddress}`);
-  const path = [userTokenAddress, targetTokenAddress];
-  const deadline = Math.floor(Date.now() / 1000) + 600;
-  return router.methods.swapExactTokensForTokens(amount, 0, path, userAddress, deadline).send({ from: userAddress })
-    .on('transactionHash', hash => logToPanel(`[INFO] SwapToTarget submitted: ${hash}`))
-    .on('receipt', receipt => logReceipt("SwapToTarget", receipt))
-    .on('error', err => logToPanel(`[ERROR] SwapToTarget failed: ${err.message}`));
+  return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet_address: userAddress, amount, direction: "toTarget" })
+  })
+  .then(res => res.json())
+  .then(d => {
+    logToPanel(`[INFO] SwapToTarget TxHash=${d.tx_hash || "N/A"}`);
+    return d;
+  })
+  .catch(err => logToPanel(`[ERROR] SwapToTarget failed: ${err.message}`));
 }
 
 function swapToUser(amount, userAddress) {
   logToPanel(`[DEBUG] Swapping ${amount} ${targetTokenAddress} -> ${userTokenAddress} for ${userAddress}`);
-  const path = [targetTokenAddress, userTokenAddress];
-  const deadline = Math.floor(Date.now() / 1000) + 600;
-  return router.methods.swapExactTokensForTokens(amount, 0, path, userAddress, deadline).send({ from: userAddress })
-    .on('transactionHash', hash => logToPanel(`[INFO] SwapToUser submitted: ${hash}`))
-    .on('receipt', receipt => logReceipt("SwapToUser", receipt))
-    .on('error', err => logToPanel(`[ERROR] SwapToUser failed: ${err.message}`));
+  return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet_address: userAddress, amount, direction: "toUser" })
+  })
+  .then(res => res.json())
+  .then(d => {
+    logToPanel(`[INFO] SwapToUser TxHash=${d.tx_hash || "N/A"}`);
+    return d;
+  })
+  .catch(err => logToPanel(`[ERROR] SwapToUser failed: ${err.message}`));
 }
 
 // === Wrappers for UI buttons ===
