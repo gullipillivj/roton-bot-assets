@@ -1,22 +1,20 @@
 logToPanel("main_run.txt loaded");
 
-// === Balance check helper (raw text) ===
-window.checkBalances = async function(userAddress) {
+// === Helper: safe JSON parse ===
+function safeParse(text) {
     try {
-        const response = await fetch("/balances");
-        const text = await response.text();
-        logToPanel(`[BALANCES] ${text}`);
-    } catch (e) {
-        logToPanel("[ERROR] checkBalances failed: " + e.message);
+        return JSON.parse(text);
+    } catch {
+        return null;
     }
-};
+}
 
-// === Deposit with backend call + UI + DB update ===
+// === Deposit ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
 
-        const response = await fetch("/runbot/deposit", {
+        const response = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -27,32 +25,33 @@ window.runDeposit = async function(userAddress, amount) {
         });
 
         const text = await response.text();
-        try {
-            const parsed = JSON.parse(text);
+        const parsed = safeParse(text);
+        if (parsed && parsed.tx_hash) {
             logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
-        } catch (err) {
+        } else {
             logToPanel(`[RESULT] Deposit response=${text}`);
         }
 
         // Refresh balances
-        const balResponse = await fetch("/runbot/balances");
+        const balResponse = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress })
+        });
         const balText = await balResponse.text();
-        let balData;
-        try {
-            balData = JSON.parse(balText);
+        const balData = safeParse(balText);
 
-            // Update UI textboxes
+        if (balData) {
             document.getElementById("investBalance").value = balData.fund_token_balance;
             document.getElementById("startBalance").value = balData.eth_balance_wei;
-
             logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData)}`);
-        } catch (err) {
+        } else {
             logToPanel(`[BALANCES AFTER DEPOSIT] ${balText}`);
         }
 
-        // Persist into clients.db (stubbed until backend route exists)
+        // Persist into clients.db (stub until backend route exists)
         try {
-            await fetch("/runbot/update_client", {
+            await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/update_client", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -70,7 +69,55 @@ window.runDeposit = async function(userAddress, amount) {
     }
 };
 
-// === Withdraw stub (not implemented yet) ===
+// === Swap ===
+window.runSwap = async function(userAddress, amount) {
+    try {
+        const response = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress, private_key: "0x...", amount })
+        });
+        const text = await response.text();
+        const parsed = safeParse(text);
+        logToPanel(`[SWAP RESULT] ${parsed ? JSON.stringify(parsed) : text}`);
+    } catch (e) {
+        logToPanel(`[FAILURE] Swap ${amount} | Error=${e.message}`);
+    }
+};
+
+// === Payout ===
+window.runPayout = async function(userAddress, amount) {
+    try {
+        const response = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/payout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress, private_key: "0x...", amount })
+        });
+        const text = await response.text();
+        const parsed = safeParse(text);
+        logToPanel(`[PAYOUT RESULT] ${parsed ? JSON.stringify(parsed) : text}`);
+    } catch (e) {
+        logToPanel(`[FAILURE] Payout ${amount} | Error=${e.message}`);
+    }
+};
+
+// === Approve ===
+window.runApprove = async function(userAddress, amount) {
+    try {
+        const response = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/approve", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress, private_key: "0x...", amount })
+        });
+        const text = await response.text();
+        const parsed = safeParse(text);
+        logToPanel(`[APPROVE RESULT] ${parsed ? JSON.stringify(parsed) : text}`);
+    } catch (e) {
+        logToPanel(`[FAILURE] Approve ${amount} | Error=${e.message}`);
+    }
+};
+
+// === Withdraw stub ===
 window.runWithdraw = async function(userAddress, amount) {
     logToPanel(`[WARN] Withdraw not implemented. Requested amount=${amount}`);
 };
@@ -78,20 +125,19 @@ window.runWithdraw = async function(userAddress, amount) {
 // === Load client data safely ===
 async function loadClientData(username = "mockuser1") {
     try {
-        const response = await fetch("/clients");
+        const response = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/clients", { method: "POST" });
         const text = await response.text();
-        let data;
-        try {
-            data = JSON.parse(text);
+        const data = safeParse(text);
+        if (data && data.clients) {
             const client = data.clients.find(c => c.userid === username || c.name === username);
-            if (!client) return;
-
-            document.getElementById("startBalance").value = client.amount_deposited || 0;
-            document.getElementById("investBalance").value = client.current_balance || 0;
-            document.getElementById("profitTarget").value = client.profit_target || 1;
-            document.getElementById("stopLoss").value = client.stop_loss || 0.5;
-            document.getElementById("currentUserLabel").textContent = client.name;
-        } catch (err) {
+            if (client) {
+                document.getElementById("startBalance").value = client.amount_deposited || 0;
+                document.getElementById("investBalance").value = client.current_balance || 0;
+                document.getElementById("profitTarget").value = client.profit_target || 1;
+                document.getElementById("stopLoss").value = client.stop_loss || 0.5;
+                document.getElementById("currentUserLabel").textContent = client.name;
+            }
+        } else {
             logToPanel(`[WARN] Non‑JSON client data: ${text}`);
         }
     } catch (e) {
@@ -105,32 +151,6 @@ document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
     window.loadClientData("mockuser1");
 
-    // Bot controls
-    const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            if (typeof window.initBot === "function") {
-                window.initBot(10);
-                logToPanel("[INFO] Bot started");
-            } else {
-                logToPanel("[ERROR] initBot function not found");
-            }
-        });
-    }
-
-    const stopBtn = document.getElementById("stopBtn");
-    if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-            if (typeof window.stopBot === "function") {
-                window.stopBot();
-                logToPanel("[INFO] Bot stopped");
-            } else {
-                logToPanel("[ERROR] stopBot function not found");
-            }
-        });
-    }
-
-    // Account actions — direct Anvil address
     const depositBtn = document.getElementById("depositBtn");
     if (depositBtn) {
         depositBtn.addEventListener("click", () => {
