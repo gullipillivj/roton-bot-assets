@@ -13,37 +13,34 @@ function logResult(action, data) {
   logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Status: ${status}`);
 }
 
-// === Backend calls ===
-function approveToken(token, amount, userAddress) {
-  logToPanel(`[INFO] Approving ${amount} of ${token} for ${userAddress}`);
+// === Backend calls (Flask handles Anvil) ===
+function approveToken(amount, userAddress) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/approve", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, token, amount })
+    body: JSON.stringify({ wallet_address: userAddress, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("Approve", d); return d; })
   .catch(err => logToPanel(`[ERROR] Approve failed: ${err.message}`));
 }
 
-function depositToFund(token, amount, userAddress) {
-  logToPanel(`[INFO] Depositing ${amount} of ${token} for ${userAddress}`);
+function depositToFund(amount, userAddress) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, token, amount })
+    body: JSON.stringify({ wallet_address: userAddress, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("Deposit", d); return d; })
   .catch(err => logToPanel(`[ERROR] Deposit failed: ${err.message}`));
 }
 
-function withdrawFromFund(token, amount, userAddress) {
-  logToPanel(`[INFO] Withdrawing ${amount} of ${token} for ${userAddress}`);
+function withdrawFromFund(amount, userAddress) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/withdraw", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, token, amount })
+    body: JSON.stringify({ wallet_address: userAddress, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("Withdraw", d); return d; })
@@ -51,7 +48,6 @@ function withdrawFromFund(token, amount, userAddress) {
 }
 
 function swapToTarget(amount, userAddress) {
-  logToPanel(`[INFO] Swapping to target, amount=${amount}`);
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -63,7 +59,6 @@ function swapToTarget(amount, userAddress) {
 }
 
 function swapToUser(amount, userAddress) {
-  logToPanel(`[INFO] Swapping to user, amount=${amount}`);
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -74,9 +69,9 @@ function swapToUser(amount, userAddress) {
   .catch(err => logToPanel(`[ERROR] SwapToUser failed: ${err.message}`));
 }
 
-// === Wrappers for bot loop compatibility ===
+// === Wrappers for bot loop ===
 async function runApprove(userAddress, amount) {
-  return approveToken(window.userTokenAddress, amount, userAddress);
+  return approveToken(amount, userAddress);
 }
 
 async function runSwap(userAddress, amount) {
@@ -91,27 +86,25 @@ async function runPayout(userAddress, amount) {
 async function runDeposit(userAddress, amount) {
   setStatus("DEPOSITING");
   await runApprove(userAddress, amount);
-  await depositToFund(window.userTokenAddress, amount, userAddress);
+  await depositToFund(amount, userAddress);
   setStatus("COMPLETE");
 }
 
 async function runWithdraw(userAddress, amount) {
   setStatus("WITHDRAWING");
-  await withdrawFromFund(window.userTokenAddress, amount, userAddress);
+  await withdrawFromFund(amount, userAddress);
   setStatus("COMPLETE");
 }
 
 // === Expose globally ===
-window.userTokenAddress   = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
-window.targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
-window.approveToken       = approveToken;
-window.depositToFund      = depositToFund;
-window.withdrawFromFund   = withdrawFromFund;
-window.swapToTarget       = swapToTarget;
-window.swapToUser         = swapToUser;
-window.runApprove         = runApprove;
-window.runSwap            = runSwap;
-window.runPayout          = runPayout;
-window.runDeposit         = runDeposit;
-window.runWithdraw        = runWithdraw;
-window.setStatus          = setStatus;
+window.approveToken      = approveToken;
+window.depositToFund     = depositToFund;
+window.withdrawFromFund  = withdrawFromFund;
+window.swapToTarget      = swapToTarget;
+window.swapToUser        = swapToUser;
+window.runApprove        = runApprove;
+window.runSwap           = runSwap;
+window.runPayout         = runPayout;
+window.runDeposit        = runDeposit;
+window.runWithdraw       = runWithdraw;
+window.setStatus         = setStatus;
