@@ -14,6 +14,7 @@ const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 // === Deposit ===
+// === Deposit ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
@@ -46,8 +47,13 @@ window.runDeposit = async function(userAddress, amount) {
         const balData = safeParse(balText);
 
         if (balData) {
+            // Update invested balance from fund contract
             document.getElementById("investBalance").value = balData.fund_token_balance;
-            document.getElementById("startBalance").value = balData.eth_balance_wei;
+
+            // Increment startBalance with each deposit (cumulative)
+            const currentStart = parseInt(document.getElementById("startBalance").value) || 0;
+            document.getElementById("startBalance").value = currentStart + amount;
+
             logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData)}`);
         } else {
             logToPanel(`[BALANCES AFTER DEPOSIT] ${balText}`);
@@ -60,8 +66,8 @@ window.runDeposit = async function(userAddress, amount) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     userid: "mockuser1",
-                    amount_deposited: balData ? balData.eth_balance_wei : null,
-                    current_balance: balData ? balData.fund_token_balance : null
+                    amount_deposited: document.getElementById("startBalance").value,
+                    current_balance: document.getElementById("investBalance").value
                 })
             });
             logToPanel("[SUCCESS] Client balances updated in DB");
