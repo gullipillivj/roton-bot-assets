@@ -6,14 +6,6 @@ function setStatus(state) {
   if (label) label.textContent = `STATE: ${state}`;
 }
 
-function logReceipt(action, receipt) {
-  const txHash = receipt.transactionHash || "N/A";
-  const block  = receipt.blockNumber || "N/A";
-  const gas    = receipt.gasUsed || "N/A";
-  const status = receipt.status ? "SUCCESS" : "FAILED";
-  logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
-}
-
 function stopBot() {
   if (window.botInterval) {
     clearInterval(window.botInterval);
@@ -103,33 +95,4 @@ function startSimulation(totalCycles) {
 
 function initBot(totalCycles = 10) {
   setStatus("RUNNING");
-  logToPanel("[INFO] Bot started");
-  startSimulation(totalCycles);
-}
-
-// === Helpers ===
-async function pickRandomCoin() {
-  try {
-    const pairs = await window.getBinancePairs();
-    if (!pairs || pairs.length === 0) {
-      logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
-      return "BTCUSDT";
-    }
-    return pairs[Math.floor(Math.random() * pairs.length)];
-  } catch (e) {
-    logToPanel("[ERROR] pickRandomCoin failed: " + e);
-    return "BTCUSDT";
-  }
-}
-
-function calculatePnL(price, percentChange) {
-  if (!percentChange) return 0;
-  const changeFactor = percentChange / 100;
-  return price * changeFactor;
-}
-
-// Expose globally
-window.startSimulation = startSimulation;
-window.simulateCycle = simulateCycle;
-window.initBot = initBot;
-window.stopBot = stopBot;
+  logToPanel("[INFO] Bot started
