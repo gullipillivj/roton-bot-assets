@@ -1,4 +1,4 @@
-// pancake_calls.txt — PancakeSwap + SolidarityFund connector
+// pancake_calls.txt — PancakeSwap connector layer
 logToPanel("pancake_calls.txt loaded");
 
 // === Helpers ===
@@ -13,7 +13,7 @@ function setStatus(state) {
   if (label) label.textContent = `STATE: ${state}`;
 }
 
-// === Backend calls (Flask handles Anvil) ===
+// === Backend calls ===
 function approveToken(amount, userAddress, privateKey) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/approve", {
     method: "POST",
@@ -80,6 +80,17 @@ function getBalances(userAddress) {
   .catch(err => logToPanel(`[ERROR] Balances failed: ${err.message}`));
 }
 
+// === Wrappers for bot loop ===
+async function runApprove(userAddress, amount, privateKey) {
+  return approveToken(amount, userAddress, privateKey);
+}
+async function runSwap(userAddress, amount, privateKey, tokenAddress) {
+  return swapToTarget(amount, userAddress, privateKey, tokenAddress);
+}
+async function runPayout(userAddress, amount, privateKey, tokenAddress) {
+  return swapToUser(amount, userAddress, privateKey, tokenAddress);
+}
+
 // === Expose globally ===
 window.approveToken     = approveToken;
 window.depositToFund    = depositToFund;
@@ -87,5 +98,8 @@ window.withdrawFromFund = withdrawFromFund;
 window.swapToTarget     = swapToTarget;
 window.swapToUser       = swapToUser;
 window.getBalances      = getBalances;
+window.runApprove       = runApprove;
+window.runSwap          = runSwap;
+window.runPayout        = runPayout;
 window.logResult        = logResult;
 window.setStatus        = setStatus;
