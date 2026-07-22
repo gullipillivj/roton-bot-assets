@@ -1,93 +1,135 @@
-logToPanel("pancake_tx.txt loaded")
+// pancake_calls.txt — PancakeSwap + SolidarityFund interaction layer
+logToPanel("pancake_calls.txt loaded");
 
-const COMMISSION = 5
-const ROUTER_ADDRESS = "0x9ac64cc6e4415144c455bd8e4837fea55603e5c3"
-const CONFIRM_DELAY = 7000
-const SLIPPAGE = 1
-
-async function confirmTransaction(beforeAmount, expectedDelta, type, currentUser) {
-    const startBalanceBox = document.getElementById("startBalance")
-
-    setTimeout(async () => {
-        const afterBal = await window.fund.methods.balanceOf(currentUser).call()
-        const afterAmount = parseFloat(afterBal) || 0
-        startBalanceBox.value = afterAmount
-
-        const diff = type === "Deposit" ? afterAmount - beforeAmount : beforeAmount - afterAmount
-
-        if (Math.abs(diff - expectedDelta) < 0.0001) {
-            logToPanel(`[RESULT] ${type}: SUCCESS (Δ=${diff})`)
-        } else {
-            logToPanel(`[RESULT] ${type}: FAILED (Δ=${diff}, expected ${expectedDelta})`)
-        }
-    }, CONFIRM_DELAY)
+// === Helpers ===
+function setStatus(state) {
+  const label = document.getElementById("statusLabel");
+  if (label) label.textContent = `STATE: ${state}`;
 }
 
-async function runDeposit(username, amount) {
-    try {
-        const currentUser = userAddressMap[username]
-        const netAmount = amount - COMMISSION
-
-        if (amount <= COMMISSION) {
-            logToPanel("[WARN] Deposit amount must be greater than commission fee")
-            return
-        }
-
-        const beforeBal = await window.fund.methods.balanceOf(currentUser).call()
-        const beforeAmount = parseFloat(beforeBal) || 0
-        document.getElementById("startBalance").value = beforeAmount
-
-        const payload = {
-            token_out: window.userTokenAddress,
-            amount_bnb: netAmount,
-            slippage: SLIPPAGE,
-            router_address: ROUTER_ADDRESS
-        }
-
-        await fetch("/api/deposit", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        })
-
-        confirmTransaction(beforeAmount, netAmount, "Deposit", currentUser)
-    } catch (err) {
-        logToPanel("[ERROR] Deposit failed: " + err.message)
-    }
+function logResult(action, data) {
+  const txHash = data.tx_hash || "N/A";
+  const status = data.status || "UNKNOWN";
+  logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Status: ${status}`);
 }
 
-async function runWithdraw(username, amount) {
-    try {
-        const currentUser = userAddressMap[username]
-
-        if (amount <= 0) {
-            logToPanel("[WARN] Withdraw amount must be greater than 0")
-            return
-        }
-
-        const beforeBal = await window.fund.methods.balanceOf(currentUser).call()
-        const beforeAmount = parseFloat(beforeBal) || 0
-        document.getElementById("startBalance").value = beforeAmount
-
-        const payload = {
-            token_in: window.userTokenAddress,
-            amount_in: amount,
-            slippage: SLIPPAGE,
-            router_address: ROUTER_ADDRESS
-        }
-
-        await fetch("/api/withdraw", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        })
-
-        confirmTransaction(beforeAmount, amount, "Withdraw", currentUser)
-    } catch (err) {
-        logToPanel("[ERROR] Withdraw failed: " + err.message)
-    }
+// === Backend calls (Flask handles Anvil) ===
+async function approveToken(amount, userAddress, privateKey) {
+  try {
+    const res = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    const data = await res.json();
+    logResult("Approve", data);
+    return data;
+  } catch (err) {
+    logToPanel("[ERROR] Approve failed: " + err.message);
+    throw err;
+  }
 }
 
-# === Expose globally (coins.txt style) ===
-window.runDeposit = runDeposit
-window.runWithdraw = runWithdraw
+async function depositToFund(amount, userAddress, privateKey) {
+  try {
+    const res = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    const data = await res.json();
+    logResult("Deposit", data);
+    return data;
+  } catch (err) {
+    logToPanel("[ERROR] Deposit failed: " + err.message);
+    throw err;
+  }
+}
+
+async function withdrawFromFund(amount, userAddress, privateKey) {
+  try {
+    const res = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/withdraw", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    const data = await res.json();
+    logResult("Withdraw", data);
+    return data;
+  } catch (err) {
+    logToPanel("[ERROR] Withdraw failed: " + err.message);
+    throw err;
+  }
+}
+
+async function swapToTarget(amount, userAddress, privateKey) {
+  try {
+    const res = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    const data = await res.json();
+    logResult("SwapToTarget", data);
+    return data;
+  } catch (err) {
+    logToPanel("[ERROR] SwapToTarget failed: " + err.message);
+    throw err;
+  }
+}
+
+async function swapToUser(amount, userAddress, privateKey) {
+  try {
+    const res = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/payout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    const data = await res.json();
+    logResult("SwapToUser", data);
+    return data;
+  } catch (err) {
+    logToPanel("[ERROR] SwapToUser failed: " + err.message);
+    throw err;
+  }
+}
+
+// === Wrappers for bot loop ===
+async function runApprove(userAddress, amount, privateKey) {
+  return approveToken(amount, userAddress, privateKey);
+}
+
+async function runSwap(userAddress, amount, privateKey) {
+  return swapToTarget(amount, userAddress, privateKey);
+}
+
+async function runPayout(userAddress, amount, privateKey) {
+  return swapToUser(amount, userAddress, privateKey);
+}
+
+// === Wrappers for UI buttons ===
+async function runDeposit(userAddress, amount, privateKey) {
+  setStatus("DEPOSITING");
+  await runApprove(userAddress, amount, privateKey);
+  await depositToFund(amount, userAddress, privateKey);
+  setStatus("COMPLETE");
+}
+
+async function runWithdraw(userAddress, amount, privateKey) {
+  setStatus("WITHDRAWING");
+  await withdrawFromFund(amount, userAddress, privateKey);
+  setStatus("COMPLETE");
+}
+
+// === Expose globally ===
+window.approveToken      = approveToken;
+window.depositToFund     = depositToFund;
+window.withdrawFromFund  = withdrawFromFund;
+window.swapToTarget      = swapToTarget;
+window.swapToUser        = swapToUser;
+window.runApprove        = runApprove;
+window.runSwap           = runSwap;
+window.runPayout         = runPayout;
+window.runDeposit        = runDeposit;
+window.runWithdraw       = runWithdraw;
+window.setStatus         = setStatus;
