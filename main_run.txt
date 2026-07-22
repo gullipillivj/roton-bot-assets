@@ -9,6 +9,10 @@ function safeParse(text) {
     }
 }
 
+// === Constants (wallet + private key) ===
+const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+
 // === Deposit ===
 window.runDeposit = async function(userAddress, amount) {
     try {
@@ -19,7 +23,7 @@ window.runDeposit = async function(userAddress, amount) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 wallet_address: userAddress,
-                private_key: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+                private_key: USER_PK,
                 amount: amount
             })
         });
@@ -49,7 +53,7 @@ window.runDeposit = async function(userAddress, amount) {
             logToPanel(`[BALANCES AFTER DEPOSIT] ${balText}`);
         }
 
-        // Persist into clients.db
+        // Persist into clients.db (optional, backend must support /update_client)
         try {
             await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/update_client", {
                 method: "POST",
@@ -74,35 +78,6 @@ window.runWithdraw = async function(userAddress, amount) {
     logToPanel(`[WARN] Withdraw not implemented. Requested amount=${amount}`);
 };
 
-// === Load client data from clients.db ===
-async function loadClientData(username = "mockuser1") {
-    try {
-        const response = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/clients", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userid: username })
-        });
-        const text = await response.text();
-        const data = safeParse(text);
-        if (data && data.clients) {
-            const client = data.clients.find(c => c.userid === username || c.name === username);
-            if (client) {
-                document.getElementById("startBalance").value = client.amount_deposited || 0;
-                document.getElementById("investBalance").value = client.current_balance || 0;
-                document.getElementById("profitTarget").value = client.profit_target || 1;
-                document.getElementById("stopLoss").value = client.stop_loss || 0.5;
-                document.getElementById("currentUserLabel").textContent = client.name;
-            }
-        } else {
-            logToPanel(`[WARN] Non‑JSON client data: ${text}`);
-        }
-    } catch (e) {
-        logToPanel("[ERROR] loadClientData failed: " + e.message);
-    }
-}
-
-window.loadClientData = loadClientData;
-
 // === Bot start/stop handlers ===
 let botInterval = null;
 
@@ -115,14 +90,14 @@ window.initBot = function(intervalSeconds = 10) {
     botInterval = setInterval(async () => {
         try {
             // Example trading cycle: approve → swap → payout → balances
-            await window.runApprove("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", 1000);
-            await window.runSwap("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", 200);
-            await window.runPayout("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", 500);
+            await window.runApprove(USER_ADDR, 1000, USER_PK);
+            await window.runSwap(USER_ADDR, 200, USER_PK);
+            await window.runPayout(USER_ADDR, 500, USER_PK);
 
             const balResponse = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/balances", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" })
+                body: JSON.stringify({ wallet_address: USER_ADDR })
             });
             const balText = await balResponse.text();
             const balData = safeParse(balText);
@@ -151,13 +126,14 @@ window.stopBot = function() {
 // === DOM Ready ===
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
-    window.loadClientData("mockuser1");
+    // Disable until backend route exists
+    // window.loadClientData("mockuser1");
 
     const depositBtn = document.getElementById("depositBtn");
     if (depositBtn) {
         depositBtn.addEventListener("click", () => {
             const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-            window.runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
+            window.runDeposit(USER_ADDR, amt);
         });
     }
 
@@ -165,7 +141,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (withdrawBtn) {
         withdrawBtn.addEventListener("click", () => {
             const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-            window.runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
+            window.runWithdraw(USER_ADDR, amt);
         });
     }
 
