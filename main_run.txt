@@ -28,6 +28,7 @@ window.runDeposit = async function(userAddress, amount) {
                 document.getElementById("startBalance").value = parsed.eth_balance_wei;
             }
 
+
             // Sync DB
             await fetch("/runbot/update_client", {
                 method: "POST",
@@ -39,7 +40,13 @@ window.runDeposit = async function(userAddress, amount) {
                 })
             });
             logToPanel("[SUCCESS] Client balances updated in DB after deposit");
-        }
+        if (parsed.fund_token_balance !== undefined) {
+    document.getElementById("investBalance").value = parsed.fund_token_balance;
+}
+if (parsed.eth_balance_wei !== undefined) {
+    document.getElementById("startBalance").value = parsed.eth_balance_wei;
+}
+}
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
@@ -77,7 +84,13 @@ window.runWithdraw = async function(userAddress, amount) {
                 })
             });
             logToPanel("[SUCCESS] Client balances updated in DB after withdraw");
-        }
+       if (parsed.fund_token_balance !== undefined) {
+    document.getElementById("investBalance").value = parsed.fund_token_balance;
+}
+if (parsed.eth_balance_wei !== undefined) {
+    document.getElementById("startBalance").value = parsed.eth_balance_wei;
+}
+}
     } catch (e) {
         logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
     }
