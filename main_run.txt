@@ -1,4 +1,4 @@
-// main_run.txt — final corrected
+// main_run.txt — clean, full version
 logToPanel("main_run.txt loaded");
 
 function safeParse(text) {
@@ -9,16 +9,18 @@ const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 // === Refresh balances ===
-async function refreshBalances(userAddress, label) {
+async function refreshBalances(userAddress) {
     const resp = await fetch("/runbot/balances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ wallet_address: userAddress })
     });
     const parsed = safeParse(await resp.text());
-    logToPanel(`[RESPONSE ${label}] ${JSON.stringify(parsed)}`);
 
-    if (parsed?.contract) {
+    // Show raw JSON only
+    logToPanel(JSON.stringify(parsed));
+
+    if (parsed?.contract?.fund_balance !== undefined) {
         document.getElementById("investBalance").value = parsed.contract.fund_balance;
     }
 }
@@ -34,16 +36,21 @@ window.runDeposit = async function(userAddress, amount) {
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
         const parsed = safeParse(await resp.text());
-        logToPanel(`[RESPONSE DEPOSIT] ${JSON.stringify(parsed)}`);
+
+        // Show raw JSON only
+        logToPanel(JSON.stringify(parsed));
 
         if (parsed?.tx_hash) {
             logToPanel(`[SUCCESS] TxHash=${parsed.tx_hash}`);
         }
 
-        document.getElementById("investBalance").value = parsed.fund_balance;
-        await refreshBalances(userAddress, "POST-DEPOSIT");
+        if (parsed?.fund_balance !== undefined) {
+            document.getElementById("investBalance").value = parsed.fund_balance;
+        }
+
+        await refreshBalances(userAddress);
     } catch (e) {
-        logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
+        logToPanel(`Error: ${e.message}`);
     }
 };
 
@@ -58,16 +65,21 @@ window.runWithdraw = async function(userAddress, amount) {
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
         const parsed = safeParse(await resp.text());
-        logToPanel(`[RESPONSE WITHDRAW] ${JSON.stringify(parsed)}`);
+
+        // Show raw JSON only
+        logToPanel(JSON.stringify(parsed));
 
         if (parsed?.tx_hash) {
             logToPanel(`[SUCCESS] TxHash=${parsed.tx_hash}`);
         }
 
-        document.getElementById("investBalance").value = parsed.fund_balance;
-        await refreshBalances(userAddress, "POST-WITHDRAW");
+        if (parsed?.fund_balance !== undefined) {
+            document.getElementById("investBalance").value = parsed.fund_balance;
+        }
+
+        await refreshBalances(userAddress);
     } catch (e) {
-        logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
+        logToPanel(`Error: ${e.message}`);
     }
 };
 
@@ -79,7 +91,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("startBalance").value = 1000;
     document.getElementById("investBalance").value = 500;
 
-    await refreshBalances(USER_ADDR, "INIT");
+    await refreshBalances(USER_ADDR);
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
