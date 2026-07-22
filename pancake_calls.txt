@@ -1,127 +1,117 @@
 // pancake_calls.txt — PancakeSwap + SolidarityFund interaction layer
 logToPanel("pancake_calls.txt loaded");
 
-const web3 = new Web3("http://127.0.0.1:8545");
-window.web3 = web3;
-
-// === Addresses ===
-const userTokenAddress      = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
-const targetTokenAddress    = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
-const routerAddress         = "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853";
-const solidarityFundAddress = "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6";
-
-// === ABIs ===
-const routerABI = [ /* Pancake Router ABI JSON here */ ];
-const erc20ABI = [
-  { "constant": false, "inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}], "name":"approve", "outputs":[{"name":"","type":"bool"}], "type":"function" },
-  { "constant": true, "inputs":[{"name":"owner","type":"address"}], "name":"balanceOf", "outputs":[{"name":"balance","type":"uint256"}], "type":"function" }
-];
-const fundABI = [ /* SolidarityFund ABI JSON here */ ];
-
-// === Contracts ===
-const router = new web3.eth.Contract(routerABI, routerAddress);
-const fund   = new web3.eth.Contract(fundABI, solidarityFundAddress);
-
 // === Helpers ===
 function setStatus(state) {
   const label = document.getElementById("statusLabel");
   if (label) label.textContent = `STATE: ${state}`;
 }
 
-function logReceipt(action, receipt) {
-  try {
-    const txHash = receipt.transactionHash || "N/A";
-    const block  = receipt.blockNumber || "N/A";
-    const gas    = receipt.gasUsed || "N/A";
-    const status = receipt.status ? "SUCCESS" : "FAILED";
-    logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Block: ${block}, Gas: ${gas}, Status: ${status}`);
-  } catch (e) {
-    logToPanel(`[DEBUG] Raw receipt for ${action}: ${JSON.stringify(receipt)}`);
-  }
+function logResult(action, data) {
+  const txHash = data.tx_hash || "N/A";
+  const status = data.status || "UNKNOWN";
+  logToPanel(`[RESULT] ${action} — TxHash: ${txHash}, Status: ${status}`);
 }
 
-// === Functions with backend calls ===
+// === Backend calls ===
 function approveToken(token, amount, userAddress) {
-  logToPanel(`[DEBUG] Approving ${amount} of ${token} for ${userAddress}`);
-  const tokenContract = new web3.eth.Contract(erc20ABI, token);
-  return tokenContract.methods.approve(routerAddress, amount).send({ from: userAddress })
-    .on('transactionHash', hash => logToPanel(`[INFO] Approve submitted: ${hash}`))
-    .on('receipt', receipt => logReceipt("Approve", receipt))
-    .on('error', err => logToPanel(`[ERROR] Approve failed: ${err.message}`));
+  logToPanel(`[INFO] Approving ${amount} of ${token} for ${userAddress}`);
+  return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet_address: userAddress, token, amount })
+  })
+  .then(res => res.json())
+  .then(d => { logResult("Approve", d); return d; })
+  .catch(err => logToPanel(`[ERROR] Approve failed: ${err.message}`));
 }
 
 function depositToFund(token, amount, userAddress) {
-  logToPanel(`[DEBUG] Depositing ${amount} of ${token} into fund for ${userAddress}`);
-  return fund.methods.deposit(token, amount).send({ from: userAddress })
-    .on('transactionHash', hash => logToPanel(`[INFO] Deposit submitted: ${hash}`))
-    .on('receipt', receipt => logReceipt("Deposit", receipt))
-    .on('error', err => logToPanel(`[ERROR] Deposit failed: ${err.message}`));
+  logToPanel(`[INFO] Depositing ${amount} of ${token} for ${userAddress}`);
+  return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet_address: userAddress, token, amount })
+  })
+  .then(res => res.json())
+  .then(d => { logResult("Deposit", d); return d; })
+  .catch(err => logToPanel(`[ERROR] Deposit failed: ${err.message}`));
 }
 
 function withdrawFromFund(token, amount, userAddress) {
-  logToPanel(`[DEBUG] Withdrawing ${amount} of ${token} from fund for ${userAddress}`);
-  return fund.methods.withdraw(token, amount).send({ from: userAddress })
-    .on('transactionHash', hash => logToPanel(`[INFO] Withdraw submitted: ${hash}`))
-    .on('receipt', receipt => logReceipt("Withdraw", receipt))
-    .on('error', err => logToPanel(`[ERROR] Withdraw failed: ${err.message}`));
+  logToPanel(`[INFO] Withdrawing ${amount} of ${token} for ${userAddress}`);
+  return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/withdraw", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ wallet_address: userAddress, token, amount })
+  })
+  .then(res => res.json())
+  .then(d => { logResult("Withdraw", d); return d; })
+  .catch(err => logToPanel(`[ERROR] Withdraw failed: ${err.message}`));
 }
 
-// === Updated swap functions to use almanac backend ===
 function swapToTarget(amount, userAddress) {
-  logToPanel(`[DEBUG] Swapping ${amount} ${userTokenAddress} -> ${targetTokenAddress} for ${userAddress}`);
+  logToPanel(`[INFO] Swapping to target, amount=${amount}`);
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ wallet_address: userAddress, amount, direction: "toTarget" })
   })
   .then(res => res.json())
-  .then(d => {
-    logToPanel(`[INFO] SwapToTarget TxHash=${d.tx_hash || "N/A"}`);
-    return d;
-  })
+  .then(d => { logResult("SwapToTarget", d); return d; })
   .catch(err => logToPanel(`[ERROR] SwapToTarget failed: ${err.message}`));
 }
 
 function swapToUser(amount, userAddress) {
-  logToPanel(`[DEBUG] Swapping ${amount} ${targetTokenAddress} -> ${userTokenAddress} for ${userAddress}`);
+  logToPanel(`[INFO] Swapping to user, amount=${amount}`);
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ wallet_address: userAddress, amount, direction: "toUser" })
   })
   .then(res => res.json())
-  .then(d => {
-    logToPanel(`[INFO] SwapToUser TxHash=${d.tx_hash || "N/A"}`);
-    return d;
-  })
+  .then(d => { logResult("SwapToUser", d); return d; })
   .catch(err => logToPanel(`[ERROR] SwapToUser failed: ${err.message}`));
+}
+
+// === Wrappers for bot loop compatibility ===
+async function runApprove(userAddress, amount) {
+  return approveToken(window.userTokenAddress, amount, userAddress);
+}
+
+async function runSwap(userAddress, amount) {
+  return swapToTarget(amount, userAddress);
+}
+
+async function runPayout(userAddress, amount) {
+  return swapToUser(amount, userAddress);
 }
 
 // === Wrappers for UI buttons ===
 async function runDeposit(userAddress, amount) {
   setStatus("DEPOSITING");
-  logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
-  await approveToken(userTokenAddress, amount, userAddress);
-  await depositToFund(userTokenAddress, amount, userAddress);
+  await runApprove(userAddress, amount);
+  await depositToFund(window.userTokenAddress, amount, userAddress);
   setStatus("COMPLETE");
 }
 
 async function runWithdraw(userAddress, amount) {
   setStatus("WITHDRAWING");
-  logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
-  await withdrawFromFund(userTokenAddress, amount, userAddress);
+  await withdrawFromFund(window.userTokenAddress, amount, userAddress);
   setStatus("COMPLETE");
 }
 
 // === Expose globally ===
-window.userTokenAddress   = userTokenAddress;
-window.targetTokenAddress = targetTokenAddress;
-window.fund               = fund;
+window.userTokenAddress   = "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707";
+window.targetTokenAddress = "0x0165878A594ca255338adfa4d48449f69242Eb8F";
 window.approveToken       = approveToken;
 window.depositToFund      = depositToFund;
 window.withdrawFromFund   = withdrawFromFund;
 window.swapToTarget       = swapToTarget;
 window.swapToUser         = swapToUser;
+window.runApprove         = runApprove;
+window.runSwap            = runSwap;
+window.runPayout          = runPayout;
 window.runDeposit         = runDeposit;
 window.runWithdraw        = runWithdraw;
 window.setStatus          = setStatus;
