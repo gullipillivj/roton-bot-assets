@@ -1,3 +1,4 @@
+// main_run.txt — UI + trading glue
 logToPanel("main_run.txt loaded");
 
 function safeParse(text) {
@@ -7,41 +8,53 @@ function safeParse(text) {
 const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
+// === Refresh balances helper ===
+async function refreshBalances(userAddress, label) {
+    const balResp = await fetch("/runbot/balances", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: userAddress })
+    });
+    const balData = safeParse(await balResp.text());
+    if (balData?.contract) {
+        document.getElementById("investBalance").value = balData.contract.fund_token_balance;
+        document.getElementById("startBalance").value = balData.contract.eth_balance_wei;
+        logToPanel(`[${label}] Balances: ${JSON.stringify(balData.contract)}`);
+    }
+}
+
 // === Deposit ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
 
-        // Step 1: Approve
+        // Approve
         const approveResp = await fetch("/runbot/approve", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
         const approveParsed = safeParse(await approveResp.text());
-        if (approveParsed?.tx_hash) {
-            logToPanel(`[SUCCESS] Approve confirmed | TxHash=${approveParsed.tx_hash}`);
-        }
+        if (approveParsed?.tx_hash) logToPanel(`[SUCCESS] Approve confirmed | TxHash=${approveParsed.tx_hash}`);
 
-        // Step 2: Deposit
+        // Deposit
         const depositResp = await fetch("/runbot/deposit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
         const depositParsed = safeParse(await depositResp.text());
-        if (depositParsed?.tx_hash) {
-            logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${depositParsed.tx_hash}`);
+        if (depositParsed?.tx_hash) logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${depositParsed.tx_hash}`);
+
+        // ✅ Update textboxes directly from response
+        if (depositParsed?.fund_token_balance !== undefined) {
+            document.getElementById("investBalance").value = depositParsed.fund_token_balance;
+        }
+        if (depositParsed?.eth_balance_wei !== undefined) {
+            document.getElementById("startBalance").value = depositParsed.eth_balance_wei;
         }
 
-        // Step 3: Update textbox values (add amount)
-        const currentStart = parseInt(document.getElementById("startBalance").value) || 0;
-        document.getElementById("startBalance").value = currentStart + amount;
-
-        const currentInvest = parseInt(document.getElementById("investBalance").value) || 0;
-        document.getElementById("investBalance").value = currentInvest + amount;
-
-        // Step 4: Sync DB
+        // Sync DB
         await fetch("/runbot/update_client", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -53,18 +66,8 @@ window.runDeposit = async function(userAddress, amount) {
         });
         logToPanel("[SUCCESS] Client balances updated in DB after deposit");
 
-        // Step 5: Refresh balances from contract
-        const balResp = await fetch("/runbot/balances", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress })
-        });
-        const balData = safeParse(await balResp.text());
-        if (balData?.contract) {
-            document.getElementById("investBalance").value = balData.contract.fund_token_balance;
-            document.getElementById("startBalance").value = balData.contract.eth_balance_wei;
-            logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData.contract)}`);
-        }
+        // ✅ Refresh from contract
+        await refreshBalances(userAddress, "POST-DEPOSIT");
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
@@ -75,25 +78,24 @@ window.runWithdraw = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
 
-        // Step 1: Payout
+        // Payout
         const payoutResp = await fetch("/runbot/payout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
         const payoutParsed = safeParse(await payoutResp.text());
-        if (payoutParsed?.tx_hash) {
-            logToPanel(`[SUCCESS] Withdraw confirmed | TxHash=${payoutParsed.tx_hash}`);
+        if (payoutParsed?.tx_hash) logToPanel(`[SUCCESS] Withdraw confirmed | TxHash=${payoutParsed.tx_hash}`);
+
+        // ✅ Update textboxes directly from response
+        if (payoutParsed?.fund_token_balance !== undefined) {
+            document.getElementById("investBalance").value = payoutParsed.fund_token_balance;
+        }
+        if (payoutParsed?.eth_balance_wei !== undefined) {
+            document.getElementById("startBalance").value = payoutParsed.eth_balance_wei;
         }
 
-        // Step 2: Update textbox values (subtract amount)
-        const currentStart = parseInt(document.getElementById("startBalance").value) || 0;
-        document.getElementById("startBalance").value = Math.max(currentStart - amount, 0);
-
-        const currentInvest = parseInt(document.getElementById("investBalance").value) || 0;
-        document.getElementById("investBalance").value = Math.max(currentInvest - amount, 0);
-
-        // Step 3: Sync DB
+        // Sync DB
         await fetch("/runbot/update_client", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -105,26 +107,19 @@ window.runWithdraw = async function(userAddress, amount) {
         });
         logToPanel("[SUCCESS] Client balances updated in DB after withdraw");
 
-        // Step 4: Refresh balances from contract
-        const balResp = await fetch("/runbot/balances", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress })
-        });
-        const balData = safeParse(await balResp.text());
-        if (balData?.contract) {
-            document.getElementById("investBalance").value = balData.contract.fund_token_balance;
-            document.getElementById("startBalance").value = balData.contract.eth_balance_wei;
-            logToPanel(`[BALANCES AFTER WITHDRAW] ${JSON.stringify(balData.contract)}`);
-        }
+        // ✅ Refresh from contract
+        await refreshBalances(userAddress, "POST-WITHDRAW");
     } catch (e) {
         logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
     }
 };
 
 // === DOM Ready ===
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
+
+    // ✅ Initial balances
+    await refreshBalances(USER_ADDR, "INIT");
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
