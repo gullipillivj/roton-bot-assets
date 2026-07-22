@@ -14,55 +14,55 @@ function logResult(action, data) {
 }
 
 // === Backend calls (Flask handles Anvil) ===
-function approveToken(amount, userAddress) {
+function approveToken(amount, userAddress, privateKey) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/approve", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, amount })
+    body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("Approve", d); return d; })
   .catch(err => logToPanel(`[ERROR] Approve failed: ${err.message}`));
 }
 
-function depositToFund(amount, userAddress) {
+function depositToFund(amount, userAddress, privateKey) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, amount })
+    body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("Deposit", d); return d; })
   .catch(err => logToPanel(`[ERROR] Deposit failed: ${err.message}`));
 }
 
-function withdrawFromFund(amount, userAddress) {
+function withdrawFromFund(amount, userAddress, privateKey) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/withdraw", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, amount })
+    body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("Withdraw", d); return d; })
   .catch(err => logToPanel(`[ERROR] Withdraw failed: ${err.message}`));
 }
 
-function swapToTarget(amount, userAddress) {
+function swapToTarget(amount, userAddress, privateKey) {
   return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, amount, direction: "toTarget" })
+    body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("SwapToTarget", d); return d; })
   .catch(err => logToPanel(`[ERROR] SwapToTarget failed: ${err.message}`));
 }
 
-function swapToUser(amount, userAddress) {
-  return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/swap", {
+function swapToUser(amount, userAddress, privateKey) {
+  return fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/payout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ wallet_address: userAddress, amount, direction: "toUser" })
+    body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
   })
   .then(res => res.json())
   .then(d => { logResult("SwapToUser", d); return d; })
@@ -70,29 +70,29 @@ function swapToUser(amount, userAddress) {
 }
 
 // === Wrappers for bot loop ===
-async function runApprove(userAddress, amount) {
-  return approveToken(amount, userAddress);
+async function runApprove(userAddress, amount, privateKey) {
+  return approveToken(amount, userAddress, privateKey);
 }
 
-async function runSwap(userAddress, amount) {
-  return swapToTarget(amount, userAddress);
+async function runSwap(userAddress, amount, privateKey) {
+  return swapToTarget(amount, userAddress, privateKey);
 }
 
-async function runPayout(userAddress, amount) {
-  return swapToUser(amount, userAddress);
+async function runPayout(userAddress, amount, privateKey) {
+  return swapToUser(amount, userAddress, privateKey);
 }
 
 // === Wrappers for UI buttons ===
-async function runDeposit(userAddress, amount) {
+async function runDeposit(userAddress, amount, privateKey) {
   setStatus("DEPOSITING");
-  await runApprove(userAddress, amount);
-  await depositToFund(amount, userAddress);
+  await runApprove(userAddress, amount, privateKey);
+  await depositToFund(amount, userAddress, privateKey);
   setStatus("COMPLETE");
 }
 
-async function runWithdraw(userAddress, amount) {
+async function runWithdraw(userAddress, amount, privateKey) {
   setStatus("WITHDRAWING");
-  await withdrawFromFund(amount, userAddress);
+  await withdrawFromFund(amount, userAddress, privateKey);
   setStatus("COMPLETE");
 }
 
