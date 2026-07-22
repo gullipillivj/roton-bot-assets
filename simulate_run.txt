@@ -39,14 +39,21 @@ async function simulateCycle(cycle) {
 
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
 
+  // === Resolve token address ===
+  const tokenAddr = await window.getTokenAddress(coin);
+  if (!tokenAddr) {
+    logToPanel(`[WARN] Cycle ${cycle}: No token address for ${coin}, skipping`);
+    return;
+  }
+
   // === PancakeSwap interaction (Flask backend calls) ===
-  swapToTarget(buyPrice, window.userAddress, window.privateKey)
+  swapToTarget(buyPrice, window.userAddress, window.privateKey, tokenAddr)
     .then(d => {
       logToPanel(`[INFO] Cycle ${cycle}: SwapToTarget TxHash=${d.tx_hash || "N/A"}`);
     })
     .catch(err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToTarget failed: ${err.message}`));
 
-  swapToUser(buyPrice, window.userAddress, window.privateKey)
+  swapToUser(buyPrice, window.userAddress, window.privateKey, tokenAddr)
     .then(d => {
       logToPanel(`[INFO] Cycle ${cycle}: SwapToUser TxHash=${d.tx_hash || "N/A"}`);
     })
@@ -95,4 +102,33 @@ function startSimulation(totalCycles) {
 
 function initBot(totalCycles = 10) {
   setStatus("RUNNING");
-  logToPanel("[INFO] Bot started
+  logToPanel("[INFO] Bot started");
+  startSimulation(totalCycles);
+}
+
+// === Helpers ===
+async function pickRandomCoin() {
+  try {
+    const pairs = await window.getBinancePairs();
+    if (!pairs || pairs.length === 0) {
+      logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
+      return "BTCUSDT";
+    }
+    return pairs[Math.floor(Math.random() * pairs.length)];
+  } catch (e) {
+    logToPanel("[ERROR] pickRandomCoin failed: " + e);
+    return "BTCUSDT";
+  }
+}
+
+function calculatePnL(price, percentChange) {
+  if (!percentChange) return 0;
+  const changeFactor = percentChange / 100;
+  return price * changeFactor;
+}
+
+// === Expose globally ===
+window.startSimulation = startSimulation;
+window.simulateCycle = simulateCycle;
+window.initBot = initBot;
+window.stopBot = stopBot;
