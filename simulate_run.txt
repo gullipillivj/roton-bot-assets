@@ -47,16 +47,18 @@ async function simulateCycle(cycle) {
 
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
 
-  // === PancakeSwap interaction (functions kept as-is for main_run compatibility) ===
-  swapToTarget(buyPrice, window.userAddress)
-    .on('transactionHash', hash => logToPanel(`[INFO] Cycle ${cycle}: SwapToTarget submitted: ${hash}`))
-    .on('receipt', receipt => logReceipt(`Cycle ${cycle} SwapToTarget`, receipt))
-    .on('error', err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToTarget failed: ${err.message}`));
+  // === PancakeSwap interaction (Flask backend calls) ===
+  swapToTarget(buyPrice, window.userAddress, window.privateKey)
+    .then(d => {
+      logToPanel(`[INFO] Cycle ${cycle}: SwapToTarget TxHash=${d.tx_hash || "N/A"}`);
+    })
+    .catch(err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToTarget failed: ${err.message}`));
 
-  swapToUser(buyPrice, window.userAddress)
-    .on('transactionHash', hash => logToPanel(`[INFO] Cycle ${cycle}: SwapToUser submitted: ${hash}`))
-    .on('receipt', receipt => logReceipt(`Cycle ${cycle} SwapToUser`, receipt))
-    .on('error', err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToUser failed: ${err.message}`));
+  swapToUser(buyPrice, window.userAddress, window.privateKey)
+    .then(d => {
+      logToPanel(`[INFO] Cycle ${cycle}: SwapToUser TxHash=${d.tx_hash || "N/A"}`);
+    })
+    .catch(err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToUser failed: ${err.message}`));
 
   // === Profit/loss calculation ===
   const percentChange = parseFloat(stats.priceChangePercent || 0);
