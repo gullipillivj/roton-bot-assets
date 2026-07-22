@@ -12,35 +12,58 @@ window.runDeposit = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
 
-        const response = await fetch("/runbot/deposit", {
+        // Step 1: Approve
+        const approveResp = await fetch("/runbot/approve", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
+        const approveParsed = safeParse(await approveResp.text());
+        if (approveParsed?.tx_hash) {
+            logToPanel(`[SUCCESS] Approve confirmed | TxHash=${approveParsed.tx_hash}`);
+        }
 
-        const parsed = safeParse(await response.text());
-        if (parsed) {
-            if (parsed.tx_hash) logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
+        // Step 2: Deposit
+        const depositResp = await fetch("/runbot/deposit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
+        });
+        const depositParsed = safeParse(await depositResp.text());
+        if (depositParsed?.tx_hash) {
+            logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${depositParsed.tx_hash}`);
+        }
 
-            // ✅ Update UI once
-            if (parsed.fund_token_balance !== undefined) {
-                document.getElementById("investBalance").value = parsed.fund_token_balance;
-            }
-            if (parsed.eth_balance_wei !== undefined) {
-                document.getElementById("startBalance").value = parsed.eth_balance_wei;
-            }
+        // Step 3: Update textbox values (add amount)
+        const currentStart = parseInt(document.getElementById("startBalance").value) || 0;
+        document.getElementById("startBalance").value = currentStart + amount;
 
-            // Sync DB
-            await fetch("/runbot/update_client", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userid: "mockuser1",
-                    amount_deposited: document.getElementById("startBalance").value,
-                    current_balance: document.getElementById("investBalance").value
-                })
-            });
-            logToPanel("[SUCCESS] Client balances updated in DB after deposit");
+        const currentInvest = parseInt(document.getElementById("investBalance").value) || 0;
+        document.getElementById("investBalance").value = currentInvest + amount;
+
+        // Step 4: Sync DB
+        await fetch("/runbot/update_client", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                userid: "mockuser1",
+                amount_deposited: document.getElementById("startBalance").value,
+                current_balance: document.getElementById("investBalance").value
+            })
+        });
+        logToPanel("[SUCCESS] Client balances updated in DB after deposit");
+
+        // Step 5: Refresh balances from contract
+        const balResp = await fetch("/runbot/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress })
+        });
+        const balData = safeParse(await balResp.text());
+        if (balData?.contract) {
+            document.getElementById("investBalance").value = balData.contract.fund_token_balance;
+            document.getElementById("startBalance").value = balData.contract.eth_balance_wei;
+            logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData.contract)}`);
         }
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
@@ -52,35 +75,47 @@ window.runWithdraw = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
 
-        const response = await fetch("/runbot/payout", {
+        // Step 1: Payout
+        const payoutResp = await fetch("/runbot/payout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
+        const payoutParsed = safeParse(await payoutResp.text());
+        if (payoutParsed?.tx_hash) {
+            logToPanel(`[SUCCESS] Withdraw confirmed | TxHash=${payoutParsed.tx_hash}`);
+        }
 
-        const parsed = safeParse(await response.text());
-        if (parsed) {
-            if (parsed.tx_hash) logToPanel(`[SUCCESS] Withdraw confirmed | TxHash=${parsed.tx_hash}`);
+        // Step 2: Update textbox values (subtract amount)
+        const currentStart = parseInt(document.getElementById("startBalance").value) || 0;
+        document.getElementById("startBalance").value = Math.max(currentStart - amount, 0);
 
-            // ✅ Update UI once
-            if (parsed.fund_token_balance !== undefined) {
-                document.getElementById("investBalance").value = parsed.fund_token_balance;
-            }
-            if (parsed.eth_balance_wei !== undefined) {
-                document.getElementById("startBalance").value = parsed.eth_balance_wei;
-            }
+        const currentInvest = parseInt(document.getElementById("investBalance").value) || 0;
+        document.getElementById("investBalance").value = Math.max(currentInvest - amount, 0);
 
-            // Sync DB
-            await fetch("/runbot/update_client", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userid: "mockuser1",
-                    amount_deposited: document.getElementById("startBalance").value,
-                    current_balance: document.getElementById("investBalance").value
-                })
-            });
-            logToPanel("[SUCCESS] Client balances updated in DB after withdraw");
+        // Step 3: Sync DB
+        await fetch("/runbot/update_client", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                userid: "mockuser1",
+                amount_deposited: document.getElementById("startBalance").value,
+                current_balance: document.getElementById("investBalance").value
+            })
+        });
+        logToPanel("[SUCCESS] Client balances updated in DB after withdraw");
+
+        // Step 4: Refresh balances from contract
+        const balResp = await fetch("/runbot/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress })
+        });
+        const balData = safeParse(await balResp.text());
+        if (balData?.contract) {
+            document.getElementById("investBalance").value = balData.contract.fund_token_balance;
+            document.getElementById("startBalance").value = balData.contract.eth_balance_wei;
+            logToPanel(`[BALANCES AFTER WITHDRAW] ${JSON.stringify(balData.contract)}`);
         }
     } catch (e) {
         logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
@@ -91,14 +126,12 @@ window.runWithdraw = async function(userAddress, amount) {
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
 
-    const depositBtn = document.getElementById("depositBtn");
-    if (depositBtn) depositBtn.addEventListener("click", () => {
+    document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
         window.runDeposit(USER_ADDR, amt);
     });
 
-    const withdrawBtn = document.getElementById("withdrawBtn");
-    if (withdrawBtn) withdrawBtn.addEventListener("click", () => {
+    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
         window.runWithdraw(USER_ADDR, amt);
     });
