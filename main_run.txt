@@ -1,4 +1,4 @@
-// main_run.txt — SolidarityFund UI glue
+// main_run.txt — corrected to match backend
 logToPanel("main_run.txt loaded");
 
 function safeParse(text) {
@@ -17,121 +17,67 @@ async function refreshBalances(userAddress, label) {
     });
     const parsed = safeParse(await resp.text());
     if (parsed?.contract) {
-        const initialBal   = parsed.contract.initial_amount_usdt;
-        const investBal    = parsed.contract.fund_token_balance;
+        const investBal = parsed.contract.fund_balance;
 
-        document.getElementById("startBalance").value  = initialBal;
+        // Initial stays fixed (whatever you set at page load)
+        const initialVal = document.getElementById("startBalance").value || 0;
         document.getElementById("investBalance").value = investBal;
 
-        logToPanel(`[${label}] Initial=${initialBal} USDT, Investment=${investBal} USDT`);
+        logToPanel(`[${label}] Initial=${initialVal}, Investment=${investBal}`);
     }
 }
 
-// === Deposit (3 approvals + 3 transfers) ===
+// === Deposit ===
 window.runDeposit = async function(userAddress, amount) {
     try {
-        logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount} USDT`);
+        logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
 
-        // --- Approve + deposit to SolidarityFund ---
-        const approveFund = await fetch("/runbot/approve", {
+        const resp = await fetch("/runbot/deposit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
-        const approveFundParsed = safeParse(await approveFund.text());
-        if (approveFundParsed?.tx_hash)
-            logToPanel(`[SUCCESS] Approve SolidarityFund | TxHash=${approveFundParsed.tx_hash}`);
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash)
+            logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
 
-        const depositFund = await fetch("/runbot/deposit", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
-        });
-        const depositFundParsed = safeParse(await depositFund.text());
-        if (depositFundParsed?.tx_hash)
-            logToPanel(`[SUCCESS] Deposit SolidarityFund | TxHash=${depositFundParsed.tx_hash}`);
+        // ✅ Update textboxes
+        const initialVal = document.getElementById("startBalance").value || 0;
+        document.getElementById("investBalance").value = parsed.fund_balance;
 
-        // --- Approve + transfer Pancake fee ---
-        const pancakeFee = depositFundParsed?.pancake_fee || 0;
-        if (pancakeFee > 0) {
-            const approvePancake = await fetch("/runbot/approve_pancake", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount: pancakeFee })
-            });
-            const approvePancakeParsed = safeParse(await approvePancake.text());
-            if (approvePancakeParsed?.tx_hash)
-                logToPanel(`[SUCCESS] Approve Pancake fee | TxHash=${approvePancakeParsed.tx_hash}`);
-
-            const transferPancake = await fetch("/runbot/transfer_pancake_fee", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount: pancakeFee })
-            });
-            const transferPancakeParsed = safeParse(await transferPancake.text());
-            if (transferPancakeParsed?.tx_hash)
-                logToPanel(`[SUCCESS] Transfer Pancake fee | TxHash=${transferPancakeParsed.tx_hash}`);
-        }
-
-        // --- Approve + transfer commission ---
-        const commissionFee = depositFundParsed?.commission_fee || 0;
-        if (commissionFee > 0) {
-            const approveComm = await fetch("/runbot/approve_commission", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount: commissionFee })
-            });
-            const approveCommParsed = safeParse(await approveComm.text());
-            if (approveCommParsed?.tx_hash)
-                logToPanel(`[SUCCESS] Approve Commission | TxHash=${approveCommParsed.tx_hash}`);
-
-            const transferComm = await fetch("/runbot/transfer_commission", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount: commissionFee })
-            });
-            const transferCommParsed = safeParse(await transferComm.text());
-            if (transferCommParsed?.tx_hash)
-                logToPanel(`[SUCCESS] Transfer Commission | TxHash=${transferCommParsed.tx_hash}`);
-        }
-
-        // ✅ Update textboxes directly from response
-        document.getElementById("startBalance").value  = depositFundParsed.initial_amount_usdt;
-        document.getElementById("investBalance").value = depositFundParsed.fund_token_balance;
-
-        logToPanel(`[RESULT] Initial=${depositFundParsed.initial_amount_usdt} USDT, Investment=${depositFundParsed.fund_token_balance} USDT`);
+        logToPanel(`[RESULT] Initial=${initialVal}, Investment=${parsed.fund_balance}`);
 
         // ✅ Refresh from contract
         await refreshBalances(userAddress, "POST-DEPOSIT");
     } catch (e) {
-        logToPanel(`[FAILURE] Deposit ${amount} USDT | Error=${e.message}`);
+        logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
 };
 
 // === Withdraw ===
 window.runWithdraw = async function(userAddress, amount) {
     try {
-        logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount} USDT`);
+        logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
 
-        const payoutResp = await fetch("/runbot/payout", {
+        const resp = await fetch("/runbot/payout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
         });
-        const payoutParsed = safeParse(await payoutResp.text());
-        if (payoutParsed?.tx_hash)
-            logToPanel(`[SUCCESS] Withdraw confirmed | TxHash=${payoutParsed.tx_hash}`);
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash)
+            logToPanel(`[SUCCESS] Withdraw confirmed | TxHash=${parsed.tx_hash}`);
 
-        // ✅ Update textboxes directly from response
-        document.getElementById("startBalance").value  = payoutParsed.initial_amount_usdt;
-        document.getElementById("investBalance").value = payoutParsed.fund_token_balance;
+        // ✅ Update textboxes
+        const initialVal = document.getElementById("startBalance").value || 0;
+        document.getElementById("investBalance").value = parsed.fund_balance;
 
-        logToPanel(`[RESULT] Initial=${payoutParsed.initial_amount_usdt} USDT, Investment=${payoutParsed.fund_token_balance} USDT`);
+        logToPanel(`[RESULT] Initial=${initialVal}, Investment=${parsed.fund_balance}`);
 
         // ✅ Refresh from contract
         await refreshBalances(userAddress, "POST-WITHDRAW");
     } catch (e) {
-        logToPanel(`[FAILURE] Withdraw ${amount} USDT | Error=${e.message}`);
+        logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
     }
 };
 
@@ -139,7 +85,12 @@ window.runWithdraw = async function(userAddress, amount) {
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
 
-    // ✅ Initial balances from clients.db / contract
+    // Set initial figure once (from db or hardcoded)
+    document.getElementById("startBalance").value = 1000; // example figure
+    document.getElementById("investBalance").value = 500; // example figure
+
+    logToPanel(`[INIT] Initial=1000, Investment=500`);
+
     await refreshBalances(USER_ADDR, "INIT");
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
