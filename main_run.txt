@@ -14,12 +14,12 @@ const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 // === Deposit ===
-// === Deposit ===
 window.runDeposit = async function(userAddress, amount) {
     try {
         logToPanel(`[INFO] Starting deposit for ${userAddress}, amount=${amount}`);
 
-        const response = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
+        // Step 1: Call deposit route
+        const response = await fetch("/runbot/deposit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -29,111 +29,101 @@ window.runDeposit = async function(userAddress, amount) {
             })
         });
 
-        const text = await response.text();
-        const parsed = safeParse(text);
+        const parsed = safeParse(await response.text());
         if (parsed && parsed.tx_hash) {
             logToPanel(`[SUCCESS] Deposit confirmed | TxHash=${parsed.tx_hash}`);
         } else {
-            logToPanel(`[RESULT] Deposit response=${text}`);
+            logToPanel(`[RESULT] Deposit response=${JSON.stringify(parsed)}`);
         }
 
-        // Refresh balances
-        const balResponse = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/balances", {
+        // Step 2: Refresh balances
+        const balResponse = await fetch("/runbot/balances", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress })
         });
-        const balText = await balResponse.text();
-        const balData = safeParse(balText);
+        const balData = safeParse(await balResponse.text());
 
-        if (balData) {
-            // Update invested balance from fund contract
-            document.getElementById("investBalance").value = balData.fund_token_balance;
-
-            // Increment startBalance with each deposit (cumulative)
-            const currentStart = parseInt(document.getElementById("startBalance").value) || 0;
-            document.getElementById("startBalance").value = currentStart + amount;
+        if (balData && balData.contract) {
+            document.getElementById("investBalance").value = balData.contract.fund_token_balance;
+            document.getElementById("startBalance").value = balData.contract.eth_balance_wei;
 
             logToPanel(`[BALANCES AFTER DEPOSIT] ${JSON.stringify(balData)}`);
-        } else {
-            logToPanel(`[BALANCES AFTER DEPOSIT] ${balText}`);
-        }
 
-        // Persist into clients.db (optional, backend must support /update_client)
-        try {
-            await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/update_client", {
+            // Step 3: Sync DB
+            await fetch("/runbot/update_client", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     userid: "mockuser1",
-                    amount_deposited: document.getElementById("startBalance").value,
-                    current_balance: document.getElementById("investBalance").value
+                    amount_deposited: balData.contract.eth_balance_wei,
+                    current_balance: balData.contract.fund_token_balance
                 })
             });
-            logToPanel("[SUCCESS] Client balances updated in DB");
-        } catch (dbErr) {
-            logToPanel(`[WARN] Could not update clients.db: ${dbErr.message}`);
+            logToPanel("[SUCCESS] Client balances updated in DB after deposit");
         }
     } catch (e) {
         logToPanel(`[FAILURE] Deposit ${amount} | Error=${e.message}`);
     }
 };
 
-// === Withdraw stub ===
+// === Withdraw ===
 window.runWithdraw = async function(userAddress, amount) {
-    logToPanel(`[WARN] Withdraw not implemented. Requested amount=${amount}`);
-};
+    try {
+        logToPanel(`[INFO] Starting withdraw for ${userAddress}, amount=${amount}`);
 
-// === Bot start/stop handlers ===
-let botInterval = null;
+        // Step 1: Call payout route
+        const response = await fetch("/runbot/payout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                wallet_address: userAddress,
+                private_key: USER_PK,
+                amount: amount
+            })
+        });
 
-window.initBot = function(intervalSeconds = 10) {
-    if (botInterval) {
-        clearInterval(botInterval);
-    }
-    logToPanel(`[BOT] Trading loop started, interval=${intervalSeconds}s`);
+        const parsed = safeParse(await response.text());
+        if (parsed && parsed.tx_hash) {
+            logToPanel(`[SUCCESS] Withdraw confirmed | TxHash=${parsed.tx_hash}`);
+        } else {
+            logToPanel(`[RESULT] Withdraw response=${JSON.stringify(parsed)}`);
+        }
 
-    botInterval = setInterval(async () => {
-        try {
-            // Example trading cycle: approve → swap → payout → balances
-            await window.runApprove(USER_ADDR, 1000, USER_PK);
-            await window.runSwap(USER_ADDR, 200, USER_PK);
-            await window.runPayout(USER_ADDR, 500, USER_PK);
+        // Step 2: Refresh balances
+        const balResponse = await fetch("/runbot/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress })
+        });
+        const balData = safeParse(await balResponse.text());
 
-            const balResponse = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/balances", {
+        if (balData && balData.contract) {
+            document.getElementById("investBalance").value = balData.contract.fund_token_balance;
+            document.getElementById("startBalance").value = balData.contract.eth_balance_wei;
+
+            logToPanel(`[BALANCES AFTER WITHDRAW] ${JSON.stringify(balData)}`);
+
+            // Step 3: Sync DB
+            await fetch("/runbot/update_client", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ wallet_address: USER_ADDR })
+                body: JSON.stringify({
+                    userid: "mockuser1",
+                    amount_deposited: balData.contract.eth_balance_wei,
+                    current_balance: balData.contract.fund_token_balance
+                })
             });
-            const balText = await balResponse.text();
-            const balData = safeParse(balText);
-
-            if (balData) {
-                document.getElementById("investBalance").value = balData.fund_token_balance;
-                document.getElementById("startBalance").value = balData.eth_balance_wei;
-                logToPanel(`[BOT BALANCES] ${JSON.stringify(balData)}`);
-            } else {
-                logToPanel(`[BOT BALANCES] ${balText}`);
-            }
-        } catch (err) {
-            logToPanel(`[BOT ERROR] ${err.message}`);
+            logToPanel("[SUCCESS] Client balances updated in DB after withdraw");
         }
-    }, intervalSeconds * 1000);
-};
-
-window.stopBot = function() {
-    if (botInterval) {
-        clearInterval(botInterval);
-        botInterval = null;
-        logToPanel("[BOT] Trading loop stopped");
+    } catch (e) {
+        logToPanel(`[FAILURE] Withdraw ${amount} | Error=${e.message}`);
     }
 };
 
 // === DOM Ready ===
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
-    // Disable until backend route exists
-    // window.loadClientData("mockuser1");
 
     const depositBtn = document.getElementById("depositBtn");
     if (depositBtn) {
@@ -148,20 +138,6 @@ document.addEventListener("DOMContentLoaded", () => {
         withdrawBtn.addEventListener("click", () => {
             const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
             window.runWithdraw(USER_ADDR, amt);
-        });
-    }
-
-    const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            window.initBot(10);
-        });
-    }
-
-    const stopBtn = document.getElementById("stopBtn");
-    if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-            window.stopBot();
         });
     }
 });
