@@ -68,13 +68,17 @@ async function evaluateCoin(symbol) {
 
   const upward = ma20 && ma50 && ma20 > ma50;
 
+  // Resolve token address dynamically
+  const tokenAddress = await getTokenAddress(symbol);
+
   return {
     symbol,
     lastPrice: stats ? stats.lastPrice : null,
     "24hr%": stats ? stats.priceChangePercent : null,
     volume: stats ? stats.volume : null,
     ma20, ma50, ma100,
-    upward_trend: upward
+    upward_trend: upward,
+    tokenAddress
   };
 }
 
@@ -130,7 +134,6 @@ async function getGasFees(network="eth") {
     const res = await fetch(url);
     const d = await res.json();
     const gasPrice = parseFloat(d.result.SafeGasPrice); // gwei
-    // Approximate USD cost per swap (gas * 21000 units * ETH/BSC price)
     const ethPrice = await getCoingecko("ethereum","usd");
     const bnbPrice = await getCoingecko("binancecoin","usd");
     const basePrice = network === "bsc" ? bnbPrice.lastPrice : ethPrice.lastPrice;
@@ -144,7 +147,6 @@ async function getGasFees(network="eth") {
 
 // === PancakeSwap Fee Tier Mapper ===
 function getPancakeFeeTier(symbol) {
-  // Simplified mapping: stablecoins lowest, majors mid, others standard
   if (/USDT|USDC|BUSD/.test(symbol)) return 0.01;
   if (/BTC|ETH|BNB/.test(symbol)) return 0.05;
   return 0.25;
@@ -159,6 +161,20 @@ async function calculateTradeCost(symbol, tradeValueUSD, network="bsc") {
   return { symbol, tradeValueUSD, feeTier, gasFeeUSD: gas.usdCost, totalCost };
 }
 
+// === Dynamic Coin Address Fetcher ===
+async function getTokenAddress(symbol) {
+  try {
+    const res = await fetch(CHANGENOW_API);
+    const list = await res.json();
+    const base = symbol.replace("USDT","").toLowerCase();
+    const entry = list.find(c => c.ticker.toLowerCase() === base);
+    return entry ? entry.tokenContract : null;
+  } catch (e) {
+    console.warn("[WARN] Token address fetch failed:", e);
+    return null;
+  }
+}
+
 // === Expose globally ===
 window.getBinancePairs = getBinancePairs;
 window.getBinanceStats = getBinanceStats;
@@ -171,3 +187,4 @@ window.getKraken = getKraken;
 window.getGasFees = getGasFees;
 window.getPancakeFeeTier = getPancakeFeeTier;
 window.calculateTradeCost = calculateTradeCost;
+window.getTokenAddress = getTokenAddress;
