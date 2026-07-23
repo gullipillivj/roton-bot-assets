@@ -8,7 +8,7 @@ function safeParse(text) {
 }
 
 async function loadClientData(userId) {
-    const resp = await fetch("/clients");
+    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/clients");
     const data = safeParse(await resp.text());
     const client = data?.clients?.find(c => c.userid === userId);
     if (!client) return logToPanel(`[WARN] No client found for ${userId}`);
@@ -22,18 +22,16 @@ async function loadClientData(userId) {
 }
 
 async function refreshBalances(userAddress) {
-    const resp = await fetch("/runbot/balances", {
+    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/balances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ wallet_address: userAddress })
     });
     const parsed = safeParse(await resp.text());
-    if (parsed) {
-        if (parsed.contract?.fund_balance !== undefined) {
-            document.getElementById("startBalance").value = parsed.contract.fund_balance;
-            document.getElementById("investBalance").value = parsed.contract.fund_balance;
-            logToPanel(`[INFO] Updated fund balance: ${parsed.contract.fund_balance}`);
-        }
+    if (parsed?.contract?.fund_balance !== undefined) {
+        document.getElementById("startBalance").value = parsed.contract.fund_balance;
+        document.getElementById("investBalance").value = parsed.contract.fund_balance;
+        logToPanel(`[INFO] Updated fund balance: ${parsed.contract.fund_balance}`);
     } else {
         logToPanel("[WARN] No data received from balances endpoint");
     }
@@ -41,7 +39,7 @@ async function refreshBalances(userAddress) {
 
 async function runDeposit(userAddress, amount) {
     try {
-        const resp = await fetch("/runbot/deposit", {
+        const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, amount })
@@ -49,6 +47,8 @@ async function runDeposit(userAddress, amount) {
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
             logToPanel(`[INFO] Deposit successful, TX=${parsed.tx_hash}`);
+        } else {
+            logToPanel("[WARN] Deposit response missing tx_hash");
         }
         await refreshBalances(userAddress);
     } catch (err) {
@@ -58,7 +58,7 @@ async function runDeposit(userAddress, amount) {
 
 async function runWithdraw(userAddress, amount) {
     try {
-        const resp = await fetch("/runbot/payout", {
+        const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/payout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: userAddress, amount })
@@ -66,6 +66,8 @@ async function runWithdraw(userAddress, amount) {
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
             logToPanel(`[INFO] Withdraw successful, TX=${parsed.tx_hash}`);
+        } else {
+            logToPanel("[WARN] Withdraw response missing tx_hash");
         }
         await refreshBalances(userAddress);
     } catch (err) {
@@ -86,7 +88,7 @@ async function changeUser(userId) {
         userSelect.options[userSelect.selectedIndex].style.color = "black";
     }
 
-    const resp = await fetch("/clients");
+    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/clients");
     const data = safeParse(await resp.text());
     const client = data?.clients?.find(c => c.userid === userId);
     if (!client) return;
