@@ -1,6 +1,6 @@
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
-    panel.innerText += msg + "\n";
+    panel.value += msg + "\n";
 }
 
 function safeParse(text) {
@@ -63,7 +63,7 @@ async function runWithdraw(userAddress, amount) {
 async function changeUser(userId) {
     await loadClientData(userId);
 
-    const userSelect = document.getElementById("currentUser");
+    const userSelect = document.getElementById("userSelect");
     if (userSelect) {
         for (let opt of userSelect.options) {
             opt.style.backgroundColor = "";
@@ -79,6 +79,7 @@ async function changeUser(userId) {
     if (!client) return;
 
     const USER_ADDR = client.wallet_address;
+    document.getElementById("currentUserLabel").innerText = userId;
     logToPanel(`[INFO] Active user: ${userId}, Wallet=${USER_ADDR}`);
     await refreshBalances(USER_ADDR);
 }
@@ -99,7 +100,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     document.getElementById("changeUserBtn")?.addEventListener("click", async () => {
-        const selectedUser = document.getElementById("currentUser").value;
+        const selectedUser = document.getElementById("userSelect").value;
         await changeUser(selectedUser);
     });
 });
