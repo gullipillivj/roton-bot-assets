@@ -9,6 +9,11 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
   setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
+  if (typeof window.pickRandomCoin !== "function") {
+    logToPanel("[ERROR] pickRandomCoin not defined — check simulate_run setup");
+    return 0;
+  }
+
   const coin = await window.pickRandomCoin();
   logToPanel(`[DEBUG] Picked coin: ${coin}`);
 
@@ -147,6 +152,23 @@ function calculatePnL(amount, percentChange) {
   const changeFactor = percentChange / 100;
   return amount * changeFactor;
 }
+
+// === Local Coin Picker for simulate_run ===
+async function pickRandomCoin() {
+  try {
+    const pairs = await window.getBinancePairs();
+    if (!pairs || pairs.length === 0) {
+      logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
+      return "BTCUSDT";
+    }
+    const choice = pairs[Math.floor(Math.random() * pairs.length)];
+    return choice;
+  } catch (e) {
+    logToPanel("[ERROR] pickRandomCoin failed: " + e);
+    return "BTCUSDT";
+  }
+}
+window.pickRandomCoin = pickRandomCoin;
 
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
