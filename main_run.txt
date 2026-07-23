@@ -45,16 +45,28 @@ async function refreshBalances() {
 
 async function runDeposit(amount) {
     try {
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
+        // Step 1: Approve
+        const approveResp = await fetch(`${BASE_URL}/runbot/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
-        const parsed = safeParse(await resp.text());
-        if (parsed) {
-            logToPanel(`[INFO] Deposit executed, TX=${parsed.tx_hash}, Fund=${parsed.fund_token_balance}, ETH=${parsed.eth_balance_wei}`);
-            document.getElementById("startBalance").value = parsed.fund_token_balance;
-            document.getElementById("investBalance").value = parsed.fund_token_balance;
+        const approveParsed = safeParse(await approveResp.text());
+        if (approveParsed?.tx_hash) {
+            logToPanel(`[INFO] Approve executed, TX=${approveParsed.tx_hash}`);
+        }
+
+        // Step 2: Deposit
+        const depositResp = await fetch(`${BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
+        });
+        const depositParsed = safeParse(await depositResp.text());
+        if (depositParsed) {
+            logToPanel(`[INFO] Deposit executed, TX=${depositParsed.tx_hash}, Fund=${depositParsed.fund_token_balance}, ETH=${depositParsed.eth_balance_wei}`);
+            document.getElementById("startBalance").value = depositParsed.fund_token_balance;
+            document.getElementById("investBalance").value = depositParsed.fund_token_balance;
         }
     } catch (err) {
         logToPanel(`[ERROR] Deposit failed: ${err.message}`);
