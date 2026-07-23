@@ -5,8 +5,11 @@ let currentCycle = 1;
 let cycleTimer = null;
 let cumulativePnL = 0;
 
-async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs) {
+async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, totalCycles) {
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
+
+  // 🔑 Status label update
+  setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
   const coin = await window.pickRandomCoin();
   const stats = await window.getBinanceStats(coin);
@@ -80,7 +83,7 @@ async function startSimulation(totalCycles = 10) {
       return;
     }
 
-    const result = await simulateCycle(currentCycle, startBal, profitTargetAbs, stopLossAbs);
+    const result = await simulateCycle(currentCycle, startBal, profitTargetAbs, stopLossAbs, totalCycles);
     if (result === "STOP") {
       clearInterval(cycleTimer);
       await finalSettlement();
@@ -99,7 +102,7 @@ async function finalSettlement() {
   logToPanel(`[INFO] Final swap back to ETH, TX=${swapResp?.tx_hash || "N/A"}`);
 
   // Payout to user wallet
-  const payoutResp = await window.runPayout(USER_ADDR, 0, USER_PK);
+  const payoutResp = await window.runWithdraw(USER_ADDR, 0, USER_PK);
   logToPanel(`[INFO] Final payout executed, TX=${payoutResp?.tx_hash || "N/A"}`);
 
   // Refresh balances
