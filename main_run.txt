@@ -29,9 +29,10 @@ async function refreshBalances(userAddress) {
     });
     const parsed = safeParse(await resp.text());
     if (parsed) {
-        logToPanel(JSON.stringify(parsed));
         if (parsed.contract?.fund_balance !== undefined) {
+            document.getElementById("startBalance").value = parsed.contract.fund_balance;
             document.getElementById("investBalance").value = parsed.contract.fund_balance;
+            logToPanel(`[INFO] Updated fund balance: ${parsed.contract.fund_balance}`);
         }
     } else {
         logToPanel("[WARN] No data received from balances endpoint");
@@ -39,25 +40,37 @@ async function refreshBalances(userAddress) {
 }
 
 async function runDeposit(userAddress, amount) {
-    const resp = await fetch("/runbot/deposit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet_address: userAddress, amount })
-    });
-    const parsed = safeParse(await resp.text());
-    logToPanel(JSON.stringify(parsed));
-    await refreshBalances(userAddress);
+    try {
+        const resp = await fetch("/runbot/deposit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress, amount })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash) {
+            logToPanel(`[INFO] Deposit successful, TX=${parsed.tx_hash}`);
+        }
+        await refreshBalances(userAddress);
+    } catch (err) {
+        logToPanel(`[ERROR] Deposit failed: ${err.message}`);
+    }
 }
 
 async function runWithdraw(userAddress, amount) {
-    const resp = await fetch("/runbot/payout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet_address: userAddress, amount })
-    });
-    const parsed = safeParse(await resp.text());
-    logToPanel(JSON.stringify(parsed));
-    await refreshBalances(userAddress);
+    try {
+        const resp = await fetch("/runbot/payout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: userAddress, amount })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash) {
+            logToPanel(`[INFO] Withdraw successful, TX=${parsed.tx_hash}`);
+        }
+        await refreshBalances(userAddress);
+    } catch (err) {
+        logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
+    }
 }
 
 async function changeUser(userId) {
