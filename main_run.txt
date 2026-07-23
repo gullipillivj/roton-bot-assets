@@ -22,52 +22,51 @@ async function loadClientData(userId) {
 }
 
 async function refreshBalances(userAddress) {
-    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/balances", {
+    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet_address: userAddress })
+        body: JSON.stringify({ wallet_address: userAddress, private_key:"", amount:0 })
     });
     const parsed = safeParse(await resp.text());
-    if (parsed?.contract?.fund_balance !== undefined) {
-        document.getElementById("startBalance").value = parsed.contract.fund_balance;
-        document.getElementById("investBalance").value = parsed.contract.fund_balance;
-        logToPanel(`[INFO] Updated fund balance: ${parsed.contract.fund_balance}`);
+    if (parsed) {
+        logToPanel(`[INFO] Balance response: ${JSON.stringify(parsed)}`);
+        if (parsed.fund_token_balance !== undefined) {
+            document.getElementById("startBalance").value = parsed.fund_token_balance;
+            document.getElementById("investBalance").value = parsed.fund_token_balance;
+        }
     } else {
         logToPanel("[WARN] No data received from balances endpoint");
     }
 }
 
-async function runDeposit(userAddress, amount) {
+async function runDeposit(userAddress, amount, privKey) {
     try {
         const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress, amount })
+            body: JSON.stringify({ wallet_address: userAddress, private_key: privKey, amount })
         });
         const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[INFO] Deposit successful, TX=${parsed.tx_hash}`);
-        } else {
-            logToPanel("[WARN] Deposit response missing tx_hash");
+        if (parsed) {
+            logToPanel(`[INFO] Deposit executed, TX=${parsed.tx_hash}, Fund=${parsed.fund_token_balance}, ETH=${parsed.eth_balance_wei}`);
+            document.getElementById("startBalance").value = parsed.fund_token_balance;
+            document.getElementById("investBalance").value = parsed.fund_token_balance;
         }
-        await refreshBalances(userAddress);
     } catch (err) {
         logToPanel(`[ERROR] Deposit failed: ${err.message}`);
     }
 }
 
-async function runWithdraw(userAddress, amount) {
+async function runWithdraw(userAddress, amount, privKey) {
     try {
         const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/payout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress, amount })
+            body: JSON.stringify({ wallet_address: userAddress, private_key: privKey, amount })
         });
         const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[INFO] Withdraw successful, TX=${parsed.tx_hash}`);
-        } else {
-            logToPanel("[WARN] Withdraw response missing tx_hash");
+        if (parsed) {
+            logToPanel(`[INFO] Payout executed, TX=${parsed.tx_hash}`);
         }
         await refreshBalances(userAddress);
     } catch (err) {
@@ -102,16 +101,17 @@ async function changeUser(userId) {
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     await loadClientData("mockuser1");
-    await refreshBalances("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-        runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
+        const privKey = document.getElementById("privateKey").value || "";
+        runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt, privKey);
     });
 
     document.getElementById("withdrawBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-        runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
+        const privKey = document.getElementById("privateKey").value || "";
+        runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt, privKey);
     });
 
     document.getElementById("changeUserBtn")?.addEventListener("click", async () => {
