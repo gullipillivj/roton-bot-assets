@@ -10,8 +10,9 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
   const coin = await window.pickRandomCoin();
-  const stats = await window.getBinanceStats(coin);
+  logToPanel(`[DEBUG] Picked coin: ${coin}`);
 
+  const stats = await window.getBinanceStats(coin);
   if (!stats) {
     logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
     return 0;
@@ -25,7 +26,7 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
 
   // === Calculate allocation and quantity ===
   const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
-  const allocation = investBal / totalCycles;   // equal split across cycles
+  const allocation = investBal / totalCycles;
   const coinsBought = allocation / buyPrice;
 
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coinsBought.toFixed(4)} ${coin} at ${buyPrice.toFixed(4)} USDT (Allocation ${allocation.toFixed(2)} USDT)`);
@@ -37,11 +38,17 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   }
 
   // === Approve + Swap with JSON logs ===
-  const approveResp = await window.runApprove(USER_ADDR, allocation, USER_PK);
-  logToPanel(`[RESULT] Approve JSON: ${JSON.stringify(approveResp)}`);
+  try {
+    const approveResp = await window.runApprove(USER_ADDR, allocation, USER_PK);
+    logToPanel(`[RESULT] Approve JSON: ${JSON.stringify(approveResp)}`);
 
-  const swapResp = await window.runSwap(USER_ADDR, allocation, USER_PK);
-  logToPanel(`[RESULT] Swap JSON: ${JSON.stringify(swapResp)}, Coins swapped: ${coinsBought.toFixed(4)} ${coin}`);
+    await new Promise(r => setTimeout(r, 2000)); // wait for approval
+
+    const swapResp = await window.runSwap(USER_ADDR, allocation, USER_PK);
+    logToPanel(`[RESULT] Swap JSON: ${JSON.stringify(swapResp)}, Coins swapped: ${coinsBought.toFixed(4)} ${coin}`);
+  } catch (err) {
+    logToPanel(`[ERROR] Swap failed: ${err.message}`);
+  }
 
   // === Profit/loss calculation ===
   const percentChange = parseFloat(stats.priceChangePercent || 0);
@@ -95,7 +102,7 @@ async function startSimulation(totalCycles = 10) {
     }
 
     window.currentCycle++;
-    window.cycleTimer = setTimeout(runNextCycle, 60000); // schedule next cycle
+    window.cycleTimer = setTimeout(runNextCycle, 60000);
   }
 
   runNextCycle();
@@ -104,26 +111,32 @@ async function startSimulation(totalCycles = 10) {
 async function finalSettlement() {
   logToPanel("[INFO] Final settlement started");
 
-  const swapResp = await window.runSwap(USER_ADDR, 0, USER_PK);
-  logToPanel(`[RESULT] Final Swap JSON: ${JSON.stringify(swapResp)}`);
+  try {
+    const swapResp = await window.runSwap(USER_ADDR, 0, USER_PK);
+    logToPanel(`[RESULT] Final Swap JSON: ${JSON.stringify(swapResp)}`);
 
-  const payoutResp = await window.runWithdraw(USER_ADDR, 0, USER_PK);
-  logToPanel(`[RESULT] Final Payout JSON: ${JSON.stringify(payoutResp)}`);
+    const payoutResp = await window.runWithdraw(USER_ADDR, 0, USER_PK);
+    logToPanel(`[RESULT] Final Payout JSON: ${JSON.stringify(payoutResp)}`);
 
-  const balances = await window.runBalances(USER_ADDR);
-  logToPanel(`[RESULT] Final Balances JSON: ${JSON.stringify(balances)}`);
+    await new Promise(r => setTimeout(r, 1000));
 
-  if (balances?.fund_token_balance !== undefined) {
-    document.getElementById("startBalance").value = balances.fund_token_balance;
-    logToPanel(`[INFO] Initial balance updated with P&L: ${balances.fund_token_balance} ETH`);
+    const balances = await window.runBalances(USER_ADDR);
+    logToPanel(`[RESULT] Final Balances JSON: ${JSON.stringify(balances)}`);
+
+    if (balances?.fund_token_balance !== undefined) {
+      document.getElementById("startBalance").value = balances.fund_token_balance;
+      logToPanel(`[INFO] Initial balance updated with P&L: ${balances.fund_token_balance} ETH`);
+    }
+
+    await fetch(`${BASE_URL}/updateClientBalance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: USER_ID, new_balance: balances.fund_token_balance })
+    });
+    logToPanel("[INFO] Client DB updated with new balance");
+  } catch (err) {
+    logToPanel(`[ERROR] Final settlement failed: ${err.message}`);
   }
-
-  await fetch(`${BASE_URL}/updateClientBalance`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userid: USER_ID, new_balance: balances.fund_token_balance })
-  });
-  logToPanel("[INFO] Client DB updated with new balance");
 
   setStatus("STOPPED");
   logToPanel("[INFO] Trading simulation complete");
