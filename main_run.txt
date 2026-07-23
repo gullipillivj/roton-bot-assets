@@ -6,7 +6,14 @@ const BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
 
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
-    panel.value += msg + "\n";
+    if (panel) panel.value += msg + "\n";
+}
+
+// ✅ Status helper
+function setStatus(text) {
+    const statusBox = document.getElementById("statusLabel");
+    if (statusBox) statusBox.textContent = `STATE: ${text}`;
+    logToPanel(`[STATUS] ${text}`);
 }
 
 function safeParse(text) {
@@ -45,7 +52,6 @@ async function refreshBalances() {
 
 async function runDeposit(amount) {
     try {
-        // Step 1: Approve
         const approveResp = await fetch(`${BASE_URL}/runbot/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -56,7 +62,6 @@ async function runDeposit(amount) {
             logToPanel(`[INFO] Approve executed, TX=${approveParsed.tx_hash}`);
         }
 
-        // Step 2: Deposit
         const depositResp = await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -105,8 +110,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         runWithdraw(amt);
     });
 
-    // ✅ Start Trading button
-    document.getElementById("startTradingBtn")?.addEventListener("click", async () => {
+    // ✅ Start Trading button (ID aligned with HTML: startBtn)
+    document.getElementById("startBtn")?.addEventListener("click", async () => {
         const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
         const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
 
@@ -118,7 +123,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         logToPanel("[INFO] Start Trading button pressed — launching simulation");
         setStatus("RUNNING");
 
-        // Kick off the simulate_run loop (10 cycles, with thresholds + status updates)
         window.startSimulation(10);
+    });
+
+    // ✅ Stop Trading button (ID aligned with HTML: stopBtn)
+    document.getElementById("stopBtn")?.addEventListener("click", () => {
+        if (window.cycleTimer) {
+            clearInterval(window.cycleTimer);
+            setStatus("STOPPED");
+            logToPanel("[INFO] Trading stopped manually");
+        }
     });
 });
