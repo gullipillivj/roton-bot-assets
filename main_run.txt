@@ -104,4 +104,21 @@ document.addEventListener("DOMContentLoaded", async () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
         runWithdraw(amt);
     });
+
+    // ✅ Start Trading button
+    document.getElementById("startTradingBtn")?.addEventListener("click", async () => {
+        const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
+        const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
+
+        if (investBal > startBal) {
+            logToPanel("[WARN] Investment balance must be less than or equal to starting balance to start trading");
+            return;
+        }
+
+        logToPanel("[INFO] Start Trading button pressed — launching simulation");
+        setStatus("RUNNING");
+
+        // Kick off the simulate_run loop (10 cycles, with thresholds + status updates)
+        window.startSimulation(10);
+    });
 });
