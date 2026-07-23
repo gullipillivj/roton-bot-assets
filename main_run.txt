@@ -1,3 +1,9 @@
+// ---- Hardcoded constants for mockuser1 ----
+const USER_ID  = "mockuser1";
+const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+const USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+const BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
+
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     panel.value += msg + "\n";
@@ -8,7 +14,7 @@ function safeParse(text) {
 }
 
 async function loadClientData(userId) {
-    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/clients");
+    const resp = await fetch(`${BASE_URL}/clients`);
     const data = safeParse(await resp.text());
     const client = data?.clients?.find(c => c.userid === userId);
     if (!client) return logToPanel(`[WARN] No client found for ${userId}`);
@@ -21,30 +27,28 @@ async function loadClientData(userId) {
     logToPanel(`[INFO] Loaded client data for ${client.userid}`);
 }
 
-async function refreshBalances(userAddress) {
-    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
+async function refreshBalances() {
+    const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet_address: userAddress, private_key:"", amount:0 })
+        body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: 0 })
     });
     const parsed = safeParse(await resp.text());
-    if (parsed) {
-        logToPanel(`[INFO] Balance response: ${JSON.stringify(parsed)}`);
-        if (parsed.fund_token_balance !== undefined) {
-            document.getElementById("startBalance").value = parsed.fund_token_balance;
-            document.getElementById("investBalance").value = parsed.fund_token_balance;
-        }
+    if (parsed?.fund_token_balance !== undefined) {
+        document.getElementById("startBalance").value = parsed.fund_token_balance;
+        document.getElementById("investBalance").value = parsed.fund_token_balance;
+        logToPanel(`[INFO] Fund balance: ${parsed.fund_token_balance}, ETH=${parsed.eth_balance_wei}`);
     } else {
-        logToPanel("[WARN] No data received from balances endpoint");
+        logToPanel("[WARN] No balance data received");
     }
 }
 
-async function runDeposit(userAddress, amount, privKey) {
+async function runDeposit(amount) {
     try {
-        const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/deposit", {
+        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress, private_key: privKey, amount })
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
         const parsed = safeParse(await resp.text());
         if (parsed) {
@@ -57,65 +61,35 @@ async function runDeposit(userAddress, amount, privKey) {
     }
 }
 
-async function runWithdraw(userAddress, amount, privKey) {
+async function runWithdraw(amount) {
     try {
-        const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/runbot/payout", {
+        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress, private_key: privKey, amount })
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
         const parsed = safeParse(await resp.text());
         if (parsed) {
             logToPanel(`[INFO] Payout executed, TX=${parsed.tx_hash}`);
         }
-        await refreshBalances(userAddress);
+        await refreshBalances();
     } catch (err) {
         logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
     }
 }
 
-async function changeUser(userId) {
-    await loadClientData(userId);
-
-    const userSelect = document.getElementById("userSelect");
-    if (userSelect) {
-        for (let opt of userSelect.options) {
-            opt.style.backgroundColor = "";
-            opt.style.color = "";
-        }
-        userSelect.options[userSelect.selectedIndex].style.backgroundColor = "lightgreen";
-        userSelect.options[userSelect.selectedIndex].style.color = "black";
-    }
-
-    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/clients");
-    const data = safeParse(await resp.text());
-    const client = data?.clients?.find(c => c.userid === userId);
-    if (!client) return;
-
-    const USER_ADDR = client.wallet_address;
-    document.getElementById("currentUserLabel").innerText = userId;
-    logToPanel(`[INFO] Active user: ${userId}, Wallet=${USER_ADDR}`);
-    await refreshBalances(USER_ADDR);
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
-    await loadClientData("mockuser1");
+    await loadClientData(USER_ID);
+    await refreshBalances();
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-        const privKey = document.getElementById("privateKey").value || "";
-        runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt, privKey);
+        runDeposit(amt);
     });
 
     document.getElementById("withdrawBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-        const privKey = document.getElementById("privateKey").value || "";
-        runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt, privKey);
-    });
-
-    document.getElementById("changeUserBtn")?.addEventListener("click", async () => {
-        const selectedUser = document.getElementById("userSelect").value;
-        await changeUser(selectedUser);
+        runWithdraw(amt);
     });
 });
