@@ -51,7 +51,7 @@ async function withdrawFromFund(amount, userAddress, privateKey) {
       body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
     });
     const parsed = safeParse(await res.text());
-    logResult("Withdraw", parsed);
+    logResult("Withdraw/Payout", parsed);
     return parsed;
   } catch (err) {
     logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
@@ -66,10 +66,10 @@ async function swapToTarget(amount, userAddress, privateKey) {
       body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
     });
     const parsed = safeParse(await res.text());
-    logResult("SwapToTarget", parsed);
+    logResult("Swap", parsed);
     return parsed;
   } catch (err) {
-    logToPanel(`[ERROR] SwapToTarget failed: ${err.message}`);
+    logToPanel(`[ERROR] Swap failed: ${err.message}`);
   }
 }
 
@@ -89,21 +89,11 @@ async function getBalances(userAddress) {
 }
 
 // === Wrappers for bot loop ===
-async function runApprove(userAddress, amount, privateKey) {
-  return approveToken(amount, userAddress, privateKey);
-}
-async function runDeposit(userAddress, amount, privateKey) {
-  return depositToFund(amount, userAddress, privateKey);
-}
-async function runWithdraw(userAddress, amount, privateKey) {
-  return withdrawFromFund(amount, userAddress, privateKey);
-}
-async function runSwap(userAddress, amount, privateKey) {
-  return swapToTarget(amount, userAddress, privateKey);
-}
-async function runBalances(userAddress) {
-  return getBalances(userAddress);
-}
+async function runApprove(userAddress, amount, privateKey) { return approveToken(amount, userAddress, privateKey); }
+async function runDeposit(userAddress, amount, privateKey) { return depositToFund(amount, userAddress, privateKey); }
+async function runWithdraw(userAddress, amount, privateKey) { return withdrawFromFund(amount, userAddress, privateKey); }
+async function runSwap(userAddress, amount, privateKey) { return swapToTarget(amount, userAddress, privateKey); }
+async function runBalances(userAddress) { return getBalances(userAddress); }
 
 // === Expose globally ===
 window.approveToken     = approveToken;
