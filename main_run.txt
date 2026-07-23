@@ -1,14 +1,26 @@
-// main_run.txt — clean, full version
-logToPanel("main_run.txt loaded");
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    panel.innerText += msg + "\n";
+}
 
 function safeParse(text) {
     try { return JSON.parse(text); } catch { return null; }
 }
 
-const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-const USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+async function loadClientData(userId) {
+    const resp = await fetch("/clients");
+    const data = safeParse(await resp.text());
+    const client = data?.clients?.find(c => c.userid === userId);
+    if (!client) return logToPanel(`[WARN] No client found for ${userId}`);
 
-// === Refresh balances ===
+    document.getElementById("startBalance").value = client.amount_deposited;
+    document.getElementById("investBalance").value = client.current_balance;
+    document.getElementById("profitTarget").value = client.profit_target;
+    document.getElementById("stopLoss").value = client.stop_loss;
+
+    logToPanel(`[INFO] Loaded client data for ${client.userid}`);
+}
+
 async function refreshBalances(userAddress) {
     const resp = await fetch("/runbot/balances", {
         method: "POST",
@@ -16,90 +28,78 @@ async function refreshBalances(userAddress) {
         body: JSON.stringify({ wallet_address: userAddress })
     });
     const parsed = safeParse(await resp.text());
-
-    // Show raw JSON only
-    logToPanel(JSON.stringify(parsed));
-
-    if (parsed?.contract?.fund_balance !== undefined) {
-        document.getElementById("investBalance").value = parsed.contract.fund_balance;
+    if (parsed) {
+        logToPanel(JSON.stringify(parsed));
+        if (parsed.contract?.fund_balance !== undefined) {
+            document.getElementById("investBalance").value = parsed.contract.fund_balance;
+        }
+    } else {
+        logToPanel("[WARN] No data received from balances endpoint");
     }
 }
 
-// === Deposit ===
-window.runDeposit = async function(userAddress, amount) {
-    try {
-        logToPanel(`[INFO] Deposit for ${userAddress}, amount=${amount}`);
+async function runDeposit(userAddress, amount) {
+    const resp = await fetch("/runbot/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: userAddress, amount })
+    });
+    const parsed = safeParse(await resp.text());
+    logToPanel(JSON.stringify(parsed));
+    await refreshBalances(userAddress);
+}
 
-        const resp = await fetch("/runbot/deposit", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
-        });
-        const parsed = safeParse(await resp.text());
+async function runWithdraw(userAddress, amount) {
+    const resp = await fetch("/runbot/payout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: userAddress, amount })
+    });
+    const parsed = safeParse(await resp.text());
+    logToPanel(JSON.stringify(parsed));
+    await refreshBalances(userAddress);
+}
 
-        // Show raw JSON only
-        logToPanel(JSON.stringify(parsed));
+async function changeUser(userId) {
+    await loadClientData(userId);
 
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] TxHash=${parsed.tx_hash}`);
+    const userSelect = document.getElementById("currentUser");
+    if (userSelect) {
+        for (let opt of userSelect.options) {
+            opt.style.backgroundColor = "";
+            opt.style.color = "";
         }
-
-        if (parsed?.fund_balance !== undefined) {
-            document.getElementById("investBalance").value = parsed.fund_balance;
-        }
-
-        await refreshBalances(userAddress);
-    } catch (e) {
-        logToPanel(`Error: ${e.message}`);
+        userSelect.options[userSelect.selectedIndex].style.backgroundColor = "lightgreen";
+        userSelect.options[userSelect.selectedIndex].style.color = "black";
     }
-};
 
-// === Withdraw ===
-window.runWithdraw = async function(userAddress, amount) {
-    try {
-        logToPanel(`[INFO] Withdraw for ${userAddress}, amount=${amount}`);
+    const resp = await fetch("/clients");
+    const data = safeParse(await resp.text());
+    const client = data?.clients?.find(c => c.userid === userId);
+    if (!client) return;
 
-        const resp = await fetch("/runbot/payout", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: userAddress, private_key: USER_PK, amount })
-        });
-        const parsed = safeParse(await resp.text());
+    const USER_ADDR = client.wallet_address;
+    logToPanel(`[INFO] Active user: ${userId}, Wallet=${USER_ADDR}`);
+    await refreshBalances(USER_ADDR);
+}
 
-        // Show raw JSON only
-        logToPanel(JSON.stringify(parsed));
-
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] TxHash=${parsed.tx_hash}`);
-        }
-
-        if (parsed?.fund_balance !== undefined) {
-            document.getElementById("investBalance").value = parsed.fund_balance;
-        }
-
-        await refreshBalances(userAddress);
-    } catch (e) {
-        logToPanel(`Error: ${e.message}`);
-    }
-};
-
-// === DOM Ready ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
-
-    // Set initial figures once (example values)
-    document.getElementById("startBalance").value = 1000;
-    document.getElementById("investBalance").value = 500;
-
-    await refreshBalances(USER_ADDR);
+    await loadClientData("mockuser1");
+    await refreshBalances("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266");
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-        window.runDeposit(USER_ADDR, amt);
+        runDeposit("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
     });
 
     document.getElementById("withdrawBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-        window.runWithdraw(USER_ADDR, amt);
+        runWithdraw("0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", amt);
+    });
+
+    document.getElementById("changeUserBtn")?.addEventListener("click", async () => {
+        const selectedUser = document.getElementById("currentUser").value;
+        await changeUser(selectedUser);
     });
 });
