@@ -1,4 +1,4 @@
-//main_run.txt
+// main_run.txt
 // ---- Hardcoded constants for mockuser1 ----
 const USER_ID  = "mockuser1";
 const USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -130,7 +130,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ✅ Stop Trading button (ID aligned with HTML: stopBtn)
     document.getElementById("stopBtn")?.addEventListener("click", () => {
         if (window.cycleTimer) {
-            clearInterval(window.cycleTimer);
+            clearTimeout(window.cycleTimer); // ✅ corrected to clearTimeout
             setStatus("STOPPED");
             logToPanel("[INFO] Trading stopped manually");
         }
