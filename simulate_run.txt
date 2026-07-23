@@ -1,126 +1,127 @@
 // simulate_run.txt — Bot cycle simulation with PancakeSwap calls
 logToPanel("simulate_run.txt loaded");
 
-function setStatus(state) {
-  const label = document.getElementById("statusLabel");
-  if (label) label.textContent = `STATE: ${state}`;
-}
-
-function stopBot() {
-  if (window.botInterval) {
-    clearInterval(window.botInterval);
-    window.botInterval = null;
-    setStatus("STOPPED");
-    logToPanel("[INFO] Bot stopped");
-  } else {
-    logToPanel("[WARN] Bot was not running");
-  }
-}
-
 let currentCycle = 1;
 let cycleTimer = null;
+let cumulativePnL = 0;
 
-async function simulateCycle(cycle) {
+async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs) {
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
 
-  const coin = await pickRandomCoin();
+  const coin = await window.pickRandomCoin();
   const stats = await window.getBinanceStats(coin);
 
   if (!stats) {
     logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
-    return;
+    return 0;
   }
 
   const buyPrice = parseFloat(stats.lastPrice || 0);
   if (isNaN(buyPrice) || buyPrice <= 0) {
     logToPanel(`[WARN] Cycle ${cycle}: Invalid price for ${coin}, skipping`);
-    return;
+    return 0;
   }
 
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coin} at ${buyPrice.toFixed(4)} USDT`);
 
-  // === Resolve token address ===
   const tokenAddr = await window.getTokenAddress(coin);
   if (!tokenAddr) {
     logToPanel(`[WARN] Cycle ${cycle}: No token address for ${coin}, skipping`);
-    return;
+    return 0;
   }
 
-  // === PancakeSwap interaction (Flask backend calls) ===
-  swapToTarget(buyPrice, window.userAddress, window.privateKey, tokenAddr)
-    .then(d => {
-      logToPanel(`[INFO] Cycle ${cycle}: SwapToTarget TxHash=${d.tx_hash || "N/A"}`);
-    })
-    .catch(err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToTarget failed: ${err.message}`));
-
-  swapToUser(buyPrice, window.userAddress, window.privateKey, tokenAddr)
-    .then(d => {
-      logToPanel(`[INFO] Cycle ${cycle}: SwapToUser TxHash=${d.tx_hash || "N/A"}`);
-    })
-    .catch(err => logToPanel(`[ERROR] Cycle ${cycle}: SwapToUser failed: ${err.message}`));
+  // === Approve + Swap ===
+  await window.runApprove(USER_ADDR, buyPrice, USER_PK);
+  await window.runSwap(USER_ADDR, buyPrice, USER_PK);
 
   // === Profit/loss calculation ===
   const percentChange = parseFloat(stats.priceChangePercent || 0);
   const grossPnL = calculatePnL(buyPrice, percentChange);
-
-  // === Deduct gas + Pancake fees using coins.txt helpers ===
   const tradeCost = await window.calculateTradeCost(coin, buyPrice, "bsc");
   const netPnL = grossPnL - (tradeCost.totalCost || 0);
 
-  if (netPnL >= 0) {
-    logToPanel(`[INFO] Cycle ${cycle}: Net Profit ${netPnL.toFixed(2)} USDT (after fees)`);
-  } else {
-    logToPanel(`[INFO] Cycle ${cycle}: Net Loss ${netPnL.toFixed(2)} USDT (after fees)`);
-  }
+  logToPanel(`[INFO] Cycle ${cycle}: Net ${netPnL >= 0 ? "Profit" : "Loss"} ${netPnL.toFixed(2)} USDT (after fees)`);
 
   updateChart(buyPrice, netPnL);
-
   const liveProfitBox = document.getElementById("liveProfitValue");
-  if (liveProfitBox) {
-    liveProfitBox.textContent = `${netPnL.toFixed(2)} USDT`;
+  if (liveProfitBox) liveProfitBox.textContent = `${netPnL.toFixed(2)} USDT`;
+
+  cumulativePnL += netPnL;
+
+  // === Threshold checks ===
+  if (cumulativePnL >= profitTargetAbs) {
+    logToPanel(`[INFO] Profit target reached after cycle ${cycle}, stopping trading`);
+    return "STOP";
+  }
+  if (cumulativePnL <= -stopLossAbs) {
+    logToPanel(`[INFO] Stop loss triggered after cycle ${cycle}, stopping trading`);
+    return "STOP";
   }
 
   logToPanel(`[INFO] simulateCycle(${cycle}) complete`);
+  return netPnL;
 }
 
-function startSimulation(totalCycles) {
-  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
+async function startSimulation(totalCycles = 10) {
+  const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
+  const profitTargetPct = parseFloat(document.getElementById("profitTarget").value) || 0;
+  const stopLossPct = parseFloat(document.getElementById("stopLoss").value) || 0;
+
+  const profitTargetAbs = startBal * (profitTargetPct / 100);
+  const stopLossAbs = startBal * (stopLossPct / 100);
+
+  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles`);
 
   currentCycle = 1;
   cycleTimer = setInterval(async () => {
     if (currentCycle > totalCycles) {
       clearInterval(cycleTimer);
-      logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
-      setStatus("STOPPED");
+      await finalSettlement();
       return;
     }
 
-    await simulateCycle(currentCycle);
+    const result = await simulateCycle(currentCycle, startBal, profitTargetAbs, stopLossAbs);
+    if (result === "STOP") {
+      clearInterval(cycleTimer);
+      await finalSettlement();
+      return;
+    }
+
     currentCycle++;
   }, 60000);
 }
 
-function initBot(totalCycles = 10) {
-  setStatus("RUNNING");
-  logToPanel("[INFO] Bot started");
-  startSimulation(totalCycles);
+async function finalSettlement() {
+  logToPanel("[INFO] Final settlement started");
+
+  // Swap holdings back to ETH
+  const swapResp = await window.runSwap(USER_ADDR, 0, USER_PK);
+  logToPanel(`[INFO] Final swap back to ETH, TX=${swapResp?.tx_hash || "N/A"}`);
+
+  // Payout to user wallet
+  const payoutResp = await window.runPayout(USER_ADDR, 0, USER_PK);
+  logToPanel(`[INFO] Final payout executed, TX=${payoutResp?.tx_hash || "N/A"}`);
+
+  // Refresh balances
+  const balances = await window.runBalances(USER_ADDR);
+  if (balances?.fund_token_balance !== undefined) {
+    document.getElementById("startBalance").value = balances.fund_token_balance;
+    logToPanel(`[INFO] Initial balance updated with P&L: ${balances.fund_token_balance} ETH`);
+  }
+
+  // Update clients.db
+  await fetch(`${BASE_URL}/updateClientBalance`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userid: USER_ID, new_balance: balances.fund_token_balance })
+  });
+  logToPanel("[INFO] Client DB updated with new balance");
+
+  setStatus("STOPPED");
+  logToPanel("[INFO] Trading simulation complete");
 }
 
 // === Helpers ===
-async function pickRandomCoin() {
-  try {
-    const pairs = await window.getBinancePairs();
-    if (!pairs || pairs.length === 0) {
-      logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
-      return "BTCUSDT";
-    }
-    return pairs[Math.floor(Math.random() * pairs.length)];
-  } catch (e) {
-    logToPanel("[ERROR] pickRandomCoin failed: " + e);
-    return "BTCUSDT";
-  }
-}
-
 function calculatePnL(price, percentChange) {
   if (!percentChange) return 0;
   const changeFactor = percentChange / 100;
@@ -130,5 +131,4 @@ function calculatePnL(price, percentChange) {
 // === Expose globally ===
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
-window.initBot = initBot;
-window.stopBot = stopBot;
+window.finalSettlement = finalSettlement;
