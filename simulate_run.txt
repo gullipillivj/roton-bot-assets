@@ -94,6 +94,25 @@ async function runSwap(userAddr, amount, userPk) {
 window.runApprove = runApprove;
 window.runSwap = runSwap;
 
+// === Coin picker from coins.txt ===
+async function pickRandomCoin() {
+  try {
+    const resp = await fetch("coins.txt");
+    const text = await resp.text();
+    const coins = text.split("\n").map(c => c.trim()).filter(c => c.length > 0);
+    if (coins.length === 0) {
+      logToPanel("[WARN] No coins found in coins.txt");
+      return "ETHUSDT"; // fallback
+    }
+    const idx = Math.floor(Math.random() * coins.length);
+    return coins[idx];
+  } catch (err) {
+    logToPanel("[ERROR] Coin picker failed: " + err.message);
+    return "ETHUSDT"; // fallback
+  }
+}
+window.pickRandomCoin = pickRandomCoin;
+
 // === Simulation logic ===
 async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, totalCycles) {
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
@@ -108,6 +127,9 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   const allocation = investBal / totalCycles;
   logToPanel(`[INFO] Cycle ${cycle}: Allocation ${allocation.toFixed(2)} USDT`);
 
+  const coin = await pickRandomCoin();
+  logToPanel(`[DEBUG] Picked coin: ${coin}`);
+
   try {
     const approveResp = await window.runApprove(USER_ADDR, allocation, USER_PK);
     logToPanel(`[RESULT] Approve JSON: ${JSON.stringify(approveResp)}`);
@@ -115,7 +137,7 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
     await new Promise(r => setTimeout(r, 2000));
 
     const swapResp = await window.runSwap(USER_ADDR, allocation, USER_PK);
-    logToPanel(`[RESULT] Swap JSON: ${JSON.stringify(swapResp)}`);
+    logToPanel(`[RESULT] Swap JSON: ${JSON.stringify(swapResp)}, Coin=${coin}`);
   } catch (err) {
     logToPanel(`[ERROR] Swap failed: ${err.message}`);
   }
@@ -123,3 +145,22 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   logToPanel(`[INFO] simulateCycle(${cycle}) complete`);
   return allocation;
 }
+
+// === Simulation wrapper ===
+async function startSimulation(totalCycles) {
+  cumulativePnL = 0;
+  for (let i = 1; i <= totalCycles; i++) {
+    const result = await simulateCycle(
+      i,
+      parseFloat(document.getElementById("startBalance").value) || 0,
+      parseFloat(document.getElementById("profitTarget").value) || 0,
+      parseFloat(document.getElementById("stopLoss").value) || 0,
+      totalCycles
+    );
+    if (result === "STOP") break;
+    await new Promise(r => setTimeout(r, 1000)); // delay between cycles
+  }
+  setStatus("STOPPED");
+  logToPanel("[INFO] Simulation finished");
+}
+window.startSimulation = startSimulation;
