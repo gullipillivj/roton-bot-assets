@@ -7,7 +7,43 @@ let cumulativePnL = 0;
 
 // === Registry contract setup ===
 const registryAddress = "0x04C89607413713Ec9775E14b954286519d836FEf";
-const registryAbi = [ /* paste ABI from build/contracts/MockTokenRegistry.json */ ];
+const registryAbi = [
+  {
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "inputs": [
+      { "internalType": "string", "name": "symbol", "type": "string" }
+    ],
+    "name": "getTokenAddress",
+    "outputs": [
+      { "internalType": "address", "name": "", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      { "internalType": "address", "name": "", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "string", "name": "symbol", "type": "string" },
+      { "internalType": "address", "name": "tokenAddr", "type": "address" }
+    ],
+    "name": "registerToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+];
 const registryContract = new web3.eth.Contract(registryAbi, registryAddress);
 
 async function getTokenAddress(symbol) {
@@ -20,6 +56,7 @@ async function getTokenAddress(symbol) {
   }
 }
 
+// === Simulation logic ===
 async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, totalCycles) {
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
   setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
@@ -115,129 +152,7 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   return netPnL;
 }
 
-async function startSimulation(totalCycles = 10) {
-  const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
-  const profitTargetPct = parseFloat(document.getElementById("profitTarget").value) || 0;
-  const stopLossPct = parseFloat(document.getElementById("stopLoss").value) || 0;
-
-  const profitTargetAbs = startBal * (profitTargetPct / 100);
-  const stopLossAbs = startBal * (stopLossPct / 100);
-
-  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles`);
-
-  window.currentCycle = 1;
-
-  async function runNextCycle() {
-    if (window.currentCycle > totalCycles) {
-      await finalSettlement();
-      return;
-    }
-
-    const result = await simulateCycle(window.currentCycle, startBal, profitTargetAbs, stopLossAbs, totalCycles);
-    if (result === "STOP") {
-      await finalSettlement();
-      return;
-    }
-
-    window.currentCycle++;
-    window.cycleTimer = setTimeout(runNextCycle, 60000);
-  }
-
-  runNextCycle();
-}
-
-async function finalSettlement() {
-  logToPanel("[INFO] Final settlement started");
-
-  try {
-    const swapResp = await window.runSwap(USER_ADDR, 0, USER_PK);
-    logToPanel(`[RESULT] Final Swap JSON: ${JSON.stringify(swapResp)}`);
-
-    const payoutResp = await window.runWithdraw(USER_ADDR, 0, USER_PK);
-    logToPanel(`[RESULT] Final Payout JSON: ${JSON.stringify(payoutResp)}`);
-
-    await new Promise(r => setTimeout(r, 1000));
-
-    const balances = await window.runBalances(USER_ADDR);
-    logToPanel(`[RESULT] Final Balances JSON: ${JSON.stringify(balances)}`);
-
-    target reached after cycle ${cycle}, stopping trading`);
-    return "STOP";
-  }
-  if (cumulativePnL <= -stopLossAbs) {
-    logToPanel(`[INFO] Stop loss triggered after cycle ${cycle}, stopping trading`);
-    return "STOP";
-  }
-
-  logToPanel(`[INFO] simulateCycle(${cycle}) complete`);
-  return netPnL;
-}
-
-async function startSimulation(totalCycles = 10) {
-  const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
-  const profitTargetPct = parseFloat(document.getElementById("profitTarget").value) || 0;
-  const stopLossPct = parseFloat(document.getElementById("stopLoss").value) || 0;
-
-  const profitTargetAbs = startBal * (profitTargetPct / 100);
-  const stopLossAbs = startBal * (stopLossPct / 100);
-
-  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles`);
-
-  window.currentCycle = 1;
-
-  async function runNextCycle() {
-    if (window.currentCycle > totalCycles) {
-      await finalSettlement();
-      return;
-    }
-
-    const result = await simulateCycle(window.currentCycle, startBal, profitTargetAbs, stopLossAbs, totalCycles);
-    if (result === "STOP") {
-      await finalSettlement();
-      return;
-    }
-
-    window.currentCycle++;
-    window.cycleTimer = setTimeout(runNextCycle, 60000);
-  }
-
-  runNextCycle();
-}
-
-async function finalSettlement() {
-  logToPanel("[INFO] Final settlement started");
-
-  try {
-    const swapResp = await window.runSwap(USER_ADDR, 0, USER_PK);
-    logToPanel(`[RESULT] Final Swap JSON: ${JSON.stringify(swapResp)}`);
-
-    const payoutResp = await window.runWithdraw(USER_ADDR, 0, USER_PK);
-    logToPanel(`[RESULT] Final Payout JSON: ${JSON.stringify(payoutResp)}`);
-
-    await new Promise(r => setTimeout(r, 1000));
-
-    const balances = await window.runBalances(USER_ADDR);
-    logToPanel(`[RESULT] Final Balances JSON: ${JSON.stringify(balances)}`);
-
-    if (balances?.fund_token_balance !== undefined) {
-      document.getElementById("startBalance").value = balances.fund_token_balance;
-      logToPanel(`[INFO] Initial balance updated with P&L: ${balances.fund_token_balance} ETH`);
-    }
-
-    await fetch(`${BASE_URL}/updateClientBalance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: USER_ID, new_balance: balances.fund_token_balance })
-    });
-    logToPanel("[INFO] Client DB updated with new balance");
-  } catch (err) {
-    logToPanel(`[ERROR] Final settlement failed: ${err.message}`);
-  }
-
-  setStatus("STOPPED");
-  logToPanel("[INFO] Trading simulation complete");
-}
-
+// === Helpers ===
 function calculatePnL(amount, percentChange) {
   if (!percentChange) return 0;
   const changeFactor = percentChange / 100;
@@ -259,7 +174,4 @@ async function pickRandomCoin() {
   }
 }
 window.pickRandomCoin = pickRandomCoin;
-
-window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
-window.finalSettlement = finalSettlement;
