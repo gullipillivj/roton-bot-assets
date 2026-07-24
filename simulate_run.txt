@@ -9,11 +9,6 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
   setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
-  if (typeof window.pickRandomCoin !== "function") {
-    logToPanel("[ERROR] pickRandomCoin not defined — check simulate_run setup");
-    return 0;
-  }
-
   const coin = await window.pickRandomCoin();
   logToPanel(`[DEBUG] Picked coin: ${coin}`);
 
@@ -37,8 +32,33 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coinsBought.toFixed(4)} ${coin} at ${buyPrice.toFixed(4)} USDT (Allocation ${allocation.toFixed(2)} USDT)`);
 
   const tokenAddr = await window.getTokenAddress(coin);
+
+  // === ETH Proxy Fallback for unsupported coins ===
   if (!tokenAddr) {
-    logToPanel(`[WARN] Cycle ${cycle}: No token address for ${coin}, skipping`);
+    logToPanel(`[WARN] Cycle ${cycle}: ${coin} unsupported → converting to ETHUSDT`);
+
+    const ethStats = await window.getBinanceStats("ETHUSDT");
+    const ethPrice = parseFloat(ethStats.lastPrice || 0);
+    const ethAllocation = allocation / ethPrice;
+
+    const ethAddr = await window.getTokenAddress("ETHUSDT");
+    if (!ethAddr) {
+      logToPanel("[ERROR] ETHUSDT address not found, aborting swap");
+      return 0;
+    }
+
+    try {
+      const approveResp = await window.runApprove(USER_ADDR, ethAllocation, USER_PK);
+      logToPanel(`[RESULT] Proxy Approve JSON: ${JSON.stringify(approveResp)}`);
+
+      await new Promise(r => setTimeout(r, 2000));
+
+      const swapResp = await window.runSwap(USER_ADDR, ethAllocation, USER_PK);
+      logToPanel(`[RESULT] Proxy Swap JSON: ${JSON.stringify(swapResp)}, Converted ${coin} → ${ethAllocation.toFixed(4)} ETH`);
+    } catch (err) {
+      logToPanel(`[ERROR] Proxy swap failed: ${err.message}`);
+    }
+
     return 0;
   }
 
@@ -47,7 +67,7 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
     const approveResp = await window.runApprove(USER_ADDR, allocation, USER_PK);
     logToPanel(`[RESULT] Approve JSON: ${JSON.stringify(approveResp)}`);
 
-    await new Promise(r => setTimeout(r, 2000)); // wait for approval
+    await new Promise(r => setTimeout(r, 2000));
 
     const swapResp = await window.runSwap(USER_ADDR, allocation, USER_PK);
     logToPanel(`[RESULT] Swap JSON: ${JSON.stringify(swapResp)}, Coins swapped: ${coinsBought.toFixed(4)} ${coin}`);
