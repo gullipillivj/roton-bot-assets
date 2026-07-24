@@ -86,8 +86,6 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
     const approveResp = await window.runApprove(USER_ADDR, allocation, USER_PK, coin);
     logToPanel(`[RESULT] Approve JSON: ${JSON.stringify(approveResp)}`);
 
-    await new Promise(r => setTimeout(r, 2000));
-
     const swapResp = await window.runSwap(USER_ADDR, allocation, USER_PK, coin);
     logToPanel(`[RESULT] Swap JSON: ${JSON.stringify(swapResp)}, Coin=${coin}`);
   } catch (err) {
@@ -110,7 +108,7 @@ async function startSimulation(totalCycles) {
       totalCycles
     );
     if (result === "STOP") break;
-    await new Promise(r => setTimeout(r, 10000)); // 10 seconds between cycles
+    // no waiting between cycles
   }
   setStatus("STOPPED");
   logToPanel("[INFO] Simulation finished");
