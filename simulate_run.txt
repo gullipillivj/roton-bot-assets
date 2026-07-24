@@ -1,9 +1,24 @@
-// simulate_run.txt — Bot cycle simulation with PancakeSwap calls
+// simulate_run.txt — Bot cycle simulation with PancakeSwap calls + Registry integration
 logToPanel("simulate_run.txt loaded");
 
 window.currentCycle = 1;
 window.cycleTimer = null;
 let cumulativePnL = 0;
+
+// === Registry contract setup ===
+const registryAddress = "0x04C89607413713Ec9775E14b954286519d836FEf";
+const registryAbi = [ /* paste ABI from build/contracts/MockTokenRegistry.json */ ];
+const registryContract = new web3.eth.Contract(registryAbi, registryAddress);
+
+async function getTokenAddress(symbol) {
+  try {
+    const addr = await registryContract.methods.getTokenAddress(symbol).call();
+    return addr && addr !== "0x0000000000000000000000000000000000000000" ? addr : null;
+  } catch (e) {
+    logToPanel("[WARN] Registry lookup failed: " + e.message);
+    return null;
+  }
+}
 
 async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, totalCycles) {
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
@@ -24,14 +39,13 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
     return 0;
   }
 
-  // === Calculate allocation and quantity ===
   const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
   const allocation = investBal / totalCycles;
   const coinsBought = allocation / buyPrice;
 
   logToPanel(`[INFO] Cycle ${cycle}: Bought ${coinsBought.toFixed(4)} ${coin} at ${buyPrice.toFixed(4)} USDT (Allocation ${allocation.toFixed(2)} USDT)`);
 
-  const tokenAddr = await window.getTokenAddress(coin);
+  const tokenAddr = await getTokenAddress(coin);
 
   // === ETH Proxy Fallback for unsupported coins ===
   if (!tokenAddr) {
@@ -41,9 +55,9 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
     const ethPrice = parseFloat(ethStats.lastPrice || 0);
     const ethAllocation = allocation / ethPrice;
 
-    const ethAddr = await window.getTokenAddress("ETHUSDT");
+    const ethAddr = await getTokenAddress("ETHUSDT");
     if (!ethAddr) {
-      logToPanel("[ERROR] ETHUSDT address not found, aborting swap");
+      logToPanel("[ERROR] ETHUSDT address not found in registry, aborting swap");
       return 0;
     }
 
@@ -75,7 +89,6 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
     logToPanel(`[ERROR] Swap failed: ${err.message}`);
   }
 
-  // === Profit/loss calculation ===
   const percentChange = parseFloat(stats.priceChangePercent || 0);
   const grossPnL = calculatePnL(allocation, percentChange);
   const tradeCost = await window.calculateTradeCost(coin, allocation, "bsc");
@@ -91,6 +104,64 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
 
   if (cumulativePnL >= profitTargetAbs) {
     logToPanel(`[INFO] Profit target reached after cycle ${cycle}, stopping trading`);
+    return "STOP";
+  }
+  if (cumulativePnL <= -stopLossAbs) {
+    logToPanel(`[INFO] Stop loss triggered after cycle ${cycle}, stopping trading`);
+    return "STOP";
+  }
+
+  logToPanel(`[INFO] simulateCycle(${cycle}) complete`);
+  return netPnL;
+}
+
+async function startSimulation(totalCycles = 10) {
+  const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
+  const profitTargetPct = parseFloat(document.getElementById("profitTarget").value) || 0;
+  const stopLossPct = parseFloat(document.getElementById("stopLoss").value) || 0;
+
+  const profitTargetAbs = startBal * (profitTargetPct / 100);
+  const stopLossAbs = startBal * (stopLossPct / 100);
+
+  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles`);
+
+  window.currentCycle = 1;
+
+  async function runNextCycle() {
+    if (window.currentCycle > totalCycles) {
+      await finalSettlement();
+      return;
+    }
+
+    const result = await simulateCycle(window.currentCycle, startBal, profitTargetAbs, stopLossAbs, totalCycles);
+    if (result === "STOP") {
+      await finalSettlement();
+      return;
+    }
+
+    window.currentCycle++;
+    window.cycleTimer = setTimeout(runNextCycle, 60000);
+  }
+
+  runNextCycle();
+}
+
+async function finalSettlement() {
+  logToPanel("[INFO] Final settlement started");
+
+  try {
+    const swapResp = await window.runSwap(USER_ADDR, 0, USER_PK);
+    logToPanel(`[RESULT] Final Swap JSON: ${JSON.stringify(swapResp)}`);
+
+    const payoutResp = await window.runWithdraw(USER_ADDR, 0, USER_PK);
+    logToPanel(`[RESULT] Final Payout JSON: ${JSON.stringify(payoutResp)}`);
+
+    await new Promise(r => setTimeout(r, 1000));
+
+    const balances = await window.runBalances(USER_ADDR);
+    logToPanel(`[RESULT] Final Balances JSON: ${JSON.stringify(balances)}`);
+
+    target reached after cycle ${cycle}, stopping trading`);
     return "STOP";
   }
   if (cumulativePnL <= -stopLossAbs) {
@@ -173,7 +244,6 @@ function calculatePnL(amount, percentChange) {
   return amount * changeFactor;
 }
 
-// === Local Coin Picker for simulate_run ===
 async function pickRandomCoin() {
   try {
     const pairs = await window.getBinancePairs();
