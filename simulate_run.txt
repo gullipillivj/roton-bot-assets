@@ -49,19 +49,42 @@ const erc20Abi = [
   }
 ];
 
-const routerAbi = [
+const registryAbi = [
   {
-    "name": "swapExactTokensForTokens",
-    "type": "function",
+    "inputs": [],
+    "stateMutability": "nonpayable",
+    "type": "constructor",
+    "name": "constructor"
+  },
+  {
     "inputs": [
-      { "name": "amountIn", "type": "uint256" },
-      { "name": "amountOutMin", "type": "uint256" },
-      { "name": "path", "type": "address[]" },
-      { "name": "to", "type": "address" },
-      { "name": "deadline", "type": "uint256" }
+      { "internalType": "string", "name": "symbol", "type": "string" }
     ],
-    "outputs": [{ "name": "amounts", "type": "uint256[]" }],
-    "stateMutability": "nonpayable"
+    "name": "getTokenAddress",
+    "outputs": [
+      { "internalType": "address", "name": "", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      { "internalType": "address", "name": "", "type": "address" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "string", "name": "symbol", "type": "string" },
+      { "internalType": "address", "name": "tokenAddr", "type": "address" }
+    ],
+    "name": "registerToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
 
