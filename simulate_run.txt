@@ -5,6 +5,10 @@ window.currentCycle = 1;
 window.cycleTimer = null;
 let cumulativePnL = 0;
 
+// === Web3 provider setup ===
+// Replace with your nginx proxy URL
+const web3 = new Web3("http://yourdomain.com/rpc");
+
 // === Registry contract setup ===
 const registryAddress = "0x04C89607413713Ec9775E14b954286519d836FEf";
 const registryAbi = [
@@ -56,6 +60,92 @@ async function getTokenAddress(symbol) {
   }
 }
 
+// === ERC20 + Router ABIs (minimal) ===
+const erc20Abi = [
+  {
+    "constant": false,
+    "inputs": [
+      { "name": "_spender", "type": "address" },
+      { "name": "_value", "type": "uint256" }
+    ],
+    "name": "approve",
+    "outputs": [{ "name": "", "type": "bool" }],
+    "type": "function"
+  }
+];
+
+const routerAbi = [
+  {
+    "name": "swapExactTokensForTokens",
+    "type": "function",
+    "inputs": [
+      { "name": "amountIn", "type": "uint256" },
+      { "name": "amountOutMin", "type": "uint256" },
+      { "name": "path", "type": "address[]" },
+      { "name": "to", "type": "address" },
+      { "name": "deadline", "type": "uint256" }
+    ],
+    "outputs": [{ "name": "amounts", "type": "uint256[]" }],
+    "stateMutability": "nonpayable"
+  }
+];
+
+// Replace with actual router + USDT addresses
+const SWAP_ROUTER_ADDR = "0xYourRouterAddress";
+const USDT_ADDRESS = "0xYourUSDTAddress";
+
+// === Approve helper ===
+async function runApprove(userAddr, amount, userPk) {
+  const account = web3.eth.accounts.privateKeyToAccount(userPk);
+  web3.eth.accounts.wallet.add(account);
+
+  const tokenAddr = await getTokenAddress("ETHUSDT"); // example fallback
+  const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddr);
+
+  const tx = tokenContract.methods.approve(SWAP_ROUTER_ADDR, web3.utils.toWei(amount.toString(), "ether"));
+  const gas = await tx.estimateGas({ from: userAddr });
+  const data = tx.encodeABI();
+
+  const signedTx = await web3.eth.accounts.signTransaction(
+    { to: tokenAddr, data, gas },
+    userPk
+  );
+
+  return await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+}
+
+// === Swap helper ===
+async function runSwap(userAddr, amount, userPk) {
+  const account = web3.eth.accounts.privateKeyToAccount(userPk);
+  web3.eth.accounts.wallet.add(account);
+
+  const tokenAddr = await getTokenAddress("ETHUSDT"); // example fallback
+  const router = new web3.eth.Contract(routerAbi, SWAP_ROUTER_ADDR);
+  const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+
+  const tx = router.methods.swapExactTokensForTokens(
+    web3.utils.toWei(amount.toString(), "ether"),
+    0,
+    [tokenAddr, USDT_ADDRESS],
+    userAddr,
+    deadline
+  );
+
+  const gas = await tx.estimateGas({ from: userAddr });
+  const data = tx.encodeABI();
+
+  const signedTx = await web3.eth.accounts.signTransaction(
+    { to: SWAP_ROUTER_ADDR, data, gas },
+    userPk
+  );
+
+  return await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+}
+
+// Expose to window
+window.runApprove = runApprove;
+window.runSwap = runSwap;
+
 // === Simulation logic ===
 async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, totalCycles) {
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
@@ -84,36 +174,11 @@ async function simulateCycle(cycle, startBal, profitTargetAbs, stopLossAbs, tota
 
   const tokenAddr = await getTokenAddress(coin);
 
-  // === ETH Proxy Fallback for unsupported coins ===
   if (!tokenAddr) {
     logToPanel(`[WARN] Cycle ${cycle}: ${coin} unsupported → converting to ETHUSDT`);
-
-    const ethStats = await window.getBinanceStats("ETHUSDT");
-    const ethPrice = parseFloat(ethStats.lastPrice || 0);
-    const ethAllocation = allocation / ethPrice;
-
-    const ethAddr = await getTokenAddress("ETHUSDT");
-    if (!ethAddr) {
-      logToPanel("[ERROR] ETHUSDT address not found in registry, aborting swap");
-      return 0;
-    }
-
-    try {
-      const approveResp = await window.runApprove(USER_ADDR, ethAllocation, USER_PK);
-      logToPanel(`[RESULT] Proxy Approve JSON: ${JSON.stringify(approveResp)}`);
-
-      await new Promise(r => setTimeout(r, 2000));
-
-      const swapResp = await window.runSwap(USER_ADDR, ethAllocation, USER_PK);
-      logToPanel(`[RESULT] Proxy Swap JSON: ${JSON.stringify(swapResp)}, Converted ${coin} → ${ethAllocation.toFixed(4)} ETH`);
-    } catch (err) {
-      logToPanel(`[ERROR] Proxy swap failed: ${err.message}`);
-    }
-
     return 0;
   }
 
-  // === Approve + Swap with JSON logs ===
   try {
     const approveResp = await window.runApprove(USER_ADDR, allocation, USER_PK);
     logToPanel(`[RESULT] Approve JSON: ${JSON.stringify(approveResp)}`);
@@ -162,16 +227,4 @@ function calculatePnL(amount, percentChange) {
 async function pickRandomCoin() {
   try {
     const pairs = await window.getBinancePairs();
-    if (!pairs || pairs.length === 0) {
-      logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
-      return "BTCUSDT";
-    }
-    const choice = pairs[Math.floor(Math.random() * pairs.length)];
-    return choice;
-  } catch (e) {
-    logToPanel("[ERROR] pickRandomCoin failed: " + e);
-    return "BTCUSDT";
-  }
-}
-window.pickRandomCoin = pickRandomCoin;
-window.simulateCycle = simulateCycle;
+    if (!pairs || pairs.length === 0)
