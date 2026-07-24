@@ -1,17 +1,16 @@
-// simulate_run.txt — Bot cycle simulation with PancakeSwap calls + Registry integration
+// === simulate_run.txt — Bot cycle simulation ===
 logToPanel("simulate_run.txt loaded");
 
 window.currentCycle = 1;
 window.cycleTimer = null;
 let cumulativePnL = 0;
 
-// === Contract addresses (replace with actual values from Brownie console) ===
+// === Contract addresses (replace with actual values) ===
 const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
 const SWAP_ROUTER_ADDR = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; // PancakeSwap v2 router
 
-// === Web3 provider setup ===
-// Replace with correct RPC URL (your node or provider)
-const web3 = new Web3("http://<correct-ip>:<port>");
+// === Web3 provider setup (via Flask/nginx RPC proxy) ===
+const web3 = new Web3("https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc");
 
 // === Registry contract setup ===
 const registryAddress = "0x04C89607413713Ec9775E14b954286519d836FEf";
@@ -78,14 +77,14 @@ async function getTokenAddress(symbol) {
 }
 
 // === Balance initialization ===
-async function initBalances(userId) {
+async function initBalances(userAddr) {
   try {
     const res = await fetch(`/runbot/balances`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: USER_ADDR })
+      body: JSON.stringify({ wallet_address: userAddr })
     });
-    const parsed = JSON.parse(await res.text());
+    const parsed = await res.json();
     if (parsed && parsed.startBalance) {
       document.getElementById("startingBalance").value = parsed.startBalance;
       document.getElementById("investBalance").value = parsed.investBalance || parsed.startBalance;
@@ -147,11 +146,11 @@ async function runSwap(userAddr, amount, userPk) {
 window.runApprove = runApprove;
 window.runSwap = runSwap;
 
-// === Coin picker from coins.txt (JSON array) ===
+// === Coin picker from coins.txt (must be valid JSON array) ===
 async function pickRandomCoin() {
   try {
-    const resp = await fetch("/coins.txt");   // must serve valid JSON
-    const coins = await resp.json();          // parse JSON array
+    const resp = await fetch("/coins.txt");
+    const coins = await resp.json();
     if (!Array.isArray(coins) || coins.length === 0) {
       logToPanel("[WARN] coins.txt returned empty or invalid JSON");
       return "ETHUSDT"; // fallback
@@ -159,7 +158,7 @@ async function pickRandomCoin() {
     const idx = Math.floor(Math.random() * coins.length);
     return coins[idx];
   } catch (err) {
-    logToPanel("[ERROR] Coin picker failed: " + err.message);
+    logToPanel(`[ERROR] Coin picker failed: ${err.message}`);
     return "ETHUSDT"; // fallback
   }
 }
