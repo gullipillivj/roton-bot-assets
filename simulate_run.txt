@@ -11,9 +11,58 @@ const web3 = new Web3("http://69.10.54.87/rpc");
 
 // === Registry contract setup ===
 const registryAddress = "0x04C89607413713Ec9775E14b954286519d836FEf";
-const registryAbi = [ /* same ABI as before */ ];
+const registryAbi = [
+  {
+    "inputs": [{ "internalType": "string", "name": "symbol", "type": "string" }],
+    "name": "getTokenAddress",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "string", "name": "symbol", "type": "string" },
+      { "internalType": "address", "name": "tokenAddr", "type": "address" }
+    ],
+    "name": "registerToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+];
 const registryContract = new web3.eth.Contract(registryAbi, registryAddress);
 
+// === ERC20 + Router ABIs ===
+const erc20Abi = [
+  {
+    "constant": false,
+    "inputs": [
+      { "name": "_spender", "type": "address" },
+      { "name": "_value", "type": "uint256" }
+    ],
+    "name": "approve",
+    "outputs": [{ "name": "", "type": "bool" }],
+    "type": "function"
+  }
+];
+
+const routerAbi = [
+  {
+    "name": "swapExactTokensForTokens",
+    "type": "function",
+    "inputs": [
+      { "name": "amountIn", "type": "uint256" },
+      { "name": "amountOutMin", "type": "uint256" },
+      { "name": "path", "type": "address[]" },
+      { "name": "to", "type": "address" },
+      { "name": "deadline", "type": "uint256" }
+    ],
+    "outputs": [{ "name": "amounts", "type": "uint256[]" }],
+    "stateMutability": "nonpayable"
+  }
+];
+
+// === Registry lookup ===
 async function getTokenAddress(symbol) {
   try {
     const addr = await registryContract.methods.getTokenAddress(symbol).call();
@@ -48,7 +97,7 @@ async function runApprove(userAddr, amount, userPk) {
   const account = web3.eth.accounts.privateKeyToAccount(userPk);
   web3.eth.accounts.wallet.add(account);
 
-  const tokenAddr = await getTokenAddress("ETHUSDT"); // fallback
+  const tokenAddr = await getTokenAddress("ETHUSDT") || USDT_ADDRESS;
   const tokenContract = new web3.eth.Contract(erc20Abi, tokenAddr);
 
   const tx = tokenContract.methods.approve(SWAP_ROUTER_ADDR, web3.utils.toWei(amount.toString(), "ether"));
@@ -68,7 +117,7 @@ async function runSwap(userAddr, amount, userPk) {
   const account = web3.eth.accounts.privateKeyToAccount(userPk);
   web3.eth.accounts.wallet.add(account);
 
-  const tokenAddr = await getTokenAddress("ETHUSDT"); // fallback
+  const tokenAddr = await getTokenAddress("ETHUSDT") || USDT_ADDRESS;
   const router = new web3.eth.Contract(routerAbi, SWAP_ROUTER_ADDR);
   const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
@@ -97,7 +146,7 @@ window.runSwap = runSwap;
 // === Coin picker from coins.txt ===
 async function pickRandomCoin() {
   try {
-    const resp = await fetch("coins.txt");
+    const resp = await fetch("/coins.txt"); // absolute path
     const text = await resp.text();
     const coins = text.split("\n").map(c => c.trim()).filter(c => c.length > 0);
     if (coins.length === 0) {
