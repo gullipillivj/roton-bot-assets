@@ -5,6 +5,10 @@ window.currentCycle = 1;
 window.cycleTimer = null;
 let cumulativePnL = 0;
 
+// === Contract addresses (fill with actual values from Brownie console) ===
+const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
+const SWAP_ROUTER_ADDR = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; // PancakeSwap v2 router
+
 // === Web3 provider setup ===
 // Use VPS IP + /rpc (proxied via nginx)
 const web3 = new Web3("http://69.10.54.87/rpc");
@@ -143,14 +147,13 @@ async function runSwap(userAddr, amount, userPk) {
 window.runApprove = runApprove;
 window.runSwap = runSwap;
 
-// === Coin picker from coins.txt ===
+// === Coin picker from coins.txt (JSON) ===
 async function pickRandomCoin() {
   try {
-    const resp = await fetch("/coins.txt"); // absolute path
-    const text = await resp.text();
-    const coins = text.split("\n").map(c => c.trim()).filter(c => c.length > 0);
-    if (coins.length === 0) {
-      logToPanel("[WARN] No coins found in coins.txt");
+    const resp = await fetch("/coins.txt");   // coins.txt returns JSON
+    const coins = await resp.json();          // parse JSON array
+    if (!Array.isArray(coins) || coins.length === 0) {
+      logToPanel("[WARN] coins.txt returned empty or invalid JSON");
       return "ETHUSDT"; // fallback
     }
     const idx = Math.floor(Math.random() * coins.length);
