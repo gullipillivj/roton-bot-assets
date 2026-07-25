@@ -1,5 +1,19 @@
-logToPanel("main_run.txt loaded");
 
+// === main_run.txt ===
+logToPanel("main_run.txt loaded");
+// 🌐 EXPOSE STRATEGIC CONSTANTS GLOBALLY ACROSS ALL SCRIPT ASSETS
+window.USER_ID   = "mockuser1";
+window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
+window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+window.BASE_URL  = "https://ngrok-free.dev";
+// Maintain short-hand mirrors inside main_run.txt to preserve structural referencesconst USER_ID   = window.USER_ID;const USER_ADDR = window.USER_ADDR;const USER_PK   = window.USER_PK;const BASE_URL  = window.BASE_URL;
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    if (panel) panel.value += msg + "\n";
+}
+function safeParse(text) {
+    try { return JSON.parse(text); } catch { return null; }
+}
 // === Global safe UI status helper ===
 window.setStatus = function(text) {
     const statusLabel = document.getElementById("statusLabel");
@@ -10,47 +24,43 @@ window.setStatus = function(text) {
         logToPanel(`[STATUS UPDATE] ${text}`);
     }
 };
-
-// Also expose it without window prefix for direct scripts execution context
-if (typeof globalThis !== 'undefined') {
+// Also expose it without window prefix for direct scripts execution contextif (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
-
 }
-
-
-// === Load client data function ===
-async function loadClientData(username = "mockuser1") {
+// === Load client data function ===async function loadClientData(userId) {
     try {
-        const response = await fetch("/clients");
-        const data = await response.json();
+        const resp = await fetch(`${BASE_URL}/clients`);
+        const data = safeParse(await resp.text());
         
-        if (!data.clients || data.clients.length === 0) {
+        if (!data || !data.clients || data.clients.length === 0) {
             logToPanel("[WARN] No clients array found in DB payload");
             return;
         }
 
         // 🔍 Fixed Object Traversal: Target nested profile.name property
-        const client = data.clients.find(c => c.profile && c.profile.name === username);
+        const client = data.clients.find(c => c.profile && c.profile.name === userId);
         
         if (!client) {
-            logToPanel(`[WARN] ${username} nested profile records not found in DB`);
+            logToPanel(`[WARN] ${userId} nested profile records not found in DB`);
             return;
         }
 
-        logToPanel(`[INFO] Found database record for user: ${username}`);
+        logToPanel(`[INFO] Found database record for user: ${userId}`);
 
         // 🪙 Extract values safely using deep structural maps + non-null fallbacks
         const walletBalance = (client.wallet && client.wallet.balance !== null) ? parseFloat(client.wallet.balance) : 5000;
         const profitTarget  = (client.settings && client.settings.profit_target) ? parseFloat(client.settings.profit_target) : 1.0;
         const stopLoss      = (client.settings && client.settings.stop_loss) ? parseFloat(client.settings.stop_loss) : 0.5;
-        const profileName   = client.profile.name || username;
+        const profileName   = client.profile.name || userId;
 
         // Fill controls safely
         document.getElementById("startBalance").value = walletBalance;
         document.getElementById("investBalance").value = walletBalance;
         document.getElementById("profitTarget").value = profitTarget;
         document.getElementById("stopLoss").value = stopLoss;
-        document.getElementById("currentUserLabel").textContent = profileName;
+        
+        const userLabel = document.getElementById("currentUserLabel");
+        if (userLabel) userLabel.textContent = profileName;
 
         // Unlock buttons instantly since balance is set
         if (walletBalance > 0) {
@@ -65,9 +75,69 @@ async function loadClientData(username = "mockuser1") {
         setButtonStates("afterDeposit"); 
     }
 }
+async function refreshBalances() {
+    try {
+        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: 0 })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.fund_token_balance !== undefined) {
+            document.getElementById("startBalance").value = parsed.fund_token_balance;
+            document.getElementById("investBalance").value = parsed.fund_token_balance;
+            logToPanel(`[INFO] Fund balance: ${parsed.fund_token_balance}, ETH=${parsed.eth_balance_wei}`);
+        } else {
+            logToPanel("[WARN] No balance data received");
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Balance refresh failed: ${err.message}`);
+    }
+}
+async function runDeposit(amount) {
+    try {
+        const approveResp = await fetch(`${BASE_URL}/runbot/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
+        });
+        const approveParsed = safeParse(await approveResp.text());
+        if (approveParsed?.tx_hash) {
+            logToPanel(`[INFO] Approve executed, TX=${approveParsed.tx_hash}`);
+        }
 
-// === State machine ===
-function setButtonStates(state) {
+        const depositResp = await fetch(`${BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
+        });
+        const depositParsed = safeParse(await depositResp.text());
+        if (depositParsed) {
+            logToPanel(`[INFO] Deposit executed, TX=${depositParsed.tx_hash}, Fund=${depositParsed.fund_token_balance}, ETH=${depositParsed.eth_balance_wei}`);
+            document.getElementById("startBalance").value = depositParsed.fund_token_balance;
+            document.getElementById("investBalance").value = depositParsed.fund_token_balance;
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Deposit failed: ${err.message}`);
+    }
+}
+async function runWithdraw(amount) {
+    try {
+        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed) {
+            logToPanel(`[INFO] Payout executed, TX=${parsed.tx_hash}`);
+        }
+        await refreshBalances();
+    } catch (err) {
+        logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
+    }
+}
+// === State machine ===function setButtonStates(state) {
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     const depositBtn = document.getElementById("depositBtn");
@@ -91,7 +161,7 @@ function setButtonStates(state) {
             if(startBalanceBox) startBalanceBox.readOnly = true;
             if(depositBox) depositBox.disabled = false;
             if(withdrawBox) withdrawBox.disabled = true;
-            statusLabel.textContent = "STATE: INIT";
+            window.setStatus("INIT");
             statusLabel.style.color = "gray";
             break;
 
@@ -104,7 +174,7 @@ function setButtonStates(state) {
             if(startBalanceBox) startBalanceBox.readOnly = true;
             if(depositBox) depositBox.disabled = false;
             if(withdrawBox) withdrawBox.disabled = false;
-            statusLabel.textContent = "STATE: READY TO RUN";
+            window.setStatus("READY TO RUN");
             statusLabel.style.color = "blue";
             break;
 
@@ -117,7 +187,7 @@ function setButtonStates(state) {
             if(startBalanceBox) startBalanceBox.disabled = true;
             if(depositBox) depositBox.disabled = true;
             if(withdrawBox) withdrawBox.disabled = true;
-            statusLabel.textContent = "STATE: RUNNING";
+            window.setStatus("RUNNING");
             statusLabel.style.color = "red";
             break;
 
@@ -130,127 +200,69 @@ function setButtonStates(state) {
             if(startBalanceBox) startBalanceBox.disabled = false; 
             if(depositBox) depositBox.disabled = false;
             if(withdrawBox) withdrawBox.disabled = false;
-            statusLabel.textContent = "STATE: COMPLETED";
+            window.setStatus("COMPLETED");
             statusLabel.style.color = "green";
             break;
     }
 }
-
 // === Expose state callbacks globally ===
 window.updateUIState = function(state) {
     setButtonStates(state);
 };
-
 // === UI glue ===
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     setButtonStates("init"); 
-    loadClientData("mockuser1");
+    await loadClientData(USER_ID);
+    await refreshBalances();
 
     // Deposit button
-    const depositBtn = document.getElementById("depositBtn");
-    if (depositBtn) {
-        depositBtn.addEventListener("click", async () => {
-            try {
-                const amount = parseFloat(document.getElementById("depositAmount").value) || 0;
-                const currentUser = "mockuser1";
-                const commission = 5;
-                const netAmount = amount - commission;
-
-                if (amount <= commission) {
-                    logToPanel("[WARN] Deposit amount must be greater than commission fee");
-                    return;
-                }
-
-                await window.approveToken(window.userTokenAddress, amount, currentUser);
-                await window.depositToFund(window.userTokenAddress, netAmount, currentUser);
-                await window.depositToFund(window.userTokenAddress, commission, "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5");
-
-                const startBalanceBox = document.getElementById("startBalance");
-                const currentBalance = parseFloat(startBalanceBox.value) || 0;
-                startBalanceBox.value = currentBalance + netAmount;
-
-                logToPanel(`[INFO] ${currentUser} deposited ${amount} tokens → net credited ${netAmount}, commission ${commission} coins sent to Admin`);
-
-                document.getElementById("depositAmount").value = 0;
-
-                if (parseFloat(startBalanceBox.value) > 0) {
-                    setButtonStates("afterDeposit");
-                }
-            } catch (err) {
-                logToPanel("[ERROR] Deposit failed: " + err);
-            }
-        });
-    }
+    document.getElementById("depositBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
+        runDeposit(amt);
+    });
 
     // Withdraw button
-    const withdrawBtn = document.getElementById("withdrawBtn");
-    if (withdrawBtn) {
-        withdrawBtn.addEventListener("click", async () => {
-            try {
-                const currentUser = "mockuser1";
-                const amount = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
 
-                logToPanel(`[INFO] Checking available balance for ${currentUser} in SolidarityFund...`);
-                const available = await window.fund.methods.balanceOf(currentUser).call();
-                const availableAmount = parseFloat(available) || 0;
-
-                if (amount <= 0) {
-                    logToPanel("[WARN] Withdraw amount must be greater than 0");
-                    return;
-                }
-                if (availableAmount < amount) {
-                    logToPanel(`[WARN] Requested ${amount} exceeds available ${availableAmount} for ${currentUser}`);
-                    return;
-                }
-
-                logToPanel(`[INFO] Ledger shows ${availableAmount} tokens available for ${currentUser}`);
-
-                await window.withdrawFromFund(window.userTokenAddress, amount, currentUser);
-
-                const startBalanceBox = document.getElementById("startBalance");
-                const currentBalance = parseFloat(startBalanceBox.value) || 0;
-                startBalanceBox.value = currentBalance - amount;
-
-                logToPanel(`[INFO] Withdrawn ${amount} tokens for ${currentUser} from SolidarityFund`);
-
-                document.getElementById("withdrawAmount").value = 0;
-            } catch (err) {
-                logToPanel("[ERROR] Withdraw failed: " + err);
-            }
-        });
-    }
-
-    // Start Bot button
-    const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", async () => {
-            const launchEngine = window.startSimulation || window.initBot;
-            if (typeof launchEngine === "function") {
-                setButtonStates("running");
-                try {
-                    await launchEngine(10);
-                } catch (err) {
-                    logToPanel("[ERROR] Bot execution runtime error: " + err.message);
-                } finally {
-                    setButtonStates("completed");
-                }
-            } else {
-                logToPanel("[ERROR] Simulation loop entry engine not found.");
-            }
-        });
-    }
-
-    // Stop Bot button
-    const stopBtn = document.getElementById("stopBtn");
-    if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-            window.isBotRunning = false;
-            if (typeof window.stopBot === "function") {
-                window.stopBot();
-            }
-            setButtonStates("completed");
-            logToPanel("[MANUAL] Stop signal flagged. Halting background sequence.");
-        });
-    }
+const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+runWithdraw(amt);
 });
+// Start Bot button
+document.getElementById("startBtn")?.addEventListener("click", async () => {
+const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
+const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
+if (investBal > startBal) {
+logToPanel("[WARN] Investment balance must be less than or equal to starting balance to start trading");
+return;
+}
+const launchEngine = window.startSimulation || window.initBot;
+if (typeof launchEngine === "function") {
+setButtonStates("running");
+logToPanel("[INFO] Start Trading button pressed — launching simulation");
+try {
+await launchEngine(10);
+} catch (err) {
+logToPanel("[ERROR] Bot execution runtime error: " + err.message);
+} finally {
+setButtonStates("completed");
+}
+} else {
+logToPanel("[ERROR] Simulation loop entry engine not found.");
+}
+});
+// Stop Bot button
+document.getElementById("stopBtn")?.addEventListener("click", () => {
+window.isBotRunning = false;
+if (typeof window.stopBot === "function") {
+window.stopBot();
+}
+setButtonStates("completed");
+logToPanel("[MANUAL] Stop signal flagged. Halting background sequence.");
+});
+});
+
+
+
+
+
