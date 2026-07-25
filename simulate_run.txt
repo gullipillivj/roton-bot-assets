@@ -112,19 +112,23 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
   const updatedRunningBalance = startingBalanceAllocated + cumulativePnL;
   window.updateChart(updatedRunningBalance, cumulativePnL);
 
-  // Check Stop-Loss / Take-Profit criteria threshold checks
+   // Check Stop-Loss / Take-Profit criteria threshold checks
   const totalChangePct = (cumulativePnL / investBal) * 100;
+  
   if (totalChangePct >= profitTargetPct) {
-    logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Stopping simulation loop.`);
-    return "STOP";
+    logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering profit target exit.`);
+    return "STOP_PROFIT";
   }
+  
   if (totalChangePct <= -stopLossPct) {
-    logToPanel(`[STOP LOSS] Limit of -${stopLossPct}% violated! Safeguarding assets.`);
-    return "STOP";
+    // Log asset protection warning but allow simulation to proceed to the next automated cycle
+    logToPanel(`[ALERT-STOP LOSS] Limit of -${stopLossPct}% breached (${totalChangePct.toFixed(2)}%). Simulation continues for block verification.`);
+    return "CONTINUE";
   }
 
   logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
   return "CONTINUE";
+
 }
 
 // === Simulation Engine Management Wrapper ===
