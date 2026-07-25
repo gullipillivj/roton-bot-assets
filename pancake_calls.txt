@@ -1,9 +1,10 @@
-// pancake_calls.txt — PancakeSwap connector layer
+// pancake_calls.txt — PancakeSwap connector layer (Fixed Parameter Layout)
 logToPanel("pancake_calls.txt loaded");
 
 function safeParse(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
+
 function logResult(action, data) {
   if (data && data.tx_hash) {
     logToPanel(`[RESULT] ${action} — TxHash=${data.tx_hash}, Status=${data.status || "UNKNOWN"}`);
@@ -12,13 +13,13 @@ function logResult(action, data) {
   }
 }
 
-// === Backend calls ===
-async function approveToken(amount, userAddress, privateKey) {
+// === Fixed Backend Calls (Aligned to match caller signatures cleanly) ===
+async function approveToken(userAddress, amount, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
     const parsed = safeParse(await res.text());
     logResult("Approve", parsed);
@@ -28,12 +29,12 @@ async function approveToken(amount, userAddress, privateKey) {
   }
 }
 
-async function depositToFund(amount, userAddress, privateKey) {
+async function depositToFund(userAddress, amount, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
     const parsed = safeParse(await res.text());
     logResult("Deposit", parsed);
@@ -43,12 +44,12 @@ async function depositToFund(amount, userAddress, privateKey) {
   }
 }
 
-async function withdrawFromFund(amount, userAddress, privateKey) {
+async function withdrawFromFund(userAddress, amount, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/payout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
     const parsed = safeParse(await res.text());
     logResult("Withdraw/Payout", parsed);
@@ -58,12 +59,12 @@ async function withdrawFromFund(amount, userAddress, privateKey) {
   }
 }
 
-async function swapToTarget(amount, userAddress, privateKey) {
+async function swapToTarget(userAddress, amount, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
     const parsed = safeParse(await res.text());
     logResult("Swap", parsed);
@@ -88,11 +89,11 @@ async function getBalances(userAddress) {
   }
 }
 
-// === Wrappers for bot loop ===
-async function runApprove(userAddress, amount, privateKey) { return approveToken(amount, userAddress, privateKey); }
-async function runDeposit(userAddress, amount, privateKey) { return depositToFund(amount, userAddress, privateKey); }
-async function runWithdraw(userAddress, amount, privateKey) { return withdrawFromFund(amount, userAddress, privateKey); }
-async function runSwap(userAddress, amount, privateKey) { return swapToTarget(amount, userAddress, privateKey); }
+// === Wrappers for bot loop matching uniform structure ===
+async function runApprove(userAddress, amount, privateKey) { return approveToken(userAddress, amount, privateKey); }
+async function runDeposit(userAddress, amount, privateKey) { return depositToFund(userAddress, amount, privateKey); }
+async function runWithdraw(userAddress, amount, privateKey) { return withdrawFromFund(userAddress, amount, privateKey); }
+async function runSwap(userAddress, amount, privateKey) { return swapToTarget(userAddress, amount, privateKey); }
 async function runBalances(userAddress) { return getBalances(userAddress); }
 
 // === Expose globally ===
