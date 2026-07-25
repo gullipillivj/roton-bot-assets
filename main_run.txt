@@ -1,8 +1,7 @@
-// === assets/main_run.txt ===
 logToPanel("main_run.txt loaded (Full Production Integration v4)");
 
 // 🌐 LIVE TUNNEL CONFIGURATION: Links both script environments seamlessly
-window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
+window.BASE_URL  = "https://ngrok-free.dev";
 window.RPC_URL   = "https://ngrok-free.dev";
 
 window.USER_ID   = "mockuser1";
@@ -36,6 +35,28 @@ if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
 
+// 🛡️ BUTTON METRICS TRACKER: Added back to context
+window.setButtonStates = function(status) {
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    
+    if (!startBtn || !stopBtn) return;
+
+    if (status === "running") {
+        startBtn.disabled = true;
+        startBtn.style.backgroundColor = "#2e7d32";
+        startBtn.textContent = "Trading Active...";
+        stopBtn.disabled = false;
+        window.setStatus("RUNNING");
+    } else if (status === "completed" || status === "stopped") {
+        startBtn.disabled = false;
+        startBtn.style.backgroundColor = "green";
+        startBtn.textContent = "Start Trading";
+        stopBtn.disabled = true;
+        window.setStatus("COMPLETED");
+    }
+};
+
 // 📈 CHART APPARATUS HOOK: Maps data streams cleanly matching chart.txt arrays
 window.updateChart = function(balance, profit = null) {
     try {
@@ -59,32 +80,25 @@ window.updateChart = function(balance, profit = null) {
     }
 };
 
-// 🛡️ REVERSE PROXY INTERCEPTOR: Translates amountIn and patches routing paths on the fly
+// 🛡️ REVERSE PROXY INTERCEPTOR
 const originalFetch = window.fetch;
 window.fetch = async function(url, options) {
     let urlStr = typeof url === 'string' ? url : '';
     
-    // Auto-inject the ngrok warning bypass header globally
     if (options) {
         if (!options.headers) options.headers = {};
         options.headers["ngrok-skip-browser-warning"] = "true";
     }
 
-    // Fix Data Key Fields and variable structures before transmitting data to Flask
     if (options && options.body && (urlStr.includes('approve') || urlStr.includes('swap') || urlStr.includes('deposit') || urlStr.includes('payout'))) {
         try {
             let parsedBody = JSON.parse(options.body);
-            
-            // 🧠 DYNAMIC REMAPPING: If pancake_calls passes amountIn instead of amount, fix it right here
             if (parsedBody.amountIn !== undefined && parsedBody.amount === undefined) {
                 parsedBody.amount = parsedBody.amountIn;
             }
-            
-            // Force values to match raw integer schema parameters matching your working cURL payloads
             if (parsedBody.amount !== undefined) {
                 parsedBody.amount = Math.floor(parseFloat(parsedBody.amount));
             }
-            
             options.body = JSON.stringify(parsedBody);
         } catch(e) {}
     }
@@ -162,13 +176,13 @@ async function commitFinalPnLToDatabase(finalPnL) {
 // === UI Click Handlers ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
-    window.setStatus("READY TO RUN"); 
+    window.setButtonStates("completed"); // Sets correct initial state
     await loadClientData(USER_ID);
 
     document.getElementById("depositBtn")?.addEventListener("click", async () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
         logToPanel(`[INFO] Triggering manual deposit route for ${amt}...`);
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
+        await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: amt })
@@ -179,7 +193,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
         logToPanel(`[INFO] Triggering manual withdrawal route for ${amt}...`);
-        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
+        await fetch(`${BASE_URL}/runbot/payout`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: amt })
@@ -188,25 +202,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     document.getElementById("startBtn")?.addEventListener("click", async () => {
-        const launchEngine = window.startSimulation;
+        const launchEngine = window.startSimulation || window.initBot;
         if (typeof launchEngine === "function") {
-            window.setStatus("RUNNING");
+            window.setButtonStates("running");
             logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
             try {
                 await launchEngine(10);
             } catch (err) {
                 logToPanel("[ERROR] Runtime simulation engine drop: " + err.message);
             } finally {
-                window.setStatus("COMPLETED");
+                window.setButtonStates("completed");
                 const totalSimulatedPnL = window.cumulativePnL || 0;
                 await commitFinalPnLToDatabase(totalSimulatedPnL);
             }
+        } else {
+            logToPanel("[ERROR] Simulation loop entry engine not found.");
         }
     });
 
     document.getElementById("stopBtn")?.addEventListener("click", () => {
         window.isBotRunning = false;
-        window.setStatus("STOPPED");
+        if (typeof window.stopBot === "function") {
+            window.stopBot();
+        }
+        window.setButtonStates("completed");
         logToPanel("[MANUAL] Bot process sequence flagged to stop.");
     });
 });
