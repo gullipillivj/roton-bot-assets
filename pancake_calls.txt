@@ -1,4 +1,4 @@
-// pancake_calls.txt — PancakeSwap connector layer (Fixed Parameter Layout)
+// pancake_calls.txt — PancakeSwap connector layer (Parameter Aligned Layout)
 logToPanel("pancake_calls.txt loaded");
 
 function safeParse(text) {
@@ -13,64 +13,60 @@ function logResult(action, data) {
   }
 }
 
-// === Fixed Backend Calls (Aligned to match caller signatures cleanly) ===
-async function approveToken(userAddress, amount, privateKey) {
+// === Backend Calls (Defensively structured to handle parameters directly) ===
+async function approveToken(amount, userAddress, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
-    const parsed = safeParse(await res.text());
-    logResult("Approve", parsed);
-    return parsed;
+    return safeParse(await res.text());
   } catch (err) {
     logToPanel(`[ERROR] Approve failed: ${err.message}`);
+    return null;
   }
 }
 
-async function depositToFund(userAddress, amount, privateKey) {
+async function depositToFund(amount, userAddress, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
-    const parsed = safeParse(await res.text());
-    logResult("Deposit", parsed);
-    return parsed;
+    return safeParse(await res.text());
   } catch (err) {
     logToPanel(`[ERROR] Deposit failed: ${err.message}`);
+    return null;
   }
 }
 
-async function withdrawFromFund(userAddress, amount, privateKey) {
+async function withdrawFromFund(amount, userAddress, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/payout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
-    const parsed = safeParse(await res.text());
-    logResult("Withdraw/Payout", parsed);
-    return parsed;
+    return safeParse(await res.text());
   } catch (err) {
     logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
+    return null;
   }
 }
 
-async function swapToTarget(userAddress, amount, privateKey) {
+async function swapToTarget(amount, userAddress, privateKey) {
   try {
     const res = await fetch(`${BASE_URL}/runbot/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
     });
-    const parsed = safeParse(await res.text());
-    logResult("Swap", parsed);
-    return parsed;
+    return safeParse(await res.text());
   } catch (err) {
     logToPanel(`[ERROR] Swap failed: ${err.message}`);
+    return null;
   }
 }
 
@@ -81,20 +77,43 @@ async function getBalances(userAddress) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet_address: userAddress })
     });
-    const parsed = safeParse(await res.text());
-    logResult("Balances", parsed);
-    return parsed;
+    return safeParse(await res.text());
   } catch (err) {
     logToPanel(`[ERROR] Balances failed: ${err.message}`);
+    return null;
   }
 }
 
-// === Wrappers for bot loop matching uniform structure ===
-async function runApprove(userAddress, amount, privateKey) { return approveToken(userAddress, amount, privateKey); }
-async function runDeposit(userAddress, amount, privateKey) { return depositToFund(userAddress, amount, privateKey); }
-async function runWithdraw(userAddress, amount, privateKey) { return withdrawFromFund(userAddress, amount, privateKey); }
-async function runSwap(userAddress, amount, privateKey) { return swapToTarget(userAddress, amount, privateKey); }
-async function runBalances(userAddress) { return getBalances(userAddress); }
+// === Wrappers for bot loop matching uniform structure (userAddress, amount, privateKey) ===
+async function runApprove(userAddress, amount, privateKey) {
+  const parsed = await approveToken(amount, userAddress, privateKey);
+  logResult("Approve", parsed);
+  return parsed;
+}
+
+async function runDeposit(userAddress, amount, privateKey) {
+  const parsed = await depositToFund(amount, userAddress, privateKey);
+  logResult("Deposit", parsed);
+  return parsed;
+}
+
+async function runWithdraw(userAddress, amount, privateKey) {
+  const parsed = await withdrawFromFund(amount, userAddress, privateKey);
+  logResult("Withdraw/Payout", parsed);
+  return parsed;
+}
+
+async function runSwap(userAddress, amount, privateKey) {
+  const parsed = await swapToTarget(amount, userAddress, privateKey);
+  logResult("Swap", parsed);
+  return parsed;
+}
+
+async function runBalances(userAddress) {
+  const parsed = await getBalances(userAddress);
+  logResult("Balances", parsed);
+  return parsed;
+}
 
 // === Expose globally ===
 window.approveToken     = approveToken;
