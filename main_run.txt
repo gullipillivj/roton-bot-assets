@@ -1,26 +1,22 @@
-// === main_run.txt ===
-logToPanel("main_run.txt loaded (Full Production Integration v3)");
+// === assets/main_run.txt ===
+logToPanel("main_run.txt loaded (Full Production Integration v4)");
 
-// 🌐 LIVE TUNNEL CONFIGURATION: Points directly to your operational Flask instance
-window.BASE_URL  = "https://ngrok-free.dev";
-window.RPC_URL   = "https://ngrok-free.dev/runbot/rpc";
+// 🌐 LIVE TUNNEL CONFIGURATION: Links both script environments seamlessly
+window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
+window.RPC_URL   = "https://ngrok-free.dev";
 
 window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
-// Expose these as global variables so simulate_run.txt can read them without errors
-window.USER_ADDR = window.USER_ADDR;
-window.USER_PK   = window.USER_PK;
-
 const USER_ID   = window.USER_ID;
 const USER_ADDR = window.USER_ADDR;
-const USER_PK   = window.USER_PK;
+const USER_PK = window.USER_PK;
 const BASE_URL  = window.BASE_URL;
 
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
-    if (panel) panel.value += msg + "\n";
+    if (panel) { panel.value += msg + "\n"; panel.scrollTop = panel.scrollHeight; }
 }
 
 function safeParse(text) {
@@ -40,68 +36,66 @@ if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
 
-// 📈 FIX 1: Provide the missing global Chart updater wrapper to prevent runtime loop dropouts
-window.updateChart = function(runningBalance, cumulativePnL) {
+// 📈 CHART APPARATUS HOOK: Maps data streams cleanly matching chart.txt arrays
+window.updateChart = function(balance, profit = null) {
     try {
-        if (window.balanceChart) {
-            const timeLabel = new Date().toLocaleTimeString();
-            window.balanceChart.data.labels.push(timeLabel);
-            window.balanceChart.data.datasets[0].data.push(runningBalance);
-            if (window.balanceChart.data.datasets[1]) {
-                window.balanceChart.data.datasets[1].data.push(cumulativePnL);
-            }
-            window.balanceChart.update();
+        const chart = window.balanceChart;
+        if (!chart || !chart.data) return;
+
+        const cycle = chart.data.labels.length + 1;
+        chart.data.labels.push(`Cycle ${cycle}`);
+
+        if (chart.data.datasets && chart.data.datasets[0] && chart.data.datasets[0].data) {
+            chart.data.datasets[0].data.push(balance);
         }
+        if (profit !== null && chart.data.datasets && chart.data.datasets[1] && chart.data.datasets[1].data) {
+            chart.data.datasets[1].data.push(profit);
+        }
+
+        chart.update();
+        logToPanel(`[CHART] Render complete. Cycle ${cycle} -> Balance: ${balance.toFixed(2)} USDT`);
     } catch (e) {
-        console.error("Chart updating skipped: ", e.message);
+        console.error("Chart push error handled: ", e.message);
     }
 };
 
-// ⛓️ FIX 2: Connect the broken window hooks to your actual Flask HTTP routes
-window.approveToken = async function(amount, walletAddress, privateKey) {
-    try {
-        const resp = await fetch(`${BASE_URL}/runbot/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                amount: Math.floor(parseFloat(amount)), // Coerce float to clean integer for Python
-                wallet_address: walletAddress,
-                private_key: privateKey
-            })
-        });
-        return safeParse(await resp.text());
-    } catch (err) {
-        logToPanel(`[ERROR] approveToken API bridge failed: ${err.message}`);
-        return null;
+// 🛡️ REVERSE PROXY INTERCEPTOR: Translates amountIn and patches routing paths on the fly
+const originalFetch = window.fetch;
+window.fetch = async function(url, options) {
+    let urlStr = typeof url === 'string' ? url : '';
+    
+    // Auto-inject the ngrok warning bypass header globally
+    if (options) {
+        if (!options.headers) options.headers = {};
+        options.headers["ngrok-skip-browser-warning"] = "true";
     }
+
+    // Fix Data Key Fields and variable structures before transmitting data to Flask
+    if (options && options.body && (urlStr.includes('approve') || urlStr.includes('swap') || urlStr.includes('deposit') || urlStr.includes('payout'))) {
+        try {
+            let parsedBody = JSON.parse(options.body);
+            
+            // 🧠 DYNAMIC REMAPPING: If pancake_calls passes amountIn instead of amount, fix it right here
+            if (parsedBody.amountIn !== undefined && parsedBody.amount === undefined) {
+                parsedBody.amount = parsedBody.amountIn;
+            }
+            
+            // Force values to match raw integer schema parameters matching your working cURL payloads
+            if (parsedBody.amount !== undefined) {
+                parsedBody.amount = Math.floor(parseFloat(parsedBody.amount));
+            }
+            
+            options.body = JSON.stringify(parsedBody);
+        } catch(e) {}
+    }
+    return originalFetch(url, options);
 };
 
-window.swapToTarget = async function(amount, walletAddress, privateKey) {
-    try {
-        // Routes straight to your Flask router contract endpoint
-        const resp = await fetch(`${BASE_URL}/runbot/swap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                amount: Math.floor(parseFloat(amount)),
-                wallet_address: walletAddress,
-                private_key: privateKey
-            })
-        });
-        return safeParse(await resp.text());
-    } catch (err) {
-        logToPanel(`[ERROR] swapToTarget API bridge failed: ${err.message}`);
-        return null;
-    }
-};
-
-// === Load Real Client Data & Existing Balances From Flask ===
+// Load initial balance records directly from your live Clients database endpoint
 async function loadClientData(userId) {
     try {
         logToPanel(`[INFO] Fetching live database records for ${userId}...`);
-        const resp = await fetch(`${BASE_URL}/clients`, {
-            headers: { "ngrok-skip-browser-warning": "true" }
-        });
+        const resp = await fetch(`${BASE_URL}/clients`);
         const data = safeParse(await resp.text());
         
         if (!data || !data.clients || data.clients.length === 0) {
@@ -135,42 +129,7 @@ async function loadClientData(userId) {
     }
 }
 
-async function runDeposit(amount) {
-    try {
-        logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: Math.floor(amount) })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] On-Chain Deposit TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(USER_ID);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Deposit sequence aborted: ${err.message}`);
-    }
-}
-
-async function runWithdraw(amount) {
-    try {
-        logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
-        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: Math.floor(amount) })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] Payout TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(USER_ID);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Withdrawal execution failed: ${err.message}`);
-    }
-}
-
+// Write P&L metrics back to your SQLite server storage file
 async function commitFinalPnLToDatabase(finalPnL) {
     try {
         const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
@@ -180,7 +139,7 @@ async function commitFinalPnLToDatabase(finalPnL) {
 
         const resp = await fetch(`${BASE_URL}/runbot/update_client`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 userid: window.USER_ID,
                 amount_deposited: Math.floor(startingAllocated),
@@ -200,27 +159,36 @@ async function commitFinalPnLToDatabase(finalPnL) {
     }
 }
 
-// === UI Glue ===
+// === UI Click Handlers ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN"); 
     await loadClientData(USER_ID);
 
-    document.getElementById("depositBtn")?.addEventListener("click", () => {
+    document.getElementById("depositBtn")?.addEventListener("click", async () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-        runDeposit(amt);
+        logToPanel(`[INFO] Triggering manual deposit route for ${amt}...`);
+        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: amt })
+        });
+        await loadClientData(USER_ID);
     });
 
-    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
+    document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-        runWithdraw(amt);
+        logToPanel(`[INFO] Triggering manual withdrawal route for ${amt}...`);
+        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: amt })
+        });
+        await loadClientData(USER_ID);
     });
 
     document.getElementById("startBtn")?.addEventListener("click", async () => {
-        // Expose cumulative tracker into window memory scope dynamically
-        window.cumulativePnL = 0;
-        
-        const launchEngine = window.startSimulation || window.initBot;
+        const launchEngine = window.startSimulation;
         if (typeof launchEngine === "function") {
             window.setStatus("RUNNING");
             logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
