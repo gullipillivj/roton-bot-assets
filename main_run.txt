@@ -2,14 +2,21 @@
 logToPanel("main_run.txt loaded (Single Tunnel Mode)");
 
 // 🌐 SINGLE TUNNEL EXPOSURE: Points directly to your Anvil node
-window.RPC_URL   = "https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc";
+// === main_run.txt ===
+logToPanel("main_run.txt loaded (Single Tunnel Mode)");
+
+// 🌐 LIVE TUNNEL EXPOSURE: Points directly to your operational Anvil instance
+window.RPC_URL   = "https://ngrok-free.dev";
+window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev"; // Maps the root path for unedited asset references
 window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
+// Maintain short-hand mirrors inside main_run.txt to preserve structural references
 const USER_ID   = window.USER_ID;
 const USER_ADDR = window.USER_ADDR;
 const USER_PK   = window.USER_PK;
+const BASE_URL  = window.BASE_URL;
 
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
