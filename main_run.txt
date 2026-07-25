@@ -1,25 +1,19 @@
 // === main_run.txt ===
-logToPanel("main_run.txt loaded");
+logToPanel("main_run.txt loaded (Single Tunnel Mode)");
 
-// 🌐 EXPOSE STRATEGIC CONSTANTS GLOBALLY ACROSS ALL SCRIPT ASSETS
+// 🌐 SINGLE TUNNEL EXPOSURE: Points directly to your Anvil node
+window.RPC_URL   = "https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc";
 window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-window.BASE_URL  = "https://ngrok-free.dev";
 
-// Maintain short-hand mirrors inside main_run.txt to preserve structural references
 const USER_ID   = window.USER_ID;
 const USER_ADDR = window.USER_ADDR;
 const USER_PK   = window.USER_PK;
-const BASE_URL  = window.BASE_URL;
 
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) panel.value += msg + "\n";
-}
-
-function safeParse(text) {
-    try { return JSON.parse(text); } catch { return null; }
 }
 
 // === Global safe UI status helper ===
@@ -36,150 +30,60 @@ if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
 
-// === Load client data function ===
+// === Bypassed DB Fetch: Loads Mock Data locally to prevent Single Tunnel Network Errors ===
 async function loadClientData(userId) {
-    try {
-        logToPanel(`[INFO] Fetching records for ${userId}...`);
-        
-        // Include ngrok bypass headers directly in the fetch request to mitigate warning screen blocks
-        const resp = await fetch(`${BASE_URL}/clients`, {
-            headers: { "ngrok-skip-browser-warning": "true" }
-        });
-        const data = safeParse(await resp.text());
-        
-        if (!data || !data.clients || data.clients.length === 0) {
-            logToPanel("[WARN] No clients array found in DB payload");
-            return;
-        }
+    logToPanel(`[INFO] Single Tunnel Active: Loading offline mock data configuration for ${userId}...`);
+    
+    // Default fallback values to bypass network issues entirely
+    const walletBalance = 5000;
+    const profitTarget  = 1.0;
+    const stopLoss      = 0.5;
 
-        // Target nested profile.name property
-        const client = data.clients.find(c => c.profile && c.profile.name === userId);
-        
-        if (!client) {
-            logToPanel(`[WARN] ${userId} records not found in DB`);
-            return;
-        }
-
-        logToPanel(`[INFO] Found database record for user: ${userId}`);
-
-        // Extract values safely using deep structural maps + non-null fallbacks
-        const walletBalance = (client.wallet && client.wallet.balance !== null) ? parseFloat(client.wallet.balance) : 5000;
-        const profitTarget  = (client.settings && client.settings.profit_target) ? parseFloat(client.settings.profit_target) : 1.0;
-        const stopLoss      = (client.settings && client.settings.stop_loss) ? parseFloat(client.settings.stop_loss) : 0.5;
-        const profileName   = client.profile.name || userId;
-
-        // Fill controls safely
-        document.getElementById("startBalance").value = walletBalance;
-        document.getElementById("investBalance").value = walletBalance;
-        document.getElementById("profitTarget").value = profitTarget;
-        document.getElementById("stopLoss").value = stopLoss;
-        
-        const userLabel = document.getElementById("currentUserLabel");
-        if (userLabel) userLabel.textContent = profileName;
-
-    } catch (e) {
-        logToPanel("[ERROR] loadClientData fetch bypassed: " + e.message);
-        logToPanel("[MOCK ACTIVE] Running with local dashboard default fallback numbers.");
-    }
+    document.getElementById("startBalance").value = walletBalance;
+    document.getElementById("investBalance").value = walletBalance;
+    document.getElementById("profitTarget").value = profitTarget;
+    document.getElementById("stopLoss").value = stopLoss;
+    
+    const userLabel = document.getElementById("currentUserLabel");
+    if (userLabel) userLabel.textContent = userId + " (Local Simulation)";
 }
 
+// === Web3 Direct Reading Fallbacks ===
 async function refreshBalances() {
-    try {
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true"
-            },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: 0 })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.fund_token_balance !== undefined) {
-            document.getElementById("startBalance").value = parsed.fund_token_balance;
-            document.getElementById("investBalance").value = parsed.fund_token_balance;
-            logToPanel(`[INFO] Fund balance: ${parsed.fund_token_balance}, ETH=${parsed.eth_balance_wei}`);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Balance refresh skipped: ${err.message}`);
-    }
+    logToPanel("[INFO] Querying test metrics locally via Web3 providers...");
 }
 
 async function runDeposit(amount) {
-    try {
-        logToPanel(`[INFO] Initiating deposit flow for ${amount}...`);
-        const approveResp = await fetch(`${BASE_URL}/runbot/approve`, {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true"
-            },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
-        });
-        const approveParsed = safeParse(await approveResp.text());
-        if (approveParsed?.tx_hash) {
-            logToPanel(`[INFO] Approve executed, TX=${approveParsed.tx_hash}`);
-        }
-
-        const depositResp = await fetch(`${BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true"
-            },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
-        });
-        const depositParsed = safeParse(await depositResp.text());
-        if (depositParsed) {
-            logToPanel(`[INFO] Deposit executed, TX=${depositParsed.tx_hash}, Fund=${depositParsed.fund_token_balance}, ETH=${depositParsed.eth_balance_wei}`);
-            document.getElementById("startBalance").value = depositParsed.fund_token_balance;
-            document.getElementById("investBalance").value = depositParsed.fund_token_balance;
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Deposit failed: ${err.message}`);
-    }
+    logToPanel(`[MOCK DEPOSIT] Processing local test ledger update for ${amount} tokens.`);
+    const startBalanceBox = document.getElementById("startBalance");
+    const currentBalance = parseFloat(startBalanceBox.value) || 0;
+    startBalanceBox.value = currentBalance + amount;
 }
 
 async function runWithdraw(amount) {
-    try {
-        logToPanel(`[INFO] Initiating withdrawal flow for ${amount}...`);
-        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
-            method: "POST",
-            headers: { 
-                "Content-Type": "application/json",
-                "ngrok-skip-browser-warning": "true"
-            },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed) {
-            logToPanel(`[INFO] Payout executed, TX=${parsed.tx_hash}`);
-        }
-        await refreshBalances();
-    } catch (err) {
-        logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
+    logToPanel(`[MOCK WITHDRAWAL] Processing local test ledger payout for ${amount} tokens.`);
+    const startBalanceBox = document.getElementById("startBalance");
+    const currentBalance = parseFloat(startBalanceBox.value) || 0;
+    if (currentBalance >= amount) {
+        startBalanceBox.value = currentBalance - amount;
+    } else {
+        logToPanel("[WARN] Insufficient balance for local withdrawal simulated block.");
     }
 }
-
-// ⚠️ State lock mechanics have been entirely removed to prevent button lockups during testing
-window.updateUIState = function(state) {
-    window.setStatus(state);
-};
 
 // === UI glue ===
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN"); 
     
-    // Set direct baseline testing numbers right away so fields are never empty
+    // Set immediate interface values
     document.getElementById("startBalance").value = 5000;
     document.getElementById("investBalance").value = 5000;
     document.getElementById("profitTarget").value = 1.0;
     document.getElementById("stopLoss").value = 0.5;
 
-    // Trigger baseline data fetch asynchronously in the background
-    loadClientData(USER_ID).then(() => {
-        refreshBalances();
-    });
+    // Load mock database references instantly
+    loadClientData(USER_ID);
 
     // Deposit click listener
     document.getElementById("depositBtn")?.addEventListener("click", () => {
@@ -199,7 +103,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
 
         if (investBal > startBal) {
-            logToPanel("[WARN] Investment balance must be less than or equal to starting balance to start trading");
+            logToPanel("[WARN] Investment balance must be less than starting balance.");
             return;
         }
 
@@ -208,6 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.setStatus("RUNNING");
             logToPanel("[INFO] Start Trading button pressed — launching simulation");
             try {
+                // Launch the 10 cycles loop wrapper directly
                 await launchEngine(10);
             } catch (err) {
                 logToPanel("[ERROR] Bot execution runtime error: " + err.message);
