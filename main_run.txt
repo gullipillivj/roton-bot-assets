@@ -1,18 +1,18 @@
 // === main_run.txt ===
-logToPanel("main_run.txt loaded (Single Tunnel Mode)");
+logToPanel("main_run.txt loaded (Full Production Integration v3)");
 
-// 🌐 SINGLE TUNNEL EXPOSURE: Points directly to your Anvil node
-// === main_run.txt ===
-logToPanel("main_run.txt loaded (Single Tunnel Mode)");
+// 🌐 LIVE TUNNEL CONFIGURATION: Points directly to your operational Flask instance
+window.BASE_URL  = "https://ngrok-free.dev";
+window.RPC_URL   = "https://ngrok-free.dev/runbot/rpc";
 
-// 🌐 LIVE TUNNEL EXPOSURE: Points directly to your operational Anvil instance
-window.RPC_URL   = "https://ngrok-free.dev";
-window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev"; // Maps the root path for unedited asset references
 window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
-// Maintain short-hand mirrors inside main_run.txt to preserve structural references
+// Expose these as global variables so simulate_run.txt can read them without errors
+window.USER_ADDR = window.USER_ADDR;
+window.USER_PK   = window.USER_PK;
+
 const USER_ID   = window.USER_ID;
 const USER_ADDR = window.USER_ADDR;
 const USER_PK   = window.USER_PK;
@@ -23,7 +23,10 @@ function logToPanel(msg) {
     if (panel) panel.value += msg + "\n";
 }
 
-// === Global safe UI status helper ===
+function safeParse(text) {
+    try { return JSON.parse(text); } catch { return null; }
+}
+
 window.setStatus = function(text) {
     const statusLabel = document.getElementById("statusLabel");
     if (statusLabel) {
@@ -37,107 +40,205 @@ if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
 
-// === Bypassed DB Fetch: Loads Mock Data locally to prevent Single Tunnel Network Errors ===
+// 📈 FIX 1: Provide the missing global Chart updater wrapper to prevent runtime loop dropouts
+window.updateChart = function(runningBalance, cumulativePnL) {
+    try {
+        if (window.balanceChart) {
+            const timeLabel = new Date().toLocaleTimeString();
+            window.balanceChart.data.labels.push(timeLabel);
+            window.balanceChart.data.datasets[0].data.push(runningBalance);
+            if (window.balanceChart.data.datasets[1]) {
+                window.balanceChart.data.datasets[1].data.push(cumulativePnL);
+            }
+            window.balanceChart.update();
+        }
+    } catch (e) {
+        console.error("Chart updating skipped: ", e.message);
+    }
+};
+
+// ⛓️ FIX 2: Connect the broken window hooks to your actual Flask HTTP routes
+window.approveToken = async function(amount, walletAddress, privateKey) {
+    try {
+        const resp = await fetch(`${BASE_URL}/runbot/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                amount: Math.floor(parseFloat(amount)), // Coerce float to clean integer for Python
+                wallet_address: walletAddress,
+                private_key: privateKey
+            })
+        });
+        return safeParse(await resp.text());
+    } catch (err) {
+        logToPanel(`[ERROR] approveToken API bridge failed: ${err.message}`);
+        return null;
+    }
+};
+
+window.swapToTarget = async function(amount, walletAddress, privateKey) {
+    try {
+        // Routes straight to your Flask router contract endpoint
+        const resp = await fetch(`${BASE_URL}/runbot/swap`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                amount: Math.floor(parseFloat(amount)),
+                wallet_address: walletAddress,
+                private_key: privateKey
+            })
+        });
+        return safeParse(await resp.text());
+    } catch (err) {
+        logToPanel(`[ERROR] swapToTarget API bridge failed: ${err.message}`);
+        return null;
+    }
+};
+
+// === Load Real Client Data & Existing Balances From Flask ===
 async function loadClientData(userId) {
-    logToPanel(`[INFO] Single Tunnel Active: Loading offline mock data configuration for ${userId}...`);
-    
-    // Default fallback values to bypass network issues entirely
-    const walletBalance = 5000;
-    const profitTarget  = 1.0;
-    const stopLoss      = 0.5;
+    try {
+        logToPanel(`[INFO] Fetching live database records for ${userId}...`);
+        const resp = await fetch(`${BASE_URL}/clients`, {
+            headers: { "ngrok-skip-browser-warning": "true" }
+        });
+        const data = safeParse(await resp.text());
+        
+        if (!data || !data.clients || data.clients.length === 0) {
+            logToPanel("[WARN] No clients found in DB payload");
+            return;
+        }
 
-    document.getElementById("startBalance").value = walletBalance;
-    document.getElementById("investBalance").value = walletBalance;
-    document.getElementById("profitTarget").value = profitTarget;
-    document.getElementById("stopLoss").value = stopLoss;
-    
-    const userLabel = document.getElementById("currentUserLabel");
-    if (userLabel) userLabel.textContent = userId + " (Local Simulation)";
-}
+        const client = data.clients.find(c => c.profile && c.profile.name === userId);
+        if (!client) {
+            logToPanel(`[WARN] User ${userId} not found in database records.`);
+            return;
+        }
 
-// === Web3 Direct Reading Fallbacks ===
-async function refreshBalances() {
-    logToPanel("[INFO] Querying test metrics locally via Web3 providers...");
-}
+        const walletBalance = (client.wallet && client.wallet.balance !== null) ? parseFloat(client.wallet.balance) : 1000;
+        const profitTarget  = (client.settings && client.settings.profit_target) ? parseFloat(client.settings.profit_target) : 1.0;
+        const stopLoss      = (client.settings && client.settings.stop_loss) ? parseFloat(client.settings.stop_loss) : 0.5;
+        const profileName   = client.profile.name || userId;
 
-async function runDeposit(amount) {
-    logToPanel(`[MOCK DEPOSIT] Processing local test ledger update for ${amount} tokens.`);
-    const startBalanceBox = document.getElementById("startBalance");
-    const currentBalance = parseFloat(startBalanceBox.value) || 0;
-    startBalanceBox.value = currentBalance + amount;
-}
+        logToPanel(`[DB SUCCESS] Loaded ${profileName}. Balance: ${walletBalance} USDT.`);
 
-async function runWithdraw(amount) {
-    logToPanel(`[MOCK WITHDRAWAL] Processing local test ledger payout for ${amount} tokens.`);
-    const startBalanceBox = document.getElementById("startBalance");
-    const currentBalance = parseFloat(startBalanceBox.value) || 0;
-    if (currentBalance >= amount) {
-        startBalanceBox.value = currentBalance - amount;
-    } else {
-        logToPanel("[WARN] Insufficient balance for local withdrawal simulated block.");
+        document.getElementById("startBalance").value = walletBalance;
+        document.getElementById("investBalance").value = walletBalance;
+        document.getElementById("profitTarget").value = profitTarget;
+        document.getElementById("stopLoss").value = stopLoss;
+        
+        const userLabel = document.getElementById("currentUserLabel");
+        if (userLabel) userLabel.textContent = profileName;
+
+    } catch (e) {
+        logToPanel("[ERROR] loadClientData query failed: " + e.message);
     }
 }
 
-// === UI glue ===
-document.addEventListener("DOMContentLoaded", () => {
+async function runDeposit(amount) {
+    try {
+        logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
+        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: Math.floor(amount) })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash) {
+            logToPanel(`[SUCCESS] On-Chain Deposit TX confirmed: ${parsed.tx_hash}`);
+            await loadClientData(USER_ID);
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Deposit sequence aborted: ${err.message}`);
+    }
+}
+
+async function runWithdraw(amount) {
+    try {
+        logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
+        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: Math.floor(amount) })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash) {
+            logToPanel(`[SUCCESS] Payout TX confirmed: ${parsed.tx_hash}`);
+            await loadClientData(USER_ID);
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Withdrawal execution failed: ${err.message}`);
+    }
+}
+
+async function commitFinalPnLToDatabase(finalPnL) {
+    try {
+        const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
+        const updatedNetBalance = startingAllocated + finalPnL;
+        
+        logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
+
+        const resp = await fetch(`${BASE_URL}/runbot/update_client`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                amount_deposited: Math.floor(startingAllocated),
+                current_balance: Math.floor(updatedNetBalance)
+            })
+        });
+        
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "client updated") {
+            logToPanel(`[SQLITE SUCCESS] Final performance data saved to clients.db for ${window.USER_ID}.`);
+            document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
+        } else {
+            logToPanel("[WARN] Database adjustment rejected by server script.");
+        }
+    } catch (err) {
+        logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
+    }
+}
+
+// === UI Glue ===
+document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN"); 
-    
-    // Set immediate interface values
-    document.getElementById("startBalance").value = 5000;
-    document.getElementById("investBalance").value = 5000;
-    document.getElementById("profitTarget").value = 1.0;
-    document.getElementById("stopLoss").value = 0.5;
+    await loadClientData(USER_ID);
 
-    // Load mock database references instantly
-    loadClientData(USER_ID);
-
-    // Deposit click listener
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
         runDeposit(amt);
     });
 
-    // Withdraw click listener
     document.getElementById("withdrawBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
         runWithdraw(amt);
     });
 
-    // Start Bot click listener
     document.getElementById("startBtn")?.addEventListener("click", async () => {
-        const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
-        const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
-
-        if (investBal > startBal) {
-            logToPanel("[WARN] Investment balance must be less than starting balance.");
-            return;
-        }
-
+        // Expose cumulative tracker into window memory scope dynamically
+        window.cumulativePnL = 0;
+        
         const launchEngine = window.startSimulation || window.initBot;
         if (typeof launchEngine === "function") {
             window.setStatus("RUNNING");
-            logToPanel("[INFO] Start Trading button pressed — launching simulation");
+            logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
             try {
-                // Launch the 10 cycles loop wrapper directly
                 await launchEngine(10);
             } catch (err) {
-                logToPanel("[ERROR] Bot execution runtime error: " + err.message);
+                logToPanel("[ERROR] Runtime simulation engine drop: " + err.message);
             } finally {
                 window.setStatus("COMPLETED");
+                const totalSimulatedPnL = window.cumulativePnL || 0;
+                await commitFinalPnLToDatabase(totalSimulatedPnL);
             }
-        } else {
-            logToPanel("[ERROR] Simulation loop entry engine not found.");
         }
     });
 
-    // Stop Bot click listener
     document.getElementById("stopBtn")?.addEventListener("click", () => {
         window.isBotRunning = false;
-        if (typeof window.stopBot === "function") {
-            window.stopBot();
-        }
         window.setStatus("STOPPED");
-        logToPanel("[MANUAL] Stop signal flagged. Halting background sequence.");
+        logToPanel("[MANUAL] Bot process sequence flagged to stop.");
     });
 });
