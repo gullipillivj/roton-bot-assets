@@ -127,12 +127,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.startSimulation(10);
     });
 
-    // ✅ Stop Trading button (ID aligned with HTML: stopBtn)
-    document.getElementById("stopBtn")?.addEventListener("click", () => {
-        if (window.cycleTimer) {
-            clearTimeout(window.cycleTimer); // ✅ corrected to clearTimeout
-            setStatus("STOPPED");
-            logToPanel("[INFO] Trading stopped manually");
-        }
-    });
+// ✅ Stop Trading button click handler modification (Replace old clearTimeout section)
+document.getElementById("stopBtn")?.addEventListener("click", () => {
+    if (window.isBotRunning) {
+        window.isBotRunning = false;
+        setStatus("STOPPED");
+        logToPanel("[INFO] Stop loop request sent. Intercepting next cycle pipeline block...");
+    } else {
+        logToPanel("[INFO] Process runner is not currently active.");
+    }
+});
+
 });
