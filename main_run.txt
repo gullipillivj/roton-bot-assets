@@ -1,5 +1,23 @@
 logToPanel("main_run.txt loaded");
 
+// === Global safe UI status helper ===
+window.setStatus = function(text) {
+    const statusLabel = document.getElementById("statusLabel");
+    if (statusLabel) {
+        statusLabel.textContent = "STATE: " + text;
+    } else {
+        // Fallback to text logger panel if target DOM element isn't found
+        logToPanel(`[STATUS UPDATE] ${text}`);
+    }
+};
+
+// Also expose it without window prefix for direct scripts execution context
+if (typeof globalThis !== 'undefined') {
+    globalThis.setStatus = window.setStatus;
+
+}
+
+
 // === Load client data function ===
 async function loadClientData(username = "mockuser1") {
     try {
