@@ -1,4 +1,3 @@
-
 // === main_run.txt ===
 logToPanel("main_run.txt loaded");
 
@@ -33,7 +32,6 @@ window.setStatus = function(text) {
     }
 };
 
-// Also expose it without window prefix for direct scripts execution context
 if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
@@ -42,7 +40,11 @@ if (typeof globalThis !== 'undefined') {
 async function loadClientData(userId) {
     try {
         logToPanel(`[INFO] Fetching records for ${userId}...`);
-        const resp = await fetch(`${BASE_URL}/clients`);
+        
+        // Include ngrok bypass headers directly in the fetch request to mitigate warning screen blocks
+        const resp = await fetch(`${BASE_URL}/clients`, {
+            headers: { "ngrok-skip-browser-warning": "true" }
+        });
         const data = safeParse(await resp.text());
         
         if (!data || !data.clients || data.clients.length === 0) {
@@ -75,13 +77,9 @@ async function loadClientData(userId) {
         const userLabel = document.getElementById("currentUserLabel");
         if (userLabel) userLabel.textContent = profileName;
 
-        if (walletBalance > 0) {
-            setButtonStates("afterDeposit");
-        }
-
     } catch (e) {
         logToPanel("[ERROR] loadClientData fetch bypassed: " + e.message);
-        setButtonStates("afterDeposit"); 
+        logToPanel("[MOCK ACTIVE] Running with local dashboard default fallback numbers.");
     }
 }
 
@@ -89,7 +87,10 @@ async function refreshBalances() {
     try {
         const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+            },
             body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: 0 })
         });
         const parsed = safeParse(await resp.text());
@@ -97,9 +98,6 @@ async function refreshBalances() {
             document.getElementById("startBalance").value = parsed.fund_token_balance;
             document.getElementById("investBalance").value = parsed.fund_token_balance;
             logToPanel(`[INFO] Fund balance: ${parsed.fund_token_balance}, ETH=${parsed.eth_balance_wei}`);
-            if (parseFloat(parsed.fund_token_balance) > 0) {
-                setButtonStates("afterDeposit");
-            }
         }
     } catch (err) {
         logToPanel(`[ERROR] Balance refresh skipped: ${err.message}`);
@@ -108,9 +106,13 @@ async function refreshBalances() {
 
 async function runDeposit(amount) {
     try {
+        logToPanel(`[INFO] Initiating deposit flow for ${amount}...`);
         const approveResp = await fetch(`${BASE_URL}/runbot/approve`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+            },
             body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
         const approveParsed = safeParse(await approveResp.text());
@@ -120,7 +122,10 @@ async function runDeposit(amount) {
 
         const depositResp = await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+            },
             body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
         const depositParsed = safeParse(await depositResp.text());
@@ -128,7 +133,6 @@ async function runDeposit(amount) {
             logToPanel(`[INFO] Deposit executed, TX=${depositParsed.tx_hash}, Fund=${depositParsed.fund_token_balance}, ETH=${depositParsed.eth_balance_wei}`);
             document.getElementById("startBalance").value = depositParsed.fund_token_balance;
             document.getElementById("investBalance").value = depositParsed.fund_token_balance;
-            setButtonStates("afterDeposit");
         }
     } catch (err) {
         logToPanel(`[ERROR] Deposit failed: ${err.message}`);
@@ -137,9 +141,13 @@ async function runDeposit(amount) {
 
 async function runWithdraw(amount) {
     try {
+        logToPanel(`[INFO] Initiating withdrawal flow for ${amount}...`);
         const resp = await fetch(`${BASE_URL}/runbot/payout`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "ngrok-skip-browser-warning": "true"
+            },
             body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
         const parsed = safeParse(await resp.text());
@@ -152,145 +160,72 @@ async function runWithdraw(amount) {
     }
 }
 
-// === State machine ===
-function setButtonStates(state) {
-    const startBtn = document.getElementById("startBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const depositBtn = document.getElementById("depositBtn");
-    const withdrawBtn = document.getElementById("withdrawBtn");
-    const changeUserBtn = document.getElementById("changeUserBtn");
-
-    const startBalanceBox = document.getElementById("startBalance");
-    const depositBox = document.getElementById("depositAmount");
-    const withdrawBox = document.getElementById("withdrawAmount");
-    const statusLabel = document.getElementById("statusLabel");
-
-    if (!startBtn || !stopBtn || !statusLabel) return;
-
-    switch(state) {
-        case "init":
-            startBtn.disabled = true;
-            stopBtn.disabled = true;
-            if(depositBtn) depositBtn.disabled = false;
-            if(withdrawBtn) withdrawBtn.disabled = true;
-            if(changeUserBtn) changeUserBtn.disabled = true;
-            if(startBalanceBox) startBalanceBox.readOnly = true;
-            if(depositBox) depositBox.disabled = false;
-            if(withdrawBox) withdrawBox.disabled = true;
-            window.setStatus("INIT");
-            statusLabel.style.color = "gray";
-            break;
-
-        case "afterDeposit":
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            if(depositBtn) depositBtn.disabled = false;
-            if(withdrawBtn) withdrawBtn.disabled = false; 
-            if(changeUserBtn) changeUserBtn.disabled = false;
-            if(startBalanceBox) startBalanceBox.readOnly = true;
-            if(depositBox) depositBox.disabled = false;
-            if(withdrawBox) withdrawBox.disabled = false;
-            window.setStatus("READY TO RUN");
-            statusLabel.style.color = "blue";
-            break;
-
-        case "running":
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            if(depositBtn) depositBtn.disabled = true;
-            if(withdrawBtn) withdrawBtn.disabled = true;
-            if(changeUserBtn) changeUserBtn.disabled = true;
-            if(startBalanceBox) startBalanceBox.disabled = true;
-            if(depositBox) depositBox.disabled = true;
-            if(withdrawBox) withdrawBox.disabled = true;
-            window.setStatus("RUNNING");
-            statusLabel.style.color = "red";
-            break;
-
-        case "completed":
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            if(depositBtn) depositBtn.disabled = false;
-            if(withdrawBtn) withdrawBtn.disabled = false;
-            if(changeUserBtn) changeUserBtn.disabled = false;
-            if(startBalanceBox) startBalanceBox.disabled = false; 
-            if(depositBox) depositBox.disabled = false;
-            if(withdrawBox) withdrawBox.disabled = false;
-            window.setStatus("COMPLETED");
-            statusLabel.style.color = "green";
-            break;
-    }
-}
-
-// === Expose state callbacks globally ===
+// ⚠️ State lock mechanics have been entirely removed to prevent button lockups during testing
 window.updateUIState = function(state) {
-    setButtonStates(state);
+    window.setStatus(state);
 };
 
 // === UI glue ===
 document.addEventListener("DOMContentLoaded", () => {
     logToPanel("UI ready");
+    window.setStatus("READY TO RUN"); 
     
-    // 🪙 INSTANT FAIL-SAFE SETUP: Pre-populate inputs with mock values
+    // Set direct baseline testing numbers right away so fields are never empty
     document.getElementById("startBalance").value = 5000;
     document.getElementById("investBalance").value = 5000;
     document.getElementById("profitTarget").value = 1.0;
     document.getElementById("stopLoss").value = 0.5;
-    
-    // ✅ FORCE ACTIVATE: Set state to afterDeposit immediately so buttons unlock
-    setButtonStates("afterDeposit"); 
 
-    // 🚀 BACKGROUND SYNC: Fetch backend API without freezing the UI thread
+    // Trigger baseline data fetch asynchronously in the background
     loadClientData(USER_ID).then(() => {
         refreshBalances();
     });
 
-    // Deposit button
+    // Deposit click listener
+    document.getElementById("depositBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
+        runDeposit(amt);
+    });
 
-document.getElementById("depositBtn")?.addEventListener("click", () => {
-const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-runDeposit(amt);
+    // Withdraw click listener
+    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+        runWithdraw(amt);
+    });
+
+    // Start Bot click listener
+    document.getElementById("startBtn")?.addEventListener("click", async () => {
+        const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
+        const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
+
+        if (investBal > startBal) {
+            logToPanel("[WARN] Investment balance must be less than or equal to starting balance to start trading");
+            return;
+        }
+
+        const launchEngine = window.startSimulation || window.initBot;
+        if (typeof launchEngine === "function") {
+            window.setStatus("RUNNING");
+            logToPanel("[INFO] Start Trading button pressed — launching simulation");
+            try {
+                await launchEngine(10);
+            } catch (err) {
+                logToPanel("[ERROR] Bot execution runtime error: " + err.message);
+            } finally {
+                window.setStatus("COMPLETED");
+            }
+        } else {
+            logToPanel("[ERROR] Simulation loop entry engine not found.");
+        }
+    });
+
+    // Stop Bot click listener
+    document.getElementById("stopBtn")?.addEventListener("click", () => {
+        window.isBotRunning = false;
+        if (typeof window.stopBot === "function") {
+            window.stopBot();
+        }
+        window.setStatus("STOPPED");
+        logToPanel("[MANUAL] Stop signal flagged. Halting background sequence.");
+    });
 });
-// Withdraw button
-document.getElementById("withdrawBtn")?.addEventListener("click", () => {
-const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-runWithdraw(amt);
-});
-// Start Bot button
-document.getElementById("startBtn")?.addEventListener("click", async () => {
-const startBal = parseFloat(document.getElementById("startBalance").value) || 0;
-const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
-if (investBal > startBal) {
-logToPanel("[WARN] Investment balance must be less than or equal to starting balance to start trading");
-return;
-}
-const launchEngine = window.startSimulation || window.initBot;
-if (typeof launchEngine === "function") {
-setButtonStates("running");
-logToPanel("[INFO] Start Trading button pressed — launching simulation");
-try {
-await launchEngine(10);
-} catch (err) {
-logToPanel("[ERROR] Bot execution runtime error: " + err.message);
-} finally {
-setButtonStates("completed");
-}
-} else {
-logToPanel("[ERROR] Simulation loop entry engine not found.");
-}
-});
-// Stop Bot button
-document.getElementById("stopBtn")?.addEventListener("click", () => {
-window.isBotRunning = false;
-if (typeof window.stopBot === "function") {
-window.stopBot();
-}
-setButtonStates("completed");
-logToPanel("[MANUAL] Stop signal flagged. Halting background sequence.");
-});
-});
-
-
-
-
-
