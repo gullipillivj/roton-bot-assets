@@ -1,4 +1,4 @@
-logToPanel("main_run.txt loaded (Full Production Integration v4)");
+logToPanel("main_run.txt loaded (Full Production Integration v5 - Wei Native)");
 
 // 🌐 LIVE TUNNEL CONFIGURATION: Links both script environments seamlessly
 window.BASE_URL  = "https://ngrok-free.dev";
@@ -10,7 +10,7 @@ window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4
 
 const USER_ID   = window.USER_ID;
 const USER_ADDR = window.USER_ADDR;
-const USER_PK = window.USER_PK;
+const USER_PK   = window.USER_PK;
 const BASE_URL  = window.BASE_URL;
 
 function logToPanel(msg) {
@@ -35,7 +35,7 @@ if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
 
-// 🛡️ BUTTON METRICS TRACKER: Added back to context
+// 🛡️ BUTTON METRICS TRACKER
 window.setButtonStates = function(status) {
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
@@ -57,7 +57,7 @@ window.setButtonStates = function(status) {
     }
 };
 
-// 📈 CHART APPARATUS HOOK: Maps data streams cleanly matching chart.txt arrays
+// 📈 CHART APPARATUS HOOK
 window.updateChart = function(balance, profit = null) {
     try {
         const chart = window.balanceChart;
@@ -80,7 +80,7 @@ window.updateChart = function(balance, profit = null) {
     }
 };
 
-// 🛡️ REVERSE PROXY INTERCEPTOR
+// 🛡️ REVERSE PROXY INTERCEPTOR: Automatically scales values into Wei configurations
 const originalFetch = window.fetch;
 window.fetch = async function(url, options) {
     let urlStr = typeof url === 'string' ? url : '';
@@ -97,10 +97,14 @@ window.fetch = async function(url, options) {
                 parsedBody.amount = parsedBody.amountIn;
             }
             if (parsedBody.amount !== undefined) {
-                parsedBody.amount = Math.floor(parseFloat(parsedBody.amount));
+                // Scale value to 18 decimals (Wei standard representation)
+                const rawAmount = parseFloat(parsedBody.amount);
+                parsedBody.amount = (BigInt(Math.floor(rawAmount * 1000000)) * BigInt(10**12)).toString();
             }
             options.body = JSON.stringify(parsedBody);
-        } catch(e) {}
+        } catch(e) {
+            console.error("Interceptor Wei payload processing error: ", e);
+        }
     }
     return originalFetch(url, options);
 };
@@ -176,7 +180,7 @@ async function commitFinalPnLToDatabase(finalPnL) {
 // === UI Click Handlers ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
-    window.setButtonStates("completed"); // Sets correct initial state
+    window.setButtonStates("completed");
     await loadClientData(USER_ID);
 
     document.getElementById("depositBtn")?.addEventListener("click", async () => {
