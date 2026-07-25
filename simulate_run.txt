@@ -131,7 +131,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
 }
 
-// === Simulation Engine Management Wrapper ===
+// === Modified Simulation Engine Management Wrapper ===
 async function startSimulation(totalCycles) {
   if (window.isBotRunning) {
     logToPanel("[WARN] Bot runner already thread active.");
@@ -150,7 +150,9 @@ async function startSimulation(totalCycles) {
   if (window.balanceChart) {
     window.balanceChart.data.labels = [];
     window.balanceChart.data.datasets[0].data = [];
-    if (window.balanceChart.data.datasets[1]) window.balanceChart.data.datasets[1].data = [];
+    if (window.balanceChart.data.datasets[1]) {
+        window.balanceChart.data.datasets[1].data = [];
+    }
     window.balanceChart.update();
   }
 
@@ -161,15 +163,31 @@ async function startSimulation(totalCycles) {
     }
 
     const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
-    if (stateSignal === "STOP") break;
+    
+    // Check if loop was targeted to stop explicitly by Take Profit 
+    if (stateSignal === "STOP_PROFIT") {
+      logToPanel("[INFO] Terminating simulation due to Profit Target completion.");
+      break;
+    }
 
-    // Inject a 2.5-second pacing window to allow Anvil VM blocks to execute clearly
-    await blockDelay(2500);
+    // Skip the loop interval pause on the very final cycle execution block
+    if (i < totalCycles) {
+      logToPanel(`[WAIT] Pacing delay active — waiting 1 minute before executing Cycle ${i + 1}...`);
+      
+      // 60-second non-blocking countdown delay (60,000 milliseconds)
+      for (let countdown = 60; countdown > 0; countdown--) {
+        if (!window.isBotRunning) break;
+        if (countdown % 15 === 0) { // Log status update every 15 seconds to keep panel clean
+          setStatus(`WAITING (${countdown}s remaining)`);
+        }
+        await blockDelay(1000); 
+      }
+    }
   }
 
   window.isBotRunning = false;
   setStatus("STOPPED");
-  logToPanel("[FINISH] Simulated crypto cycle run complete.");
+  logToPanel("[FINISH] 10-cycle simulated crypto run sequence complete.");
 }
-
 window.startSimulation = startSimulation;
+
