@@ -156,6 +156,38 @@ async function refreshBalances() {
     }
 }
 
+// === Commit Final PnL to Database ===
+async function commitFinalPnLToDatabase(finalPnL) {
+    try {
+        const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
+        const updatedNetBalance = startingAllocated + finalPnL;
+
+        logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
+
+        const resp = await fetch(`${BASE_URL}/runbot/update_client`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                current_balance: updatedNetBalance,
+                wallet_address: USER_ADDR,
+                email: `${window.USER_ID}@example.com`,
+                status: "ACTIVE"
+            })
+        });
+
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "client updated") {
+            logToPanel(`[SQLITE SUCCESS] Final performance data persisted for user ${window.USER_ID}.`);
+            document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
+        } else {
+            logToPanel("[WARN] Database adjustment rejected by server script.");
+        }
+    } catch (err) {
+        logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
+    }
+}
+
 // === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
@@ -193,17 +225,3 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             window.cumulativePnL = 0;
             await launchEngine(10);
-            window.setStatus("COMPLETED");
-            logToPanel("[FINISHED] All trading cycles processed in memory successfully.");
-        } catch (err) {
-            window.setStatus("CRASHED");
-            logToPanel("[CRITICAL ERROR] Trading loop broke mid-flight: " + err.message);
-        }
-    });
-
-    document.getElementById("stopBtn")?.addEventListener("click", () => {
-        window.isBotRunning = false;
-        window.setStatus("STOPPED");
-        logToPanel("[MANUAL] Bot process sequence flagged to stop.");
-    });
-});
