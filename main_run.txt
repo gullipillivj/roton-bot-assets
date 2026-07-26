@@ -1,6 +1,6 @@
 logToPanel("main_run.txt loaded (Pure Memory Aligned Flow)");
 
-// 🌐 LIVE TUNNEL CONFIGURATION: Linked directly to your active subdomain instance
+// 🌐 LIVE TUNNEL CONFIGURATION
 window.BASE_URL  = "https://ngrok-free.dev";
 window.RPC_URL   = "https://ngrok-free.dev/runbot/rpc";
 
@@ -8,15 +8,12 @@ window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
-// Expose these as global variables so simulate_run.txt can read them without errors
-window.USER_ADDR = window.USER_ADDR;
-window.USER_PK   = window.USER_PK;
-
 const USER_ID   = window.USER_ID;
 const USER_ADDR = window.USER_ADDR;
 const USER_PK   = window.USER_PK;
 const BASE_URL  = window.BASE_URL;
 
+// === Helpers ===
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) {
@@ -42,18 +39,28 @@ if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
 
+// === Chart Initialization ===
+function initChart() {
+    const ctx = document.getElementById("balanceChart").getContext("2d");
+    window.balanceChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: [],
+            datasets: [
+                { label: "Running Balance", data: [], borderColor: "#00FF00" },
+                { label: "Cumulative PnL", data: [], borderColor: "#FF3333" }
+            ]
+        }
+    });
+}
+
 window.updateChart = function(runningBalance, cumulativePnL) {
     try {
         if (window.balanceChart && window.balanceChart.data) {
             const timeLabel = new Date().toLocaleTimeString();
             window.balanceChart.data.labels.push(timeLabel);
-            
-            if (window.balanceChart.data.datasets[0] && window.balanceChart.data.datasets[0].data) {
-                window.balanceChart.data.datasets[0].data.push(runningBalance);
-            }
-            if (window.balanceChart.data.datasets[1] && window.balanceChart.data.datasets[1].data) {
-                window.balanceChart.data.datasets[1].data.push(cumulativePnL);
-            }
+            window.balanceChart.data.datasets[0].data.push(runningBalance);
+            window.balanceChart.data.datasets[1].data.push(cumulativePnL);
             window.balanceChart.update();
         }
     } catch (e) {
@@ -61,86 +68,100 @@ window.updateChart = function(runningBalance, cumulativePnL) {
     }
 };
 
+// === API Calls ===
 window.approveToken = async function(amount, walletAddress, privateKey) {
     try {
-        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                amount: weiValueStr,
-                wallet_address: walletAddress,
-                private_key: privateKey
-            })
+            body: JSON.stringify({ amount, wallet_address: walletAddress, private_key: privateKey })
         });
         return safeParse(await resp.text());
     } catch (err) {
-        logToPanel(`[ERROR] approveToken API bridge failed: ${err.message}`);
+        logToPanel(`[ERROR] approveToken failed: ${err.message}`);
         return null;
     }
 };
 
 window.swapToTarget = async function(amount, walletAddress, privateKey) {
     try {
-        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/swap`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                amount: weiValueStr,
-                wallet_address: walletAddress,
-                private_key: privateKey
-            })
+            body: JSON.stringify({ amount, wallet_address: walletAddress, private_key: privateKey })
         });
         return safeParse(await resp.text());
     } catch (err) {
-        logToPanel(`[ERROR] swapToTarget API bridge failed: ${err.message}`);
+        logToPanel(`[ERROR] swapToTarget failed: ${err.message}`);
         return null;
     }
 };
 
+// === Deposit Function ===
 async function runDeposit(amount) {
+    logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
     try {
-        logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
-        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: weiValueStr })
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] On-Chain Deposit TX confirmed: ${parsed.tx_hash}`);
+            logToPanel(`[SUCCESS] Deposit TX confirmed: ${parsed.tx_hash}`);
+        }
+        if (parsed?.fund_token_balance !== undefined) {
+            document.getElementById("startBalance").value = parsed.fund_token_balance;
+            document.getElementById("investBalance").value = parsed.fund_token_balance;
         }
     } catch (err) {
-        logToPanel(`[ERROR] Deposit sequence aborted: ${err.message}`);
+        logToPanel(`[ERROR] Deposit failed: ${err.message}`);
     }
 }
 
+// === Withdraw Function ===
 async function runWithdraw(amount) {
+    logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
     try {
-        logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
-        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/payout`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: weiValueStr })
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
         });
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] Payout TX confirmed: ${parsed.tx_hash}`);
+            logToPanel(`[SUCCESS] Withdrawal TX confirmed: ${parsed.tx_hash}`);
         }
     } catch (err) {
-        logToPanel(`[ERROR] Withdrawal execution failed: ${err.message}`);
+        logToPanel(`[ERROR] Withdrawal failed: ${err.message}`);
     }
 }
 
-// === UI Click Handlers ===
+// === Balance Refresh ===
+async function refreshBalances() {
+    try {
+        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: 0 })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.fund_token_balance !== undefined) {
+            document.getElementById("startBalance").value = parsed.fund_token_balance;
+            document.getElementById("investBalance").value = parsed.fund_token_balance;
+            logToPanel(`[INFO] Fund Balance: ${parsed.fund_token_balance} units.`);
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Balance refresh failed: ${err.message}`);
+    }
+}
+
+// === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN");
+    initChart();
 
-    // Initialize UI inputs directly from default template structures instead of database queries
     document.getElementById("startBalance").value = 1000;
     document.getElementById("investBalance").value = 1000;
     if (document.getElementById("currentUserLabel")) {
@@ -157,6 +178,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         runWithdraw(amt);
     });
 
+    document.getElementById("refreshBtn")?.addEventListener("click", () => {
+        refreshBalances();
+    });
+
     document.getElementById("startBtn")?.addEventListener("click", async () => {
         const launchEngine = window.startSimulation || window.initBot;
         if (typeof launchEngine !== "function") {
@@ -165,19 +190,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
-        
         try {
             window.cumulativePnL = 0;
-            
-            // A. Execute trades from simulate_run.txt first
-            await launchEngine(10); 
-            
-            // B. SUCCESS PATH: Complete loop cleanly without hitting any SQLite updates
+            await launchEngine(10);
             window.setStatus("COMPLETED");
             logToPanel("[FINISHED] All trading cycles processed in memory successfully.");
-            
         } catch (err) {
-            // C. CRASH PATH: Logs errors natively while ensuring database channels remain untouched
             window.setStatus("CRASHED");
             logToPanel("[CRITICAL ERROR] Trading loop broke mid-flight: " + err.message);
         }
