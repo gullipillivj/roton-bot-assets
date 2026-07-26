@@ -1,9 +1,8 @@
-// === main_run.txt ===
-logToPanel("main_run.txt loaded (Full Production Integration v3)");
+logToPanel("main_run.txt loaded (Full Production Integration v5 - Stable RPC)");
 
-// 🌐 LIVE TUNNEL CONFIGURATION: Points directly to your operational Flask instance
-window.BASE_URL  = "https://ngrok-free.dev";
-window.RPC_URL   = "https://ngrok-free.dev/runbot/rpc";
+// 🌐 LIVE TUNNEL CONFIGURATION: Linked directly to your active subdomain instance
+window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
+window.RPC_URL   = "https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc";
 
 window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -20,7 +19,10 @@ const BASE_URL  = window.BASE_URL;
 
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
-    if (panel) panel.value += msg + "\n";
+    if (panel) {
+        panel.value += msg + "\n";
+        panel.scrollTop = panel.scrollHeight; 
+    }
 }
 
 function safeParse(text) {
@@ -40,14 +42,16 @@ if (typeof globalThis !== 'undefined') {
     globalThis.setStatus = window.setStatus;
 }
 
-// 📈 FIX 1: Provide the missing global Chart updater wrapper to prevent runtime loop dropouts
 window.updateChart = function(runningBalance, cumulativePnL) {
     try {
-        if (window.balanceChart) {
+        if (window.balanceChart && window.balanceChart.data) {
             const timeLabel = new Date().toLocaleTimeString();
             window.balanceChart.data.labels.push(timeLabel);
-            window.balanceChart.data.datasets[0].data.push(runningBalance);
-            if (window.balanceChart.data.datasets[1]) {
+            
+            if (window.balanceChart.data.datasets[0] && window.balanceChart.data.datasets[0].data) {
+                window.balanceChart.data.datasets[0].data.push(runningBalance);
+            }
+            if (window.balanceChart.data.datasets[1] && window.balanceChart.data.datasets[1].data) {
                 window.balanceChart.data.datasets[1].data.push(cumulativePnL);
             }
             window.balanceChart.update();
@@ -57,14 +61,14 @@ window.updateChart = function(runningBalance, cumulativePnL) {
     }
 };
 
-// ⛓️ FIX 2: Connect the broken window hooks to your actual Flask HTTP routes
 window.approveToken = async function(amount, walletAddress, privateKey) {
     try {
+        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
-                amount: Math.floor(parseFloat(amount)), // Coerce float to clean integer for Python
+                amount: weiValueStr,
                 wallet_address: walletAddress,
                 private_key: privateKey
             })
@@ -78,12 +82,12 @@ window.approveToken = async function(amount, walletAddress, privateKey) {
 
 window.swapToTarget = async function(amount, walletAddress, privateKey) {
     try {
-        // Routes straight to your Flask router contract endpoint
+        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/swap`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
-                amount: Math.floor(parseFloat(amount)),
+                amount: weiValueStr,
                 wallet_address: walletAddress,
                 private_key: privateKey
             })
@@ -95,7 +99,6 @@ window.swapToTarget = async function(amount, walletAddress, privateKey) {
     }
 };
 
-// === Load Real Client Data & Existing Balances From Flask ===
 async function loadClientData(userId) {
     try {
         logToPanel(`[INFO] Fetching live database records for ${userId}...`);
@@ -138,10 +141,11 @@ async function loadClientData(userId) {
 async function runDeposit(amount) {
     try {
         logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
+        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: Math.floor(amount) })
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: weiValueStr })
         });
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
@@ -156,10 +160,11 @@ async function runDeposit(amount) {
 async function runWithdraw(amount) {
     try {
         logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
+        const weiValueStr = (BigInt(Math.floor(parseFloat(amount) * 1000000)) * BigInt(10**12)).toString();
         const resp = await fetch(`${BASE_URL}/runbot/payout`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: Math.floor(amount) })
+            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: weiValueStr })
         });
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
@@ -200,7 +205,6 @@ async function commitFinalPnLToDatabase(finalPnL) {
     }
 }
 
-// === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN"); 
@@ -217,9 +221,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     document.getElementById("startBtn")?.addEventListener("click", async () => {
-        // Expose cumulative tracker into window memory scope dynamically
         window.cumulativePnL = 0;
-        
         const launchEngine = window.startSimulation || window.initBot;
         if (typeof launchEngine === "function") {
             window.setStatus("RUNNING");
@@ -233,12 +235,28 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const totalSimulatedPnL = window.cumulativePnL || 0;
                 await commitFinalPnLToDatabase(totalSimulatedPnL);
             }
+        } else {
+            logToPanel("[ERROR] Simulation loop entry engine not found.");
         }
     });
 
-    document.getElementById("stopBtn")?.addEventListener("click", () => {
-        window.isBotRunning = false;
-        window.setStatus("STOPPED");
-        logToPanel("[MANUAL] Bot process sequence flagged to stop.");
-    });
-});
+document.getElementById("stopBtn")?.addEventListener("click", () => {window.isBotRunning = false;window.setStatus("STOPPED");logToPanel("[MANUAL] Bot process sequence flagged to stop.");});});
+### 2. The Python Backend RPC Fix (`main.py`)
+To fix the server-side crash on your RPC proxy route, find the `@app.route("/runbot/rpc")` block inside **`main.py`** and completely replace it with this version to cleanly hook into your local Anvil blockchain node (`127.0.0.1:8545`) [source: 5]:
+
+```python
+# ==============================================================================
+# 13. PROXY LINK: RELAYS OUTBOUND STRUCT PAYLOADS STRAIGHT TO THE LOCAL EVM NODE
+# ==============================================================================
+@app.route("/runbot/rpc", methods=["POST"])
+def runbot_rpc():
+    try:
+        # FIXED: Directly targeting your active Anvil node running on port 8545
+        local_anvil_rpc = "http://127.0.0.1:8545"
+        resp = requests.post(local_anvil_rpc, json=request.get_json(), timeout=10)
+        return Response(resp.content,
+                        status=resp.status_code,
+                        content_type=resp.headers.get('Content-Type', 'application/json'))
+    except Exception as e:
+        print(f"[RPC RELAY CRASH] Failed to reach local Anvil network: {str(e)}")
+        return jsonify({"error": str(e)}), 500
