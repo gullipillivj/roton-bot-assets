@@ -27,35 +27,6 @@ window.setStatus = function(text) {
 };
 if (typeof globalThis !== 'undefined') globalThis.setStatus = window.setStatus;
 
-// === Chart Initialization ===
-function initChart() {
-    const canvas = document.getElementById("balanceChart");
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    window.balanceChart = new Chart(ctx, {
-        type: "line",
-        data: {
-            labels: [],
-            datasets: [
-                { label: "Running Balance", data: [], borderColor: "#00FF00", fill: false },
-                { label: "Cumulative PnL", data: [], borderColor: "#FF3333", fill: false }
-            ]
-        },
-        options: { animation: false, responsive: true }
-    });
-}
-window.updateChart = function(runningBalance, cumulativePnL) {
-    try {
-        if (window.balanceChart && window.balanceChart.data) {
-            const timeLabel = new Date().toLocaleTimeString();
-            window.balanceChart.data.labels.push(timeLabel);
-            window.balanceChart.data.datasets[0].data.push(runningBalance);
-            window.balanceChart.data.datasets[1].data.push(cumulativePnL);
-            window.balanceChart.update();
-        }
-    } catch (e) { console.error("Chart updating skipped: ", e.message); }
-};
-
 // === Client Data Loader ===
 async function loadClientData(userId) {
     try {
@@ -155,7 +126,6 @@ async function runWithdraw(amount) {
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN");
-    initChart();
 
     await loadClientData(window.USER_ID);
 
