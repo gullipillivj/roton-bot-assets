@@ -147,14 +147,34 @@ async function startSimulation(totalCycles) {
   const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
   // Clear previous metric layout entries prior to rendering fresh data sets
-  if (window.balanceChart) {
-    window.balanceChart.data.labels = [];
-    window.balanceChart.data.datasets[0].data = [];
-    if (window.balanceChart.data.datasets[1]) {
-        window.balanceChart.data.datasets[1].data = [];
-    }
-    window.balanceChart.update();
+  // ❌ REMOVE THESE LINES (Around line 122):
+if (window.balanceChart) {
+  window.balanceChart.data.labels = [];
+  window.balanceChart.data.datasets[0].data = [];
+  if (window.balanceChart.data.datasets[1]) {
+      window.balanceChart.data.datasets[1].data = [];
   }
+  window.balanceChart.update();
+}
+
+// =========================================================================
+
+// === ✅ REPLACE THEM WITH THIS SAFE CODE: ===
+if (window.balanceChart && window.balanceChart.data && window.balanceChart.data.datasets) {
+  try {
+      window.balanceChart.data.labels = [];
+      if (window.balanceChart.data.datasets[0]) {
+          window.balanceChart.data.datasets[0].data = [];
+      }
+      if (window.balanceChart.data.datasets[1]) {
+          window.balanceChart.data.datasets[1].data = [];
+      }
+      window.balanceChart.update();
+  } catch (chartResetErr) {
+      console.warn("[CHART RESET WARNING] Bypassed safely: " + chartResetErr.message);
+  }
+}
+
 
   for (let i = 1; i <= totalCycles; i++) {
     if (!window.isBotRunning) {
