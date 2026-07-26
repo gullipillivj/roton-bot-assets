@@ -1,168 +1,184 @@
-logToPanel("main_run.txt loaded (Full Production Integration)");
+logToPanel("simulate_run.txt loaded (Pure Memory Trading Loop)");
 
-// 🌐 LIVE TUNNEL CONFIGURATION
-window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
-window.RPC_URL   = "https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc";
+window.currentCycle = 1;
+window.cycleTimer = null;
+window.isBotRunning = false;
 
-window.USER_ID   = "mockuser1";
-window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+let startingBalanceAllocated = 0;
+let cumulativePnL = 0;
 
-const BASE_URL  = window.BASE_URL;
+// === Delay Helper ===
+const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
-// === Helpers ===
-function logToPanel(msg) {
-    const panel = document.getElementById("logPanel");
-    if (panel) panel.value += msg + "\n";
-}
-function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
-
-window.setStatus = function(text) {
-    const statusLabel = document.getElementById("statusLabel");
-    if (statusLabel) {
-        statusLabel.textContent = "STATE: " + text;
-    } else {
-        logToPanel(`[STATUS UPDATE] ${text}`);
-    }
-};
-if (typeof globalThis !== 'undefined') globalThis.setStatus = window.setStatus;
-
-// === Client Data Loader ===
-async function loadClientData(userId) {
+// === Coin Picker (uses global helper from main_run) ===
+async function pickRandomCoin() {
     try {
-        logToPanel(`[INFO] Fetching live database records for ${userId}...`);
-        const resp = await fetch(`${BASE_URL}/clients`, {
-            headers: { "ngrok-skip-browser-warning": "true" }
-        });
-        const data = safeParse(await resp.text());
-        if (!data || !data.clients || data.clients.length === 0) {
-            logToPanel("[WARN] No clients found in DB payload");
-            return;
-        }
-        const client = data.clients.find(c => c.profile && c.profile.name === userId);
-        if (!client) {
-            logToPanel(`[WARN] User ${userId} not found in database records.`);
-            return;
-        }
-        const walletBalance = (client.wallet && client.wallet.balance !== null) ? parseFloat(client.wallet.balance) : 1000;
-        const profitTarget  = (client.settings && client.settings.profit_target) ? parseFloat(client.settings.profit_target) : 1.0;
-        const stopLoss      = (client.settings && client.settings.stop_loss) ? parseFloat(client.settings.stop_loss) : 0.5;
-        const profileName   = client.profile.name || userId;
-
-        logToPanel(`[DB SUCCESS] Loaded ${profileName}. Balance: ${walletBalance} USDT.`);
-
-        document.getElementById("startBalance").value = walletBalance;
-        document.getElementById("investBalance").value = walletBalance;
-        document.getElementById("profitTarget").value = profitTarget;
-        document.getElementById("stopLoss").value = stopLoss;
-        const userLabel = document.getElementById("currentUserLabel");
-        if (userLabel) userLabel.textContent = profileName;
+        const pairs = await window.getBinancePairs();
+        if (!pairs || pairs.length === 0) return "BTC";
+        const idx = Math.floor(Math.random() * pairs.length);
+        return pairs[idx].replace("USDT", "");
     } catch (e) {
-        logToPanel("[ERROR] loadClientData query failed: " + e.message);
+        logToPanel("[ERROR] pickRandomCoin failed: " + e.message);
+        return "BTC";
     }
 }
+window.pickRandomCoin = pickRandomCoin;
 
-// === Balance / Deposit / Withdraw ===
-async function refreshBalances() {
+// === Simulation Cycle ===
+async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}/${totalCycles} started`);
+    setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
+
+    const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
+    if (investBal <= 0) {
+        logToPanel(`[WARN] Cycle ${cycle}: Investment pool depleted. Skipping.`);
+        return "SKIP";
+    }
+
+    const allocationUSD = investBal / totalCycles;
+    logToPanel(`[INFO] Cycle ${cycle}: Allocating ${allocationUSD.toFixed(2)} USDT to trade path`);
+
+    const coinBase = await pickRandomCoin();
+    const fullSymbol = `${coinBase}USDT`;
+    logToPanel(`[DEBUG] Selected target validation pair: ${fullSymbol}`);
+
+    const stats = await window.getBinanceStats(fullSymbol);
+    if (!stats) {
+        logToPanel(`[WARN] Skipping cycle ${cycle}: No price feed telemetry for ${fullSymbol}`);
+        return "SKIP";
+    }
+
+    const currentPrice = stats.lastPrice;
+    const standardDayChangePct = stats.priceChangePercent;
+
+    const cyclePnLUSD = allocationUSD * (standardDayChangePct / 100);
+    cumulativePnL += cyclePnLUSD;
+    window.cumulativePnL = cumulativePnL;
+
+    logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
+
     try {
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount: 0 })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.fund_token_balance !== undefined) {
-            document.getElementById("startBalance").value = parsed.fund_token_balance;
-            document.getElementById("investBalance").value = parsed.fund_token_balance;
-            logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
-        }
+        logToPanel(`[WEB3] Broadcasting approval transaction for ${coinBase}...`);
+        const txApprove = await window.approveToken(allocationUSD, window.USER_ADDR, window.USER_PK);
+        if (txApprove?.tx_hash) logToPanel(`[SUCCESS] Approve TX: ${txApprove.tx_hash}`);
+
+        logToPanel(`[WEB3] Routing swap payload via PancakeRouter proxy address...`);
+        const txSwap = await window.swapToTarget(allocationUSD, window.USER_ADDR, window.USER_PK);
+        if (txSwap?.tx_hash) logToPanel(`[SUCCESS] Swap TX: ${txSwap.tx_hash}`);
     } catch (err) {
-        logToPanel(`[ERROR] Balance sync skipped: ${err.message}`);
+        logToPanel(`[ERROR] Contract transaction trace failure: ${err.message}`);
     }
+
+    // === Chart Update (uses chart initialized in HTML) ===
+    if (window.balanceChart) {
+        const timeLabel = new Date().toLocaleTimeString();
+        window.balanceChart.data.labels.push(timeLabel);
+        window.balanceChart.data.datasets[0].data.push(investBal + cumulativePnL);
+        window.balanceChart.data.datasets[1].data.push(cumulativePnL);
+        window.balanceChart.update();
+    } else {
+        logToPanel("[WARN] Chart update skipped — balanceChart not initialized.");
+    }
+
+    const liveProfitSpan = document.getElementById("liveProfitValue");
+    if (liveProfitSpan) {
+        liveProfitSpan.textContent = `${cumulativePnL >= 0 ? '+' : ''}${cumulativePnL.toFixed(2)} USDT`;
+        liveProfitSpan.style.color = cumulativePnL >= 0 ? "#00FF00" : "#FF3333";
+    }
+
+    logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
+
+    const totalChangePct = (cumulativePnL / investBal) * 100;
+    if (totalChangePct >= profitTargetPct) {
+        logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering exit.`);
+        return "STOP_PROFIT";
+    }
+    if (totalChangePct <= -stopLossPct) {
+        logToPanel(`[STOP LOSS] Loss threshold of ${stopLossPct}% breached! Exiting.`);
+        return "STOP_LOSS";
+    }
+
+    return "CONTINUE";
 }
 
-async function runDeposit(amount) {
+// === Commit Final PnL to Database ===
+async function commitFinalPnLToDatabase(finalPnL) {
     try {
-        logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
-        await fetch(`${BASE_URL}/runbot/approve`, {
+        const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
+        const updatedNetBalance = startingAllocated + finalPnL;
+
+        logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
+
+        const resp = await fetch(`${window.BASE_URL}/runbot/update_client`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount })
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                current_balance: updatedNetBalance,
+                wallet_address: window.USER_ADDR,
+                email: `${window.USER_ID}@example.com`,
+                status: "ACTIVE"
+            })
         });
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount })
-        });
+
         const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] On-Chain Deposit TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(window.USER_ID);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Deposit sequence aborted: ${err.message}`);
-    }
-}
-
-async function runWithdraw(amount) {
-    try {
-        logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
-        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] Payout TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(window.USER_ID);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Withdrawal execution failed: ${err.message}`);
-    }
-}
-
-// === UI Glue ===
-document.addEventListener("DOMContentLoaded", async () => {
-    logToPanel("UI ready");
-    window.setStatus("READY TO RUN");
-
-    await loadClientData(window.USER_ID);
-
-    document.getElementById("depositBtn")?.addEventListener("click", () => {
-        const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-        runDeposit(amt);
-    });
-
-    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
-        const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-        runWithdraw(amt);
-    });
-
-    document.getElementById("refreshBtn")?.addEventListener("click", () => {
-        refreshBalances();
-    });
-
-    document.getElementById("startBtn")?.addEventListener("click", async () => {
-        const launchEngine = window.startSimulation;
-        if (typeof launchEngine === "function") {
-            window.setStatus("RUNNING");
-            logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
-            try {
-                await launchEngine(10); // simulation handles DB commit internally
-            } catch (err) {
-                logToPanel("[ERROR] Runtime simulation engine drop: " + err.message);
-            } finally {
-                window.setStatus("COMPLETED");
-            }
+        if (parsed?.status === "client updated") {
+            logToPanel(`[SQLITE SUCCESS] Final performance data persisted for user ${window.USER_ID}.`);
+            document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
         } else {
-            logToPanel("[ERROR] Target simulation script execution engine not found.");
+            logToPanel("[WARN] Database adjustment rejected by server script.");
         }
-    });
+    } catch (err) {
+        logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
+    }
+}
 
-    document.getElementById("stopBtn")?.addEventListener("click", () => {
-        window.isBotRunning = false;
-        window.setStatus("STOPPED");
-        logToPanel("[MANUAL] Bot process sequence flagged to stop.");
-    });
-});
+// === Simulation Engine ===
+async function startSimulation(totalCycles) {
+    if (window.isBotRunning) {
+        logToPanel("[WARN] Bot runner already active.");
+        return;
+    }
+
+    logToPanel(`[START] Initializing pipeline for ${totalCycles} cycles`);
+    window.isBotRunning = true;
+    cumulativePnL = 0;
+    window.cumulativePnL = 0;
+
+    startingBalanceAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
+    const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
+    const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
+
+    for (let i = 1; i <= totalCycles; i++) {
+        if (!window.isBotRunning) {
+            logToPanel("[MANUAL] Simulation loop stopped.");
+            break;
+        }
+
+        const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
+
+        if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") {
+            logToPanel("[INFO] Terminating simulation due to threshold condition.");
+            break;
+        }
+
+        if (i < totalCycles) {
+            logToPanel(`[WAIT] Waiting 1 minute before Cycle ${i + 1}...`);
+            for (let countdown = 60; countdown > 0; countdown--) {
+                if (!window.isBotRunning) break;
+                if (countdown % 15 === 0) setStatus(`WAITING (${countdown}s remaining)`);
+                await blockDelay(1000);
+            }
+        }
+    }
+
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[FINISH] Simulation run complete.");
+
+    // Commit final PnL only once at the end
+    await commitFinalPnLToDatabase(window.cumulativePnL);
+}
+
+// Expose globally so main_run.txt can find it
+window.startSimulation = startSimulation;
