@@ -14,7 +14,7 @@ function updateChart(balance, profit = null) {
 
     // Append new data points cumulatively
     chart.data.datasets[0].data.push(balance);
-    if (profit !== null && chart.data.datasets[1]) {
+    if (profit !== null && chart.data.datasets.length > 1) {
         chart.data.datasets[1].data.push(profit);
     }
 
@@ -24,11 +24,12 @@ function updateChart(balance, profit = null) {
 // Switch chart type to bar and style datasets
 if (window.balanceChart) {
     window.balanceChart.config.type = "bar";
-    window.balanceChart.data.datasets[0].backgroundColor = "rgba(243, 186, 47, 0.7)"; // yellow bars
-    window.balanceChart.data.datasets[1].backgroundColor = "rgba(0, 255, 0, 0.7)";   // green bars
+    window.balanceChart.data.datasets[0].backgroundColor = "rgba(243, 186, 47, 0.7)"; // Balance bars
+    window.balanceChart.data.datasets[1].backgroundColor = "rgba(0, 255, 0, 0.7)";   // Profit/Loss bars
     window.balanceChart.data.datasets[0].borderWidth = 1;
     window.balanceChart.data.datasets[1].borderWidth = 1;
     window.balanceChart.update();
 }
 
+// Expose globally
 window.updateChart = updateChart;
