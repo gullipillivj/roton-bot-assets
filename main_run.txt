@@ -1,47 +1,47 @@
-logToPanel("main_run.txt loaded (Pure Memory Aligned Flow)");
+logToPanel("main_run.txt loaded (Full Production Integration)");
 
 // 🌐 LIVE TUNNEL CONFIGURATION
-window.BASE_URL  = "https://ngrok-free.dev";
-window.RPC_URL   = "https://ngrok-free.dev/runbot/rpc";
+window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
+window.RPC_URL   = "https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc";
 
 window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
-const USER_ID   = window.USER_ID;
-const USER_ADDR = window.USER_ADDR;
-const USER_PK   = window.USER_PK;
 const BASE_URL  = window.BASE_URL;
 
 // === Helpers ===
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
-    if (panel) {
-        panel.value += msg + "\n";
-        panel.scrollTop = panel.scrollHeight; 
-    }
+    if (panel) panel.value += msg + "\n";
 }
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
 
 window.setStatus = function(text) {
     const statusLabel = document.getElementById("statusLabel");
-    if (statusLabel) statusLabel.textContent = "STATE: " + text;
-    else logToPanel(`[STATUS UPDATE] ${text}`);
+    if (statusLabel) {
+        statusLabel.textContent = "STATE: " + text;
+    } else {
+        logToPanel(`[STATUS UPDATE] ${text}`);
+    }
 };
 if (typeof globalThis !== 'undefined') globalThis.setStatus = window.setStatus;
 
 // === Chart Initialization ===
 function initChart() {
-    const ctx = document.getElementById("balanceChart").getContext("2d");
+    const canvas = document.getElementById("balanceChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
     window.balanceChart = new Chart(ctx, {
         type: "line",
         data: {
             labels: [],
             datasets: [
-                { label: "Running Balance", data: [], borderColor: "#00FF00" },
-                { label: "Cumulative PnL", data: [], borderColor: "#FF3333" }
+                { label: "Running Balance", data: [], borderColor: "#00FF00", fill: false },
+                { label: "Cumulative PnL", data: [], borderColor: "#FF3333", fill: false }
             ]
-        }
+        },
+        options: { animation: false, responsive: true }
     });
 }
 window.updateChart = function(runningBalance, cumulativePnL) {
@@ -56,36 +56,98 @@ window.updateChart = function(runningBalance, cumulativePnL) {
     } catch (e) { console.error("Chart updating skipped: ", e.message); }
 };
 
-// === API Calls (approve/swap/deposit/withdraw/refresh) ===
-// ... [unchanged from your version] ...
-
-// === Commit Final PnL to Database ===
-async function commitFinalPnLToDatabase(finalPnL) {
+// === Client Data Loader ===
+async function loadClientData(userId) {
     try {
-        const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
-        const updatedNetBalance = startingAllocated + finalPnL;
-        logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
+        logToPanel(`[INFO] Fetching live database records for ${userId}...`);
+        const resp = await fetch(`${BASE_URL}/clients`, {
+            headers: { "ngrok-skip-browser-warning": "true" }
+        });
+        const data = safeParse(await resp.text());
+        if (!data || !data.clients || data.clients.length === 0) {
+            logToPanel("[WARN] No clients found in DB payload");
+            return;
+        }
+        const client = data.clients.find(c => c.profile && c.profile.name === userId);
+        if (!client) {
+            logToPanel(`[WARN] User ${userId} not found in database records.`);
+            return;
+        }
+        const walletBalance = (client.wallet && client.wallet.balance !== null) ? parseFloat(client.wallet.balance) : 1000;
+        const profitTarget  = (client.settings && client.settings.profit_target) ? parseFloat(client.settings.profit_target) : 1.0;
+        const stopLoss      = (client.settings && client.settings.stop_loss) ? parseFloat(client.settings.stop_loss) : 0.5;
+        const profileName   = client.profile.name || userId;
 
-        const resp = await fetch(`${BASE_URL}/runbot/update_client`, {
+        logToPanel(`[DB SUCCESS] Loaded ${profileName}. Balance: ${walletBalance} USDT.`);
+
+        document.getElementById("startBalance").value = walletBalance;
+        document.getElementById("investBalance").value = walletBalance;
+        document.getElementById("profitTarget").value = profitTarget;
+        document.getElementById("stopLoss").value = stopLoss;
+        const userLabel = document.getElementById("currentUserLabel");
+        if (userLabel) userLabel.textContent = profileName;
+    } catch (e) {
+        logToPanel("[ERROR] loadClientData query failed: " + e.message);
+    }
+}
+
+// === Balance / Deposit / Withdraw ===
+async function refreshBalances() {
+    try {
+        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                userid: window.USER_ID,
-                current_balance: updatedNetBalance,
-                wallet_address: USER_ADDR,
-                email: `${window.USER_ID}@example.com`,
-                status: "ACTIVE"
-            })
+            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount: 0 })
         });
         const parsed = safeParse(await resp.text());
-        if (parsed?.status === "client updated") {
-            logToPanel(`[SQLITE SUCCESS] Final performance data persisted for user ${window.USER_ID}.`);
-            document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
-        } else {
-            logToPanel("[WARN] Database adjustment rejected by server script.");
+        if (parsed?.fund_token_balance !== undefined) {
+            document.getElementById("startBalance").value = parsed.fund_token_balance;
+            document.getElementById("investBalance").value = parsed.fund_token_balance;
+            logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
         }
     } catch (err) {
-        logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
+        logToPanel(`[ERROR] Balance sync skipped: ${err.message}`);
+    }
+}
+
+async function runDeposit(amount) {
+    try {
+        logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
+        await fetch(`${BASE_URL}/runbot/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount })
+        });
+        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash) {
+            logToPanel(`[SUCCESS] On-Chain Deposit TX confirmed: ${parsed.tx_hash}`);
+            await loadClientData(window.USER_ID);
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Deposit sequence aborted: ${err.message}`);
+    }
+}
+
+async function runWithdraw(amount) {
+    try {
+        logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
+        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ wallet_address: window.USER_ADDR, private_key: window.USER_PK, amount })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.tx_hash) {
+            logToPanel(`[SUCCESS] Payout TX confirmed: ${parsed.tx_hash}`);
+            await loadClientData(window.USER_ID);
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Withdrawal execution failed: ${err.message}`);
     }
 }
 
@@ -95,29 +157,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.setStatus("READY TO RUN");
     initChart();
 
-    document.getElementById("startBalance").value = 1000;
-    document.getElementById("investBalance").value = 1000;
-    if (document.getElementById("currentUserLabel")) {
-        document.getElementById("currentUserLabel").textContent = window.USER_ID;
-    }
+    await loadClientData(window.USER_ID);
 
-    // Deposit / Withdraw / Refresh handlers unchanged...
+    document.getElementById("depositBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
+        runDeposit(amt);
+    });
+
+    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+        runWithdraw(amt);
+    });
+
+    document.getElementById("refreshBtn")?.addEventListener("click", () => {
+        refreshBalances();
+    });
 
     document.getElementById("startBtn")?.addEventListener("click", async () => {
-        const launchEngine = window.startSimulation || window.initBot;
-        if (typeof launchEngine !== "function") {
-            logToPanel("[ERROR] Simulation loop entry engine not found.");
-            return;
-        }
-        logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
-        try {
-            window.cumulativePnL = 0;
-            await launchEngine(10); // ✅ simulation handles DB commit internally
-            window.setStatus("COMPLETED");
-            logToPanel("[FINISHED] All trading cycles processed in memory successfully.");
-        } catch (err) {
-            window.setStatus("CRASHED");
-            logToPanel("[CRITICAL ERROR] Trading loop broke mid-flight: " + err.message);
+        const launchEngine = window.startSimulation;
+        if (typeof launchEngine === "function") {
+            window.setStatus("RUNNING");
+            logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
+            try {
+                await launchEngine(10); // simulation handles DB commit internally
+            } catch (err) {
+                logToPanel("[ERROR] Runtime simulation engine drop: " + err.message);
+            } finally {
+                window.setStatus("COMPLETED");
+            }
+        } else {
+            logToPanel("[ERROR] Target simulation script execution engine not found.");
         }
     });
 
