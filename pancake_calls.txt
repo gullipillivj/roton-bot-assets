@@ -13,13 +13,14 @@ function logResult(action, data) {
   }
 }
 
-// === Backend Calls (Defensively structured to handle parameters directly) ===
+// === Backend Calls ===
 async function approveToken(amount, userAddress, privateKey) {
   try {
-    const res = await fetch(`${BASE_URL}/runbot/approve`, {
+    logToPanel(`[DEBUG] approveToken called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
     });
     return safeParse(await res.text());
   } catch (err) {
@@ -30,12 +31,23 @@ async function approveToken(amount, userAddress, privateKey) {
 
 async function depositToFund(amount, userAddress, privateKey) {
   try {
-    const res = await fetch(`${BASE_URL}/runbot/deposit`, {
+    logToPanel(`[DEBUG] depositToFund called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
     });
-    return safeParse(await res.text());
+    const parsed = safeParse(await res.text());
+    if (parsed?.fund_token_balance !== undefined) {
+      logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
+    }
+    if (parsed?.solidarity_balance !== undefined) {
+      logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} units.`);
+    }
+    if (parsed?.eth_balance_wei !== undefined) {
+      logToPanel(`[INFO] ETH Balance (Wei): ${parsed.eth_balance_wei}`);
+    }
+    return parsed;
   } catch (err) {
     logToPanel(`[ERROR] Deposit failed: ${err.message}`);
     return null;
@@ -44,10 +56,11 @@ async function depositToFund(amount, userAddress, privateKey) {
 
 async function withdrawFromFund(amount, userAddress, privateKey) {
   try {
-    const res = await fetch(`${BASE_URL}/runbot/payout`, {
+    logToPanel(`[DEBUG] withdrawFromFund called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/payout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
     });
     return safeParse(await res.text());
   } catch (err) {
@@ -58,10 +71,11 @@ async function withdrawFromFund(amount, userAddress, privateKey) {
 
 async function swapToTarget(amount, userAddress, privateKey) {
   try {
-    const res = await fetch(`${BASE_URL}/runbot/swap`, {
+    logToPanel(`[DEBUG] swapToTarget called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount: amount })
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
     });
     return safeParse(await res.text());
   } catch (err) {
@@ -72,19 +86,32 @@ async function swapToTarget(amount, userAddress, privateKey) {
 
 async function getBalances(userAddress) {
   try {
-    const res = await fetch(`${BASE_URL}/runbot/balances`, {
+    logToPanel(`[DEBUG] getBalances called for user=${userAddress}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/balances`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ wallet_address: userAddress })
     });
-    return safeParse(await res.text());
+    const parsed = safeParse(await res.text());
+
+    if (parsed?.fund_token_balance !== undefined) {
+      logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
+    }
+    if (parsed?.solidarity_balance !== undefined) {
+      logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} units.`);
+    }
+    if (parsed?.eth_balance_wei !== undefined) {
+      logToPanel(`[INFO] ETH Balance (Wei): ${parsed.eth_balance_wei}`);
+    }
+
+    return parsed;
   } catch (err) {
     logToPanel(`[ERROR] Balances failed: ${err.message}`);
     return null;
   }
 }
 
-// === Wrappers for bot loop matching uniform structure (userAddress, amount, privateKey) ===
+// === Wrappers ===
 async function runApprove(userAddress, amount, privateKey) {
   const parsed = await approveToken(amount, userAddress, privateKey);
   logResult("Approve", parsed);
