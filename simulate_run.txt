@@ -4,13 +4,12 @@ window.currentCycle = 1;
 window.cycleTimer = null;
 window.isBotRunning = false;
 
-let startingBalanceAllocated = 0;
 let cumulativePnL = 0;
 
 // === Delay Helper ===
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
-// === Coin Picker (uses global helper from main_run) ===
+// === Coin Picker ===
 async function pickRandomCoin() {
     try {
         const pairs = await window.getBinancePairs();
@@ -29,13 +28,19 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}/${totalCycles} started`);
     setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
-    const investBal = parseFloat(document.getElementById("investBalance").value) || 0;
-    if (investBal <= 0) {
-        logToPanel(`[WARN] Cycle ${cycle}: Investment pool depleted. Skipping.`);
+    const tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    const initialBalance = parseFloat(document.getElementById("startBalance").value) || 0;
+
+    if (tradingBalance <= 0) {
+        logToPanel(`[WARN] Cycle ${cycle}: Trading balance depleted. Skipping.`);
+        return "SKIP";
+    }
+    if (tradingBalance >= initialBalance) {
+        logToPanel(`[WARN] Cycle ${cycle}: Trading balance must be less than initial balance.`);
         return "SKIP";
     }
 
-    const allocationUSD = investBal / totalCycles;
+    const allocationUSD = tradingBalance / totalCycles;
     logToPanel(`[INFO] Cycle ${cycle}: Allocating ${allocationUSD.toFixed(2)} USDT to trade path`);
 
     const coinBase = await pickRandomCoin();
@@ -69,10 +74,15 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`[ERROR] Contract transaction trace failure: ${err.message}`);
     }
 
-    if (typeof window.updateChart === "function") {
-        window.updateChart(investBal + cumulativePnL, cumulativePnL);
+    // === Chart Update ===
+    if (window.balanceChart) {
+        const timeLabel = new Date().toLocaleTimeString();
+        window.balanceChart.data.labels.push(timeLabel);
+        window.balanceChart.data.datasets[0].data.push(tradingBalance + cumulativePnL);
+        window.balanceChart.data.datasets[1].data.push(cumulativePnL);
+        window.balanceChart.update();
     } else {
-        logToPanel("[WARN] Chart update skipped — updateChart not defined.");
+        logToPanel("[WARN] Chart update skipped — balanceChart not initialized.");
     }
 
     const liveProfitSpan = document.getElementById("liveProfitValue");
@@ -83,7 +93,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
 
-    const totalChangePct = (cumulativePnL / investBal) * 100;
+    const totalChangePct = (cumulativePnL / tradingBalance) * 100;
     if (totalChangePct >= profitTargetPct) {
         logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering exit.`);
         return "STOP_PROFIT";
@@ -96,7 +106,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
-// === Commit Final PnL to Database (moved here) ===
+// === Commit Final PnL to Database ===
 async function commitFinalPnLToDatabase(finalPnL) {
     try {
         const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
@@ -140,7 +150,6 @@ async function startSimulation(totalCycles) {
     cumulativePnL = 0;
     window.cumulativePnL = 0;
 
-    startingBalanceAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
@@ -171,7 +180,7 @@ async function startSimulation(totalCycles) {
     setStatus("STOPPED");
     logToPanel("[FINISH] Simulation run complete.");
 
-    // Commit final PnL only once at the end
+    // ✅ Commit final PnL only once at the end
     await commitFinalPnLToDatabase(window.cumulativePnL);
 }
 
