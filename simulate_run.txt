@@ -54,6 +54,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const currentPrice = stats.lastPrice;
     const standardDayChangePct = stats.priceChangePercent;
 
+    // Guard against invalid price
+    if (!currentPrice || currentPrice <= 0) {
+        logToPanel(`[ERROR] Cycle ${cycle}: Invalid price feed for ${fullSymbol} (${currentPrice}). Skipping.`);
+        return "SKIP";
+    }
+
     // === Corrected Profit/Loss calculation ===
     const quantityBought = allocationUSD / currentPrice;
     const newPrice = currentPrice * (1 + standardDayChangePct / 100);
