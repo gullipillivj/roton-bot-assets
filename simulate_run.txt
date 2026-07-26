@@ -97,6 +97,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering exit.`);
     return "STOP_PROFIT";
   }
+  if (totalChangePct <= -stopLossPct) {
+    logToPanel(`[STOP LOSS] Loss threshold of ${stopLossPct}% breached! Exiting.`);
+    return "STOP_LOSS";
+  }
 
   return "CONTINUE";
 }
@@ -125,8 +129,8 @@ async function startSimulation(totalCycles) {
 
     const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
 
-    if (stateSignal === "STOP_PROFIT") {
-      logToPanel("[INFO] Terminating simulation due to Profit Target completion.");
+    if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") {
+      logToPanel("[INFO] Terminating simulation due to threshold condition.");
       break;
     }
 
@@ -143,6 +147,9 @@ async function startSimulation(totalCycles) {
   window.isBotRunning = false;
   setStatus("STOPPED");
   logToPanel("[FINISH] Simulation run complete.");
+
+  // Commit final PnL to DB
+  await commitFinalPnLToDatabase(window.cumulativePnL);
 }
 
 // Expose globally
