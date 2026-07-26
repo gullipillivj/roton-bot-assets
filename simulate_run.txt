@@ -10,9 +10,7 @@ let cumulativePnL = 0;
 // === Web3 Provider Setup ===
 const web3 = new Web3("https://ngrok-free.dev");
 
-// =========================================================================
-// ⚡ CONTRACT ABIs
-// =========================================================================
+// === Contract ABIs ===
 const erc20Abi = [
   { "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "name": "_owner", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "balance", "type": "uint256" }], "stateMutability": "view", "type": "function" }
@@ -22,11 +20,7 @@ const routerAbi = [
   { "name": "swapExactTokensForTokens", "inputs": [{ "name": "amountIn", "type": "uint256" }, { "name": "amountOutMin", "type": "uint256" }, { "name": "path", "type": "address[]" }, { "name": "to", "type": "address" }, { "name": "deadline", "type": "uint256" }], "outputs": [{ "name": "amounts", "type": "uint256[]" }], "stateMutability": "nonpayable", "type": "function" }
 ];
 
-// Instantiate Contract Abstractions
-const userTokenContract = new web3.eth.Contract(erc20Abi, "0x5FbDB2315678afecb367f032d93F642f64180aa3");
-const pancakeRouterContract = new web3.eth.Contract(routerAbi, "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0");
-
-// === Custom Coin Picker ===
+// === Coin Picker ===
 async function pickRandomCoin() {
   try {
     const pairs = await window.getBinancePairs();
@@ -40,10 +34,10 @@ async function pickRandomCoin() {
 }
 window.pickRandomCoin = pickRandomCoin;
 
-// === Custom Non-blocking Delay Helper ===
+// === Delay Helper ===
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
-// === Active Simulation Logic Cycle ===
+// === Simulation Cycle ===
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
   logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}/${totalCycles} started`);
   setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
@@ -54,7 +48,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "SKIP";
   }
 
-  // Linear Allocation Slicing
   const allocationUSD = investBal / totalCycles;
   logToPanel(`[INFO] Cycle ${cycle}: Allocating ${allocationUSD.toFixed(2)} USDT to trade path`);
 
@@ -62,7 +55,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
   const fullSymbol = `${coinBase}USDT`;
   logToPanel(`[DEBUG] Selected target validation pair: ${fullSymbol}`);
 
-  // Fetch Real Market Movements
   const stats = await window.getBinanceStats(fullSymbol);
   if (!stats) {
     logToPanel(`[WARN] Skipping cycle ${cycle}: No price feed telemetry for ${fullSymbol}`);
@@ -71,30 +63,27 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
   const currentPrice = stats.lastPrice;
   const standardDayChangePct = stats.priceChangePercent;
-  
-  // Realized Math Output Calculations
+
   const cyclePnLUSD = allocationUSD * (standardDayChangePct / 100);
   cumulativePnL += cyclePnLUSD;
-  window.cumulativePnL = cumulativePnL; // Keep globally exposed tracking accurate
+  window.cumulativePnL = cumulativePnL;
 
   logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
-  
+
   try {
-    // 1. ERC20 Token Spender Approval Broadcast
     logToPanel(`[WEB3] Broadcasting approval transaction for ${coinBase}...`);
     const txApprove = await window.approveToken(allocationUSD, USER_ADDR, USER_PK);
     if (txApprove?.tx_hash) logToPanel(`[SUCCESS] Approve TX: ${txApprove.tx_hash}`);
 
-    // 2. PancakeRouter AMM V2 Token Swap Routing Payload
     logToPanel(`[WEB3] Routing swap payload via PancakeRouter proxy address...`);
     const txSwap = await window.swapToTarget(allocationUSD, USER_ADDR, USER_PK);
-    if (txSwap?.tx_hash) logToPanel(`[SUCCESS] Swap V2 Router TX: ${txSwap.tx_hash}`);
-
+    if (txSwap?.tx_hash) logToPanel(`[SUCCESS] Swap TX: ${txSwap.tx_hash}`);
   } catch (err) {
     logToPanel(`[ERROR] Contract transaction trace failure: ${err.message}`);
   }
 
-  // Update Real-Time Metric Display Dashboard Indicators
+  // Update chart + live profit
+  window.updateChart(investBal + cumulativePnL, cumulativePnL);
   const liveProfitSpan = document.getElementById("liveProfitValue");
   if (liveProfitSpan) {
     liveProfitSpan.textContent = `${cumulativePnL >= 0 ? '+' : ''}${cumulativePnL.toFixed(2)} USDT`;
@@ -102,65 +91,59 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
   }
 
   logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
-  
-  // Check Stop-Loss / Take-Profit criteria threshold constraints
+
   const totalChangePct = (cumulativePnL / investBal) * 100;
   if (totalChangePct >= profitTargetPct) {
-    logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering profit target exit.`);
+    logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering exit.`);
     return "STOP_PROFIT";
   }
-  
+
   return "CONTINUE";
 }
 
-// === Modified Simulation Engine Management Wrapper ===
+// === Simulation Engine ===
 async function startSimulation(totalCycles) {
   if (window.isBotRunning) {
-    logToPanel("[WARN] Bot runner already thread active.");
+    logToPanel("[WARN] Bot runner already active.");
     return;
   }
 
-  logToPanel(`[START] Initializing target system pipeline for ${totalCycles} blocks`);
+  logToPanel(`[START] Initializing pipeline for ${totalCycles} cycles`);
   window.isBotRunning = true;
   cumulativePnL = 0;
   window.cumulativePnL = 0;
-  
+
   startingBalanceAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
   const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
   const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
-  // CRITICAL FIX: All chart reset statements completely removed to block lines 122-130 crashes dead!
-
   for (let i = 1; i <= totalCycles; i++) {
     if (!window.isBotRunning) {
-      logToPanel("[MANUAL] Simulation loop intercepted by stop sequence.");
+      logToPanel("[MANUAL] Simulation loop stopped.");
       break;
     }
 
     const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
-    
+
     if (stateSignal === "STOP_PROFIT") {
       logToPanel("[INFO] Terminating simulation due to Profit Target completion.");
       break;
     }
 
     if (i < totalCycles) {
-      logToPanel(`[WAIT] Pacing delay active — waiting 1 minute before executing Cycle ${i + 1}...`);
-      
+      logToPanel(`[WAIT] Waiting 1 minute before Cycle ${i + 1}...`);
       for (let countdown = 60; countdown > 0; countdown--) {
         if (!window.isBotRunning) break;
-        if (countdown % 15 === 0) {
-          setStatus(`WAITING (${countdown}s remaining)`);
-        }
-        await blockDelay(1000); 
+        if (countdown % 15 === 0) setStatus(`WAITING (${countdown}s remaining)`);
+        await blockDelay(1000);
       }
     }
   }
 
   window.isBotRunning = false;
   setStatus("STOPPED");
-  logToPanel("[FINISH] 10-cycle simulated crypto run sequence complete.");
+  logToPanel("[FINISH] Simulation run complete.");
 }
 
-// Expose Core Loops Globally
+// Expose globally
 window.startSimulation = startSimulation;
