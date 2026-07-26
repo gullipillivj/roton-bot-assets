@@ -54,7 +54,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const currentPrice = stats.lastPrice;
     const standardDayChangePct = stats.priceChangePercent;
 
-    const cyclePnLUSD = allocationUSD * (standardDayChangePct / 100);
+    // === Corrected Profit/Loss calculation ===
+    const quantityBought = allocationUSD / currentPrice;
+    const newPrice = currentPrice * (1 + standardDayChangePct / 100);
+    const cyclePnLUSD = (newPrice - currentPrice) * quantityBought;
     window.cumulativePnL += cyclePnLUSD;
 
     logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
