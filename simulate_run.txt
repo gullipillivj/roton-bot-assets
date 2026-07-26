@@ -1,3 +1,4 @@
+// simulate_run.txt — Pure Memory Trading Loop
 logToPanel("simulate_run.txt loaded (Pure Memory Trading Loop)");
 
 // use globals defined in main_run.txt
@@ -32,8 +33,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`[WARN] Cycle ${cycle}: Trading balance depleted. Skipping.`);
         return "SKIP";
     }
-    if (tradingBalance >= initialBalance) {
-        logToPanel(`[WARN] Cycle ${cycle}: Trading balance must be less than initial balance.`);
+    if (tradingBalance > initialBalance) {
+        logToPanel(`[WARN] Cycle ${cycle}: Trading balance cannot exceed initial balance.`);
         return "SKIP";
     }
 
