@@ -83,7 +83,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
   }
 
   // Update chart + live profit
-  window.updateChart(investBal + cumulativePnL, cumulativePnL);
+  if (typeof window.updateChart === "function") {
+    window.updateChart(investBal + cumulativePnL, cumulativePnL);
+  } else {
+    logToPanel("[WARN] Chart update skipped — updateChart not defined.");
+  }
+
   const liveProfitSpan = document.getElementById("liveProfitValue");
   if (liveProfitSpan) {
     liveProfitSpan.textContent = `${cumulativePnL >= 0 ? '+' : ''}${cumulativePnL.toFixed(2)} USDT`;
