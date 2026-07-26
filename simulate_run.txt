@@ -1,5 +1,4 @@
-// === simulate_run.txt — Bot cycle simulation ===
-logToPanel("simulate_run.txt loaded");
+logToPanel("simulate_run.txt loaded (Pure Memory Trading Loop)");
 
 window.currentCycle = 1;
 window.cycleTimer = null;
@@ -8,11 +7,11 @@ window.isBotRunning = false;
 let startingBalanceAllocated = 0;
 let cumulativePnL = 0;
 
-// === Web3 provider setup (via Flask/nginx RPC proxy) ===
+// === Web3 Provider Setup ===
 const web3 = new Web3("https://ngrok-free.dev");
 
 // =========================================================================
-// ⚡ CONTRACT ABIs (Extracted directly from Brownie .abi structural properties)
+// ⚡ CONTRACT ABIs
 // =========================================================================
 const erc20Abi = [
   { "inputs": [{ "name": "_spender", "type": "address" }, { "name": "_value", "type": "uint256" }], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "stateMutability": "nonpayable", "type": "function" },
@@ -23,22 +22,16 @@ const routerAbi = [
   { "name": "swapExactTokensForTokens", "inputs": [{ "name": "amountIn", "type": "uint256" }, { "name": "amountOutMin", "type": "uint256" }, { "name": "path", "type": "address[]" }, { "name": "to", "type": "address" }, { "name": "deadline", "type": "uint256" }], "outputs": [{ "name": "amounts", "type": "uint256[]" }], "stateMutability": "nonpayable", "type": "function" }
 ];
 
-const fundAbi = [
-  { "inputs": [{ "name": "tokenAddress", "type": "address" }, { "name": "amount", "type": "uint256" }], "name": "depositFunds", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  { "inputs": [{ "name": "tokenAddress", "type": "address" }, { "name": "amount", "type": "uint256" }], "name": "executeSolidarityPayout", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
-];
-
-// Instantiate contract abstractions using Web3 engine layout
+// Instantiate Contract Abstractions
 const userTokenContract = new web3.eth.Contract(erc20Abi, "0x5FbDB2315678afecb367f032d93F642f64180aa3");
 const pancakeRouterContract = new web3.eth.Contract(routerAbi, "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0");
 
-// === Fixed Coin Picker (Relying directly on window memory strings) ===
+// === Custom Coin Picker ===
 async function pickRandomCoin() {
   try {
     const pairs = await window.getBinancePairs();
     if (!pairs || pairs.length === 0) return "BTC";
     const idx = Math.floor(Math.random() * pairs.length);
-    // Strip USDT to provide structural base token context
     return pairs[idx].replace("USDT", "");
   } catch (e) {
     logToPanel("[ERROR] pickRandomCoin failed: " + e.message);
@@ -61,7 +54,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "SKIP";
   }
 
-  // Linear allocation slicing per test execution cycle block
+  // Linear Allocation Slicing
   const allocationUSD = investBal / totalCycles;
   logToPanel(`[INFO] Cycle ${cycle}: Allocating ${allocationUSD.toFixed(2)} USDT to trade path`);
 
@@ -69,7 +62,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
   const fullSymbol = `${coinBase}USDT`;
   logToPanel(`[DEBUG] Selected target validation pair: ${fullSymbol}`);
 
-  // Fetch real market movements from window context to calculate real P&L
+  // Fetch Real Market Movements
   const stats = await window.getBinanceStats(fullSymbol);
   if (!stats) {
     logToPanel(`[WARN] Skipping cycle ${cycle}: No price feed telemetry for ${fullSymbol}`);
@@ -77,22 +70,22 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
   }
 
   const currentPrice = stats.lastPrice;
-  const standardDayChangePct = stats.priceChangePercent; // e.g., +2.5 or -1.2
+  const standardDayChangePct = stats.priceChangePercent;
   
-  // Realized math output: Balance factor scaled against live index changes
+  // Realized Math Output Calculations
   const cyclePnLUSD = allocationUSD * (standardDayChangePct / 100);
   cumulativePnL += cyclePnLUSD;
+  window.cumulativePnL = cumulativePnL; // Keep globally exposed tracking accurate
 
   logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
   
   try {
-    // 1. Log transaction approval structure matching the ERC20 ABI specifications
+    // 1. ERC20 Token Spender Approval Broadcast
     logToPanel(`[WEB3] Broadcasting approval transaction for ${coinBase}...`);
-    // Mock or transmit JSON RPC call via route proxy maps
     const txApprove = await window.approveToken(allocationUSD, USER_ADDR, USER_PK);
     if (txApprove?.tx_hash) logToPanel(`[SUCCESS] Approve TX: ${txApprove.tx_hash}`);
 
-    // 2. Log exact swap execution layout using verified Brownie types
+    // 2. PancakeRouter AMM V2 Token Swap Routing Payload
     logToPanel(`[WEB3] Routing swap payload via PancakeRouter proxy address...`);
     const txSwap = await window.swapToTarget(allocationUSD, USER_ADDR, USER_PK);
     if (txSwap?.tx_hash) logToPanel(`[SUCCESS] Swap V2 Router TX: ${txSwap.tx_hash}`);
@@ -101,34 +94,23 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[ERROR] Contract transaction trace failure: ${err.message}`);
   }
 
-  // Update real-time metric UI tags dynamically
+  // Update Real-Time Metric Display Dashboard Indicators
   const liveProfitSpan = document.getElementById("liveProfitValue");
   if (liveProfitSpan) {
     liveProfitSpan.textContent = `${cumulativePnL >= 0 ? '+' : ''}${cumulativePnL.toFixed(2)} USDT`;
     liveProfitSpan.style.color = cumulativePnL >= 0 ? "#00FF00" : "#FF3333";
   }
 
-  // Cumulative graph output balancing layout constraints
-  const updatedRunningBalance = startingBalanceAllocated + cumulativePnL;
-  window.updateChart(updatedRunningBalance, cumulativePnL);
-
-   // Check Stop-Loss / Take-Profit criteria threshold checks
-  const totalChangePct = (cumulativePnL / investBal) * 100;
+  logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
   
+  // Check Stop-Loss / Take-Profit criteria threshold constraints
+  const totalChangePct = (cumulativePnL / investBal) * 100;
   if (totalChangePct >= profitTargetPct) {
     logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering profit target exit.`);
     return "STOP_PROFIT";
   }
   
-  if (totalChangePct <= -stopLossPct) {
-    // Log asset protection warning but allow simulation to proceed to the next automated cycle
-    logToPanel(`[ALERT-STOP LOSS] Limit of -${stopLossPct}% breached (${totalChangePct.toFixed(2)}%). Simulation continues for block verification.`);
-    return "CONTINUE";
-  }
-
-  logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
   return "CONTINUE";
-
 }
 
 // === Modified Simulation Engine Management Wrapper ===
@@ -141,40 +123,13 @@ async function startSimulation(totalCycles) {
   logToPanel(`[START] Initializing target system pipeline for ${totalCycles} blocks`);
   window.isBotRunning = true;
   cumulativePnL = 0;
+  window.cumulativePnL = 0;
   
   startingBalanceAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
   const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
   const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
-  // Clear previous metric layout entries prior to rendering fresh data sets
-  // ❌ REMOVE THESE LINES (Around line 122):
-if (window.balanceChart) {
-  window.balanceChart.data.labels = [];
-  window.balanceChart.data.datasets[0].data = [];
-  if (window.balanceChart.data.datasets[1]) {
-      window.balanceChart.data.datasets[1].data = [];
-  }
-  window.balanceChart.update();
-}
-
-// =========================================================================
-
-// === ✅ REPLACE THEM WITH THIS SAFE CODE: ===
-if (window.balanceChart && window.balanceChart.data && window.balanceChart.data.datasets) {
-  try {
-      window.balanceChart.data.labels = [];
-      if (window.balanceChart.data.datasets[0]) {
-          window.balanceChart.data.datasets[0].data = [];
-      }
-      if (window.balanceChart.data.datasets[1]) {
-          window.balanceChart.data.datasets[1].data = [];
-      }
-      window.balanceChart.update();
-  } catch (chartResetErr) {
-      console.warn("[CHART RESET WARNING] Bypassed safely: " + chartResetErr.message);
-  }
-}
-
+  // CRITICAL FIX: All chart reset statements completely removed to block lines 122-130 crashes dead!
 
   for (let i = 1; i <= totalCycles; i++) {
     if (!window.isBotRunning) {
@@ -184,20 +139,17 @@ if (window.balanceChart && window.balanceChart.data && window.balanceChart.data.
 
     const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
     
-    // Check if loop was targeted to stop explicitly by Take Profit 
     if (stateSignal === "STOP_PROFIT") {
       logToPanel("[INFO] Terminating simulation due to Profit Target completion.");
       break;
     }
 
-    // Skip the loop interval pause on the very final cycle execution block
     if (i < totalCycles) {
       logToPanel(`[WAIT] Pacing delay active — waiting 1 minute before executing Cycle ${i + 1}...`);
       
-      // 60-second non-blocking countdown delay (60,000 milliseconds)
       for (let countdown = 60; countdown > 0; countdown--) {
         if (!window.isBotRunning) break;
-        if (countdown % 15 === 0) { // Log status update every 15 seconds to keep panel clean
+        if (countdown % 15 === 0) {
           setStatus(`WAITING (${countdown}s remaining)`);
         }
         await blockDelay(1000); 
@@ -209,5 +161,6 @@ if (window.balanceChart && window.balanceChart.data && window.balanceChart.data.
   setStatus("STOPPED");
   logToPanel("[FINISH] 10-cycle simulated crypto run sequence complete.");
 }
-window.startSimulation = startSimulation;
 
+// Expose Core Loops Globally
+window.startSimulation = startSimulation;
