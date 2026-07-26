@@ -1,4 +1,4 @@
-logToPanel("main_run.txt loaded (Full Production Integration v5 - Stable RPC)");
+logToPanel("main_run.txt loaded (Full Production Integration v6 - Aligned Flow)");
 
 // 🌐 LIVE TUNNEL CONFIGURATION: Linked directly to your active subdomain instance
 window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
@@ -205,9 +205,9 @@ async function commitFinalPnLToDatabase(finalPnL) {
     }
 }
 
+// === UI Click Handlers ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
-    window.setStatus("READY TO RUN"); 
     await loadClientData(USER_ID);
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
@@ -221,42 +221,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     document.getElementById("startBtn")?.addEventListener("click", async () => {
-        window.cumulativePnL = 0;
         const launchEngine = window.startSimulation || window.initBot;
-        if (typeof launchEngine === "function") {
-            window.setStatus("RUNNING");
-            logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
-            try {
-                await launchEngine(10);
-            } catch (err) {
-                logToPanel("[ERROR] Runtime simulation engine drop: " + err.message);
-            } finally {
-                window.setStatus("COMPLETED");
-                const totalSimulatedPnL = window.cumulativePnL || 0;
-                await commitFinalPnLToDatabase(totalSimulatedPnL);
-            }
-        } else {
+        if (typeof launchEngine !== "function") {
             logToPanel("[ERROR] Simulation loop entry engine not found.");
+            return;
         }
-    });
 
-document.getElementById("stopBtn")?.addEventListener("click", () => {window.isBotRunning = false;window.setStatus("STOPPED");logToPanel("[MANUAL] Bot process sequence flagged to stop.");});});
-### 2. The Python Backend RPC Fix (`main.py`)
-To fix the server-side crash on your RPC proxy route, find the `@app.route("/runbot/rpc")` block inside **`main.py`** and completely replace it with this version to cleanly hook into your local Anvil blockchain node (`127.0.0.1:8545`) [source: 5]:
-
-```python
-# ==============================================================================
-# 13. PROXY LINK: RELAYS OUTBOUND STRUCT PAYLOADS STRAIGHT TO THE LOCAL EVM NODE
-# ==============================================================================
-@app.route("/runbot/rpc", methods=["POST"])
-def runbot_rpc():
-    try:
-        # FIXED: Directly targeting your active Anvil node running on port 8545
-        local_anvil_rpc = "http://127.0.0.1:8545"
-        resp = requests.post(local_anvil_rpc, json=request.get_json(), timeout=10)
-        return Response(resp.content,
-                        status=resp.status_code,
-                        content_type=resp.headers.get('Content-Type', 'application/json'))
-    except Exception as e:
-        print(f"[RPC RELAY CRASH] Failed to reach local Anvil network: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
+        
+        try {
+            window.cumulativePnL = 0;
+            
+            // 1. Run the trading engine from simulate_run.txt first
+            await launchEngine(10); 
+            
+            // 2. SUCCESS PATH: Executes only if all cycles finish with ZERO runtime crashes
+            window.setStatus("COMPLETED");
+            const totalSimulatedPnL = window.cumulativePnL || 0;
+            await commitFinalPnLToDatabase(totalSimulatedPnL);
+            
+} catch (err) {// 3. FAILURE PATH: If any trade loop crashes, execution jumps here. The DB update line above is completely skipped.window.setStatus("CRASHED");logToPanel("[CRITICAL ERROR] Trading loop broke mid-flight. Database synchronization blocked.");console.error(err);}});document.getElementById("stopBtn")?.addEventListener("click", () => {window.isBotRunning = false;window.setStatus("STOPPED");logToPanel("[MANUAL] Bot process sequence flagged to stop.");});});
