@@ -1,8 +1,8 @@
-logToPanel("main_run.txt loaded (Full Production Integration v6 - Aligned Flow)");
+logToPanel("main_run.txt loaded (Pure Memory Aligned Flow)");
 
 // 🌐 LIVE TUNNEL CONFIGURATION: Linked directly to your active subdomain instance
-window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
-window.RPC_URL   = "https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc";
+window.BASE_URL  = "https://ngrok-free.dev";
+window.RPC_URL   = "https://ngrok-free.dev/runbot/rpc";
 
 window.USER_ID   = "mockuser1";
 window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -99,45 +99,6 @@ window.swapToTarget = async function(amount, walletAddress, privateKey) {
     }
 };
 
-async function loadClientData(userId) {
-    try {
-        logToPanel(`[INFO] Fetching live database records for ${userId}...`);
-        const resp = await fetch(`${BASE_URL}/clients`, {
-            headers: { "ngrok-skip-browser-warning": "true" }
-        });
-        const data = safeParse(await resp.text());
-        
-        if (!data || !data.clients || data.clients.length === 0) {
-            logToPanel("[WARN] No clients found in DB payload");
-            return;
-        }
-
-        const client = data.clients.find(c => c.profile && c.profile.name === userId);
-        if (!client) {
-            logToPanel(`[WARN] User ${userId} not found in database records.`);
-            return;
-        }
-
-        const walletBalance = (client.wallet && client.wallet.balance !== null) ? parseFloat(client.wallet.balance) : 1000;
-        const profitTarget  = (client.settings && client.settings.profit_target) ? parseFloat(client.settings.profit_target) : 1.0;
-        const stopLoss      = (client.settings && client.settings.stop_loss) ? parseFloat(client.settings.stop_loss) : 0.5;
-        const profileName   = client.profile.name || userId;
-
-        logToPanel(`[DB SUCCESS] Loaded ${profileName}. Balance: ${walletBalance} USDT.`);
-
-        document.getElementById("startBalance").value = walletBalance;
-        document.getElementById("investBalance").value = walletBalance;
-        document.getElementById("profitTarget").value = profitTarget;
-        document.getElementById("stopLoss").value = stopLoss;
-        
-        const userLabel = document.getElementById("currentUserLabel");
-        if (userLabel) userLabel.textContent = profileName;
-
-    } catch (e) {
-        logToPanel("[ERROR] loadClientData query failed: " + e.message);
-    }
-}
-
 async function runDeposit(amount) {
     try {
         logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
@@ -150,7 +111,6 @@ async function runDeposit(amount) {
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
             logToPanel(`[SUCCESS] On-Chain Deposit TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(USER_ID);
         }
     } catch (err) {
         logToPanel(`[ERROR] Deposit sequence aborted: ${err.message}`);
@@ -169,46 +129,23 @@ async function runWithdraw(amount) {
         const parsed = safeParse(await resp.text());
         if (parsed?.tx_hash) {
             logToPanel(`[SUCCESS] Payout TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(USER_ID);
         }
     } catch (err) {
         logToPanel(`[ERROR] Withdrawal execution failed: ${err.message}`);
     }
 }
 
-async function commitFinalPnLToDatabase(finalPnL) {
-    try {
-        const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
-        const updatedNetBalance = startingAllocated + finalPnL;
-        
-        logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
-
-        const resp = await fetch(`${BASE_URL}/runbot/update_client`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                userid: window.USER_ID,
-                amount_deposited: Math.floor(startingAllocated),
-                current_balance: Math.floor(updatedNetBalance)
-            })
-        });
-        
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "client updated") {
-            logToPanel(`[SQLITE SUCCESS] Final performance data saved to clients.db for ${window.USER_ID}.`);
-            document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
-        } else {
-            logToPanel("[WARN] Database adjustment rejected by server script.");
-        }
-    } catch (err) {
-        logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
-    }
-}
-
 // === UI Click Handlers ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
-    await loadClientData(USER_ID);
+    window.setStatus("READY TO RUN");
+
+    // Initialize UI inputs directly from default template structures instead of database queries
+    document.getElementById("startBalance").value = 1000;
+    document.getElementById("investBalance").value = 1000;
+    if (document.getElementById("currentUserLabel")) {
+        document.getElementById("currentUserLabel").textContent = window.USER_ID;
+    }
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
@@ -232,12 +169,23 @@ document.addEventListener("DOMContentLoaded", async () => {
         try {
             window.cumulativePnL = 0;
             
-            // 1. Run the trading engine from simulate_run.txt first
+            // A. Execute trades from simulate_run.txt first
             await launchEngine(10); 
             
-            // 2. SUCCESS PATH: Executes only if all cycles finish with ZERO runtime crashes
+            // B. SUCCESS PATH: Complete loop cleanly without hitting any SQLite updates
             window.setStatus("COMPLETED");
-            const totalSimulatedPnL = window.cumulativePnL || 0;
-            await commitFinalPnLToDatabase(totalSimulatedPnL);
+            logToPanel("[FINISHED] All trading cycles processed in memory successfully.");
             
-} catch (err) {// 3. FAILURE PATH: If any trade loop crashes, execution jumps here. The DB update line above is completely skipped.window.setStatus("CRASHED");logToPanel("[CRITICAL ERROR] Trading loop broke mid-flight. Database synchronization blocked.");console.error(err);}});document.getElementById("stopBtn")?.addEventListener("click", () => {window.isBotRunning = false;window.setStatus("STOPPED");logToPanel("[MANUAL] Bot process sequence flagged to stop.");});});
+        } catch (err) {
+            // C. CRASH PATH: Logs errors natively while ensuring database channels remain untouched
+            window.setStatus("CRASHED");
+            logToPanel("[CRITICAL ERROR] Trading loop broke mid-flight: " + err.message);
+        }
+    });
+
+    document.getElementById("stopBtn")?.addEventListener("click", () => {
+        window.isBotRunning = false;
+        window.setStatus("STOPPED");
+        logToPanel("[MANUAL] Bot process sequence flagged to stop.");
+    });
+});
