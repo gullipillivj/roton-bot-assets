@@ -1,229 +1,34 @@
-// === main_run.txt ===
-logToPanel("main_run.txt loaded (Full Production Integration)");
+// chart.txt — Chart.js balance visualization helpers (Bar Graph)
+logToPanel("chart.txt loaded");
 
-// 🌐 LIVE TUNNEL CONFIGURATION: Points directly to your operational Flask instance
-window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
-window.RPC_URL   = "https://almanac-sierra-rundown.ngrok-free.dev/runbot/rpc";
-
-window.USER_ID   = "mockuser1";
-window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
-
-const USER_ID   = window.USER_ID;
-const USER_ADDR = window.USER_ADDR;
-const USER_PK   = window.USER_PK;
-const BASE_URL  = window.BASE_URL;
-
-function logToPanel(msg) {
-    const panel = document.getElementById("logPanel");
-    if (panel) panel.value += msg + "\n";
-}
-
-function safeParse(text) {
-    try { return JSON.parse(text); } catch { return null; }
-}
-
-window.setStatus = function(text) {
-    const statusLabel = document.getElementById("statusLabel");
-    if (statusLabel) {
-        statusLabel.textContent = "STATE: " + text;
-    } else {
-        logToPanel(`[STATUS UPDATE] ${text}`);
+function updateChart(balance, profit = null) {
+    const chart = window.balanceChart;
+    if (!chart) {
+        logToPanel("ERROR: balanceChart not found — chart must be initialized in HTML");
+        return;
     }
-};
 
-if (typeof globalThis !== 'undefined') {
-    globalThis.setStatus = window.setStatus;
-}
+    // Add next cycle label
+    const cycle = chart.data.labels.length + 1;
+    chart.data.labels.push(`Cycle ${cycle}`);
 
-// === 1. Load Real Client Data & Existing Balances From Flask ===
-async function loadClientData(userId) {
-    try {
-        logToPanel(`[INFO] Fetching live database records for ${userId}...`);
-        
-        const resp = await fetch(`${BASE_URL}/clients`, {
-            headers: { "ngrok-skip-browser-warning": "true" }
-        });
-        const data = safeParse(await resp.text());
-        
-        if (!data || !data.clients || data.clients.length === 0) {
-            logToPanel("[WARN] No clients found in DB payload");
-            return;
-        }
-
-        // Search within the nested profile structures returned by Flask
-        const client = data.clients.find(c => c.profile && c.profile.name === userId);
-        
-        if (!client) {
-            logToPanel(`[WARN] User ${userId} not found in database records.`);
-            return;
-        }
-
-        // Map fields directly out of your nested database properties
-        const walletBalance = (client.wallet && client.wallet.balance !== null) ? parseFloat(client.wallet.balance) : 1000;
-        const profitTarget  = (client.settings && client.settings.profit_target) ? parseFloat(client.settings.profit_target) : 1.0;
-        const stopLoss      = (client.settings && client.settings.stop_loss) ? parseFloat(client.settings.stop_loss) : 0.5;
-        const profileName   = client.profile.name || userId;
-
-        logToPanel(`[DB SUCCESS] Loaded ${profileName}. Balance: ${walletBalance} USDT.`);
-
-        // Fill HTML interface controls dynamically with live values
-        document.getElementById("startBalance").value = walletBalance;
-        document.getElementById("investBalance").value = walletBalance;
-        document.getElementById("profitTarget").value = profitTarget;
-        document.getElementById("stopLoss").value = stopLoss;
-        
-        const userLabel = document.getElementById("currentUserLabel");
-        if (userLabel) userLabel.textContent = profileName;
-
-    } catch (e) {
-        logToPanel("[ERROR] loadClientData query failed: " + e.message);
+    // Append new data points cumulatively
+    chart.data.datasets[0].data.push(balance);
+    if (profit !== null && chart.data.datasets[1]) {
+        chart.data.datasets[1].data.push(profit);
     }
+
+    chart.update();
 }
 
-// === 2. Balance Monitoring Routes ===
-async function refreshBalances() {
-    try {
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount: 0 })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.fund_token_balance !== undefined) {
-            document.getElementById("startBalance").value = parsed.fund_token_balance;
-            document.getElementById("investBalance").value = parsed.fund_token_balance;
-            logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Balance sync skipped: ${err.message}`);
-    }
+// Switch chart type to bar and style datasets
+if (window.balanceChart) {
+    window.balanceChart.config.type = "bar";
+    window.balanceChart.data.datasets[0].backgroundColor = "rgba(243, 186, 47, 0.7)"; // yellow bars
+    window.balanceChart.data.datasets[1].backgroundColor = "rgba(0, 255, 0, 0.7)";   // green bars
+    window.balanceChart.data.datasets[0].borderWidth = 1;
+    window.balanceChart.data.datasets[1].borderWidth = 1;
+    window.balanceChart.update();
 }
 
-async function runDeposit(amount) {
-    try {
-        logToPanel(`[INFO] Routing deposit payload for ${amount}...`);
-        await fetch(`${BASE_URL}/runbot/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
-        });
-        
-        const resp = await fetch(`${BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] On-Chain Deposit TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(USER_ID);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Deposit sequence aborted: ${err.message}`);
-    }
-}
-
-async function runWithdraw(amount) {
-    try {
-        logToPanel(`[INFO] Routing payout sequence for ${amount}...`);
-        const resp = await fetch(`${BASE_URL}/runbot/payout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ wallet_address: USER_ADDR, private_key: USER_PK, amount })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.tx_hash) {
-            logToPanel(`[SUCCESS] Payout TX confirmed: ${parsed.tx_hash}`);
-            await loadClientData(USER_ID);
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Withdrawal execution failed: ${err.message}`);
-    }
-}
-
-// === 3. Final Lifecycle Integration: Commit End Balancing back to clients.db ===
-async function commitFinalPnLToDatabase(finalPnL) {
-    try {
-        const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
-        const updatedNetBalance = startingAllocated + finalPnL;
-        
-        logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
-
-        // Target your explicit database modification endpoint
-        const resp = await fetch(`${BASE_URL}/runbot/update_client`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                userid: window.USER_ID,
-                amount_deposited: startingAllocated,
-                current_balance: updatedNetBalance
-            })
-        });
-        
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "client updated") {
-            logToPanel(`[SQLITE SUCCESS] Final performance data persisted to clients.db for user ${window.USER_ID}.`);
-            // Force interface numbers to match finalized record values
-            document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
-        } else {
-            logToPanel("[WARN] Database adjustment rejected by server script.");
-        }
-    } catch (err) {
-        logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
-    }
-}
-
-// === UI Glue ===
-document.addEventListener("DOMContentLoaded", async () => {
-    logToPanel("UI ready");
-    window.setStatus("READY TO RUN"); 
-    
-    // 1. Initialise existing user variables directly out of your database tables on load
-    await loadClientData(USER_ID);
-
-    // Deposit Handler
-    document.getElementById("depositBtn")?.addEventListener("click", () => {
-        const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
-        runDeposit(amt);
-    });
-
-    // Withdraw Handler
-    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
-        const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
-        runWithdraw(amt);
-    });
-
-    // Start Trading Handler
-    document.getElementById("startBtn")?.addEventListener("click", async () => {
-        const launchEngine = window.startSimulation || window.initBot;
-        if (typeof launchEngine === "function") {
-            window.setStatus("RUNNING");
-            logToPanel("[INFO] Start Trading button pressed — launching simulation loop");
-            try {
-                // Execute the 10 cycles pacing array loop directly
-                await launchEngine(10);
-            } catch (err) {
-                logToPanel("[ERROR] Runtime simulation engine drop: " + err.message);
-            } finally {
-                window.setStatus("COMPLETED");
-                
-                // 📊 INTEGRATION STEP: Read total loop profit matrix and commit back to SQLite file
-                const totalSimulatedPnL = window.cumulativePnL || 0;
-                await commitFinalPnLToDatabase(totalSimulatedPnL);
-            }
-        } else {
-            logToPanel("[ERROR] Target simulation script execution engine not found.");
-        }
-    });
-
-    // Stop Handler
-    document.getElementById("stopBtn")?.addEventListener("click", () => {
-        window.isBotRunning = false;
-        if (typeof window.stopBot === "function") {
-            window.stopBot();
-        }
-        window.setStatus("STOPPED");
-        logToPanel("[MANUAL] Bot process sequence flagged to stop.");
-    });
-});
+window.updateChart = updateChart;
