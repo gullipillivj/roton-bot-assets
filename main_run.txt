@@ -23,67 +23,60 @@ window.setStatus = function(text) {
     else logToPanel(`[STATUS UPDATE] ${text}`);
 };
 
-// === Client Data Loader (with balances sync) ===
-async function loadClientData(userId) {
+// === Withdraw / Payout Handler ===
+async function runWithdraw(amount) {
+    if (amount <= 0) {
+        logToPanel("[WARN] Withdraw amount must be greater than zero.");
+        return;
+    }
+
+    logToPanel(`[INFO] Initiating withdrawal of ${amount} USDT`);
+
+    const gasFeeUSDT = 0.05;
+    const netWithdraw = amount - gasFeeUSDT;
+
+    if (netWithdraw <= 0) {
+        logToPanel("[ERROR] Withdrawal too small after gas fee.");
+        return;
+    }
+
     try {
-        logToPanel(`[INFO] Fetching live database records for ${userId}...`);
-        const resp = await fetch(`${window.BASE_URL}/clients`, {
-            headers: { "ngrok-skip-browser-warning": "true" }
+        const resp = await fetch(`${window.BASE_URL}/runbot/payout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                wallet_address: window.USER_ADDR,
+                private_key: window.USER_PK,
+                amount: netWithdraw
+            })
         });
-        const data = safeParse(await resp.text());
-        if (!data?.clients?.length) {
-            logToPanel("[WARN] No clients found in DB payload");
-            return;
-        }
-        const client = data.clients.find(c => c.profile?.name === userId);
-        if (!client) {
-            logToPanel(`[WARN] User ${userId} not found in database records.`);
-            return;
-        }
 
-        const walletBalance = parseFloat(client.wallet?.balance || 0);
-        const profileName   = client.profile.name || userId;
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "withdrawal executed") {
+            logToPanel(`[SUCCESS] Withdrawal transaction confirmed. TxHash=${parsed.tx_hash}`);
 
-        logToPanel(`[DB SUCCESS] Loaded ${profileName}. Balance: ${walletBalance} USDT.`);
+            // ✅ Update UI balances
+            document.getElementById("investBalance").value = netWithdraw.toFixed(2);
+            document.getElementById("startBalance").value = netWithdraw.toFixed(2);
 
-        document.getElementById("startBalance").value = walletBalance;
-        document.getElementById("investBalance").value = walletBalance;
-        const userLabel = document.getElementById("currentUserLabel");
-        if (userLabel) userLabel.textContent = profileName;
-
-        // === Fetch live balances from backend ===
-        try {
-            const balResp = await fetch(`${window.BASE_URL}/runbot/balances`, {
+            // ✅ Sync clients.db with new balance
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
                 body: JSON.stringify({
                     userid: window.USER_ID,
-                    wallet_address: window.USER_ADDR
+                    current_balance: netWithdraw,
+                    amount_withdrawn: amount
                 })
             });
-            const balData = safeParse(await balResp.text());
-            if (balData?.status === "balances fetched") {
-                logToPanel(`[INFO] Fund token balance: ${balData.fund_token_balance}, ETH balance: ${balData.eth_balance_wei}`);
-            }
-        } catch (balErr) {
-            logToPanel("[WARN] Could not fetch live balances: " + balErr.message);
+            logToPanel("[DB SUCCESS] Client balance updated in clients.db");
+        } else {
+            logToPanel("[WARN] Withdrawal rejected by backend.");
         }
-
-        // === Sync clients.db with current balance ===
-        await fetch(`${window.BASE_URL}/runbot/update_client`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                userid: window.USER_ID,
-                current_balance: walletBalance
-            })
-        });
-        logToPanel("[DB SUCCESS] Client balance synchronized on page load");
-    } catch (e) {
-        logToPanel("[ERROR] loadClientData query failed: " + e.message);
+    } catch (err) {
+        logToPanel(`[ERROR] Withdraw request failed: ${err.message}`);
     }
 }
-
 
 // === Deposit Handler ===
 async function runDeposit(amount) {
