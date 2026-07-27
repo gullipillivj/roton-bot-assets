@@ -114,7 +114,6 @@ async function runDeposit(amount) {
         logToPanel(`[ERROR] Deposit request failed: ${err.message}`);
     }
 }
-
 // === Withdraw Handler ===
 async function runWithdraw(amount) {
     if (amount <= 0) {
@@ -146,8 +145,21 @@ async function runWithdraw(amount) {
         const parsed = safeParse(await resp.text());
         if (parsed?.status === "withdrawal executed") {
             logToPanel(`[SUCCESS] Withdrawal transaction confirmed. TxHash=${parsed.tx_hash}`);
+
+            // ✅ Update UI balances
             document.getElementById("investBalance").value = netWithdraw.toFixed(2);
             document.getElementById("startBalance").value = netWithdraw.toFixed(2);
+
+            // ✅ Sync clients.db with new balance
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({
+                    userid: window.USER_ID,
+                    current_balance: netWithdraw
+                })
+            });
+            logToPanel("[DB SUCCESS] Client balance updated in clients.db");
         } else {
             logToPanel("[WARN] Withdrawal rejected by backend.");
         }
@@ -155,6 +167,8 @@ async function runWithdraw(amount) {
         logToPanel(`[ERROR] Withdraw request failed: ${err.message}`);
     }
 }
+
+
 // === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
