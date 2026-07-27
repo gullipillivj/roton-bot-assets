@@ -59,6 +59,7 @@ async function loadClientData(userId) {
 }
 
 // === Deposit Handler ===
+as// === Deposit Handler ===
 async function runDeposit(amount) {
     if (amount <= 0) {
         logToPanel("[WARN] Deposit amount must be greater than zero.");
@@ -93,13 +94,26 @@ async function runDeposit(amount) {
         });
 
         const parsed = safeParse(await resp.text());
-        if (parsed?.status === "deposit success") {
+        if (parsed?.status === "deposit executed") {   // ✅ aligned with backend
             logToPanel(`[SUCCESS] Deposit transaction confirmed. TxHash=${parsed.tx_hash}`);
             if (parsed?.solidarity_balance !== undefined) {
                 logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} USDT`);
             }
+
+            // ✅ Update UI balances
             document.getElementById("investBalance").value = netDeposit.toFixed(2);
             document.getElementById("startBalance").value = netDeposit.toFixed(2);
+
+            // ✅ Sync clients.db with new balance
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({
+                    userid: window.USER_ID,
+                    current_balance: netDeposit
+                })
+            });
+            logToPanel("[DB SUCCESS] Client balance updated in clients.db");
         } else {
             logToPanel("[WARN] Deposit rejected by backend.");
         }
