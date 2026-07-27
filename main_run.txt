@@ -52,14 +52,13 @@ async function runWithdraw(amount) {
         });
 
         const parsed = safeParse(await resp.text());
+
         if (parsed?.status === "withdrawal executed") {
             logToPanel(`[SUCCESS] Withdrawal transaction confirmed. TxHash=${parsed.tx_hash}`);
 
-            // ✅ Update UI balances
             document.getElementById("investBalance").value = netWithdraw.toFixed(2);
             document.getElementById("startBalance").value = netWithdraw.toFixed(2);
 
-            // ✅ Sync clients.db with new balance
             await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -70,6 +69,8 @@ async function runWithdraw(amount) {
                 })
             });
             logToPanel("[DB SUCCESS] Client balance updated in clients.db");
+        } else if (parsed?.status === "error") {
+            logToPanel(`[ERROR] Backend error: ${parsed.message}`);
         } else {
             logToPanel("[WARN] Withdrawal rejected by backend.");
         }
@@ -89,8 +90,7 @@ async function runDeposit(amount) {
 
     const gasFeeUSDT = 0.05;
     const commissionCoins = 2;
-    const currentPrice = 1; // USDT stable at 1
-    const commissionUSDT = commissionCoins * currentPrice;
+    const commissionUSDT = commissionCoins * 1; // USDT stable
     const netDeposit = amount - commissionUSDT - gasFeeUSDT;
 
     if (netDeposit <= 0) {
@@ -113,6 +113,7 @@ async function runDeposit(amount) {
         });
 
         const parsed = safeParse(await resp.text());
+
         if (parsed?.status === "deposit executed") {
             logToPanel(`[SUCCESS] Deposit transaction confirmed. TxHash=${parsed.tx_hash}`);
 
@@ -124,10 +125,13 @@ async function runDeposit(amount) {
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
                 body: JSON.stringify({
                     userid: window.USER_ID,
-                    current_balance: netDeposit
+                    current_balance: netDeposit,
+                    amount_deposited: amount
                 })
             });
             logToPanel("[DB SUCCESS] Client balance updated in clients.db");
+        } else if (parsed?.status === "error") {
+            logToPanel(`[ERROR] Backend error: ${parsed.message}`);
         } else {
             logToPanel("[WARN] Deposit rejected by backend.");
         }
@@ -135,61 +139,6 @@ async function runDeposit(amount) {
         logToPanel(`[ERROR] Deposit request failed: ${err.message}`);
     }
 }
-// === Withdraw / Payout Handler ===
-async function runWithdraw(amount) {
-    if (amount <= 0) {
-        logToPanel("[WARN] Withdraw amount must be greater than zero.");
-        return;
-    }
-
-    logToPanel(`[INFO] Initiating withdrawal of ${amount} USDT`);
-
-    const gasFeeUSDT = 0.05;
-    const netWithdraw = amount - gasFeeUSDT;
-
-    if (netWithdraw <= 0) {
-        logToPanel("[ERROR] Withdrawal too small after gas fee.");
-        return;
-    }
-
-    try {
-        const resp = await fetch(`${window.BASE_URL}/runbot/payout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                wallet_address: window.USER_ADDR,
-                private_key: window.USER_PK,
-                amount: netWithdraw
-            })
-        });
-
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "withdrawal executed") {
-            logToPanel(`[SUCCESS] Withdrawal transaction confirmed. TxHash=${parsed.tx_hash}`);
-
-            // ✅ Update UI balances
-            document.getElementById("investBalance").value = netWithdraw.toFixed(2);
-            document.getElementById("startBalance").value = netWithdraw.toFixed(2);
-
-            // ✅ Sync clients.db with new balance
-            await fetch(`${window.BASE_URL}/runbot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({
-                    userid: window.USER_ID,
-                    current_balance: netWithdraw,
-                    amount_withdrawn: amount
-                })
-            });
-            logToPanel("[DB SUCCESS] Client balance updated in clients.db");
-        } else {
-            logToPanel("[WARN] Withdrawal rejected by backend.");
-        }
-    } catch (err) {
-        logToPanel(`[ERROR] Withdraw request failed: ${err.message}`);
-    }
-}
-
 
 // === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
