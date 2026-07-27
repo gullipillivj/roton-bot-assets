@@ -1,3 +1,4 @@
+// main_run.txt — Updated (single-file, DOM-safe, no duplicate handlers)
 logToPanel("main_run.txt loaded (Global Declarations + UI Wiring)");
 
 // === Global Declarations (only here) ===
@@ -13,15 +14,132 @@ window.currentCycle = 1;
 
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
+
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) panel.value += msg + "\n";
+    else console.log(msg);
 }
+
 window.setStatus = function(text) {
     const statusLabel = document.getElementById("statusLabel");
     if (statusLabel) statusLabel.textContent = "STATE: " + text;
     else logToPanel(`[STATUS UPDATE] ${text}`);
 };
+
+// === Data loader (fetch-only, DOM-free) ===
+async function fetchClientRecord(userId) {
+    try {
+        logToPanel(`[INFO] Fetching client record for ${userId} (DB only)...`);
+        const resp = await fetch(`${window.BASE_URL}/clients`, {
+            headers: { "ngrok-skip-browser-warning": "true" }
+        });
+        const data = safeParse(await resp.text());
+        if (!data || !Array.isArray(data.clients) || data.clients.length === 0) {
+            logToPanel("[WARN] No clients found in DB payload");
+            return null;
+        }
+        const client = data.clients.find(c => c.profile && c.profile.name === userId);
+        if (!client) {
+            logToPanel(`[WARN] User ${userId} not found in database records.`);
+            return null;
+        }
+
+        // Normalize values
+        const walletBalance = client.wallet?.balance ? parseFloat(client.wallet.balance) : 0;
+        const profitTarget  = client.settings?.profit_target ? parseFloat(client.settings.profit_target) : 1.0;
+        const stopLoss      = client.settings?.stop_loss ? parseFloat(client.settings.stop_loss) : 0.5;
+        const profileName   = client.profile?.name || userId;
+
+        return {
+            profileName,
+            walletBalance,
+            profitTarget,
+            stopLoss
+        };
+    } catch (e) {
+        logToPanel("[ERROR] fetchClientRecord failed: " + e.message);
+        return null;
+    }
+}
+
+// === On-chain & fund balances fetch (fetch-only) ===
+async function fetchLiveBalances(userid, walletAddr) {
+    try {
+        const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ userid, wallet_address: walletAddr })
+        });
+        const balData = safeParse(await resp.text());
+        if (!balData) {
+            logToPanel("[WARN] /runbot/balances returned no JSON");
+            return null;
+        }
+        if (balData.status === "balances fetched") {
+            return balData;
+        } else if (balData.status === "error") {
+            logToPanel(`[ERROR] Balances endpoint error: ${balData.message}`);
+            return null;
+        } else {
+            logToPanel("[WARN] Unexpected balances response");
+            return null;
+        }
+    } catch (err) {
+        logToPanel("[ERROR] fetchLiveBalances failed: " + err.message);
+        return null;
+    }
+}
+
+// === Apply client data to DOM (safe checks) ===
+async function applyClientDataToUI(userId) {
+    // Fetch DB record
+    const client = await fetchClientRecord(userId);
+    if (!client) {
+        // still attempt to fetch live balances to show something
+        const fallbackBal = await fetchLiveBalances(userId, window.USER_ADDR);
+        if (fallbackBal) {
+            logToPanel(`[INFO] Fund token balance: ${fallbackBal.fund_token_balance}, ETH balance: ${fallbackBal.eth_balance_wei}`);
+        }
+        return;
+    }
+
+    // Update DOM elements only if they exist
+    const startEl = document.getElementById("startBalance");
+    const investEl = document.getElementById("investBalance");
+    const profitEl = document.getElementById("profitTarget");
+    const stopEl = document.getElementById("stopLoss");
+    const userLabel = document.getElementById("currentUserLabel");
+
+    if (startEl) startEl.value = client.walletBalance;
+    if (investEl) investEl.value = client.walletBalance;
+    if (profitEl) profitEl.value = client.profitTarget;
+    if (stopEl) stopEl.value = client.stopLoss;
+    if (userLabel) userLabel.textContent = client.profileName;
+
+    logToPanel(`[DB SUCCESS] Loaded ${client.profileName}. Balance: ${client.walletBalance} USDT.`);
+
+    // Fetch live balances and log them
+    const live = await fetchLiveBalances(userId, window.USER_ADDR);
+    if (live) {
+        logToPanel(`[INFO] Fund token balance: ${live.fund_token_balance}, ETH balance: ${live.eth_balance_wei}`);
+    }
+
+    // Sync clients.db with current balance (best-effort)
+    try {
+        await fetch(`${window.BASE_URL}/runbot/update_client`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                current_balance: client.walletBalance
+            })
+        });
+        logToPanel("[DB SUCCESS] Client balance synchronized on page load");
+    } catch (err) {
+        logToPanel("[WARN] Failed to sync client balance: " + err.message);
+    }
+}
 
 // === Withdraw / Payout Handler ===
 async function runWithdraw(amount) {
@@ -56,9 +174,12 @@ async function runWithdraw(amount) {
         if (parsed?.status === "withdrawal executed") {
             logToPanel(`[SUCCESS] Withdrawal transaction confirmed. TxHash=${parsed.tx_hash}`);
 
-            document.getElementById("investBalance").value = netWithdraw.toFixed(2);
-            document.getElementById("startBalance").value = netWithdraw.toFixed(2);
+            const investEl = document.getElementById("investBalance");
+            const startEl = document.getElementById("startBalance");
+            if (investEl) investEl.value = netWithdraw.toFixed(2);
+            if (startEl) startEl.value = netWithdraw.toFixed(2);
 
+            // Sync clients.db with new balance
             await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -73,6 +194,7 @@ async function runWithdraw(amount) {
             logToPanel(`[ERROR] Backend error: ${parsed.message}`);
         } else {
             logToPanel("[WARN] Withdrawal rejected by backend.");
+            if (parsed) logToPanel(`[DEBUG] Backend response: ${JSON.stringify(parsed)}`);
         }
     } catch (err) {
         logToPanel(`[ERROR] Withdraw request failed: ${err.message}`);
@@ -117,8 +239,10 @@ async function runDeposit(amount) {
         if (parsed?.status === "deposit executed") {
             logToPanel(`[SUCCESS] Deposit transaction confirmed. TxHash=${parsed.tx_hash}`);
 
-            document.getElementById("investBalance").value = netDeposit.toFixed(2);
-            document.getElementById("startBalance").value = netDeposit.toFixed(2);
+            const investEl = document.getElementById("investBalance");
+            const startEl = document.getElementById("startBalance");
+            if (investEl) investEl.value = netDeposit.toFixed(2);
+            if (startEl) startEl.value = netDeposit.toFixed(2);
 
             await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
@@ -134,6 +258,7 @@ async function runDeposit(amount) {
             logToPanel(`[ERROR] Backend error: ${parsed.message}`);
         } else {
             logToPanel("[WARN] Deposit rejected by backend.");
+            if (parsed) logToPanel(`[DEBUG] Backend response: ${JSON.stringify(parsed)}`);
         }
     } catch (err) {
         logToPanel(`[ERROR] Deposit request failed: ${err.message}`);
@@ -144,15 +269,18 @@ async function runDeposit(amount) {
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN");
-    await loadClientData(window.USER_ID);
 
+    // Apply client data to UI after DOM is ready
+    await applyClientDataToUI(window.USER_ID);
+
+    // Wire buttons (safe optional chaining)
     document.getElementById("depositBtn")?.addEventListener("click", () => {
-        const amt = parseFloat(document.getElementById("depositAmount").value) || 0;
+        const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
         runDeposit(amt);
     });
 
     document.getElementById("withdrawBtn")?.addEventListener("click", () => {
-        const amt = parseFloat(document.getElementById("withdrawAmount").value) || 0;
+        const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
         runWithdraw(amt);
     });
 
@@ -168,7 +296,11 @@ document.addEventListener("DOMContentLoaded", async () => {
                 logToPanel("[ERROR] Runtime simulation engine drop: " + err.message);
             } finally {
                 window.setStatus("COMPLETED");
-                await commitFinalPnLToDatabase(window.cumulativePnL);
+                if (typeof commitFinalPnLToDatabase === "function") {
+                    await commitFinalPnLToDatabase(window.cumulativePnL);
+                } else {
+                    logToPanel("[WARN] commitFinalPnLToDatabase not defined");
+                }
             }
         } else {
             logToPanel("[ERROR] Target simulation script execution engine not found.");
@@ -184,6 +316,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     // === Logout Button ===
     document.getElementById("logoutBtn")?.addEventListener("click", () => {
         logToPanel("[INFO] Logging out user...");
-        window.location.href = "https://almanac-sierra-rundown.ngrok-free.dev/login";
+        window.location.href = `${window.BASE_URL}/login`;
     });
 });
