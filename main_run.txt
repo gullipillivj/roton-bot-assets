@@ -58,6 +58,97 @@ async function loadClientData(userId) {
     }
 }
 
+// === Deposit Handler ===
+async function runDeposit(amount) {
+    if (amount <= 0) {
+        logToPanel("[WARN] Deposit amount must be greater than zero.");
+        return;
+    }
+
+    logToPanel(`[INFO] Initiating deposit of ${amount} USDT`);
+
+    const gasFeeUSDT = 0.05;
+    const commissionCoins = 2;
+    const currentPrice = 1; // USDT stable at 1
+    const commissionUSDT = commissionCoins * currentPrice;
+    const netDeposit = amount - commissionUSDT - gasFeeUSDT;
+
+    if (netDeposit <= 0) {
+        logToPanel("[ERROR] Deposit too small after fees/commission.");
+        return;
+    }
+
+    logToPanel(`[INFO] Commission deducted: ${commissionCoins} coins (${commissionUSDT.toFixed(2)} USDT), Gas fee: ${gasFeeUSDT} USDT`);
+    logToPanel(`[INFO] Net deposit credited: ${netDeposit.toFixed(2)} USDT`);
+
+    try {
+        const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                amount: netDeposit,
+                wallet_address: window.USER_ADDR
+            })
+        });
+
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "deposit success") {
+            logToPanel(`[SUCCESS] Deposit transaction confirmed. TxHash=${parsed.tx_hash}`);
+            if (parsed?.solidarity_balance !== undefined) {
+                logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} USDT`);
+            }
+            document.getElementById("investBalance").value = netDeposit.toFixed(2);
+            document.getElementById("startBalance").value = netDeposit.toFixed(2);
+        } else {
+            logToPanel("[WARN] Deposit rejected by backend.");
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Deposit request failed: ${err.message}`);
+    }
+}
+
+// === Withdraw Handler ===
+async function runWithdraw(amount) {
+    if (amount <= 0) {
+        logToPanel("[WARN] Withdraw amount must be greater than zero.");
+        return;
+    }
+
+    logToPanel(`[INFO] Initiating withdrawal of ${amount} USDT`);
+
+    const gasFeeUSDT = 0.05;
+    const netWithdraw = amount - gasFeeUSDT;
+
+    if (netWithdraw <= 0) {
+        logToPanel("[ERROR] Withdrawal too small after gas fee.");
+        return;
+    }
+
+    try {
+        const resp = await fetch(`${window.BASE_URL}/runbot/withdraw`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                amount: netWithdraw,
+                wallet_address: window.USER_ADDR
+            })
+        });
+
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "withdraw success") {
+            logToPanel(`[SUCCESS] Withdrawal transaction confirmed. TxHash=${parsed.tx_hash}`);
+            document.getElementById("investBalance").value = netWithdraw.toFixed(2);
+            document.getElementById("startBalance").value = netWithdraw.toFixed(2);
+        } else {
+            logToPanel("[WARN] Withdrawal rejected by backend.");
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] Withdraw request failed: ${err.message}`);
+    }
+}
+
 // === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
@@ -97,5 +188,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.isBotRunning = false;
         window.setStatus("STOPPED");
         logToPanel("[MANUAL] Bot process sequence flagged to stop.");
+    });
+
+    // === Logout Button ===
+    document.getElementById("logoutBtn")?.addEventListener("click", () => {
+        logToPanel("[INFO] Logging out user...");
+        window.location.href = "https://almanac-sierra-rundown.ngrok-free.dev/login";
     });
 });
