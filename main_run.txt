@@ -59,7 +59,7 @@ async function loadClientData(userId) {
 }
 
 // === Deposit Handler ===
-as// === Deposit Handler ===
+
 async function runDeposit(amount) {
     if (amount <= 0) {
         logToPanel("[WARN] Deposit amount must be greater than zero.");
