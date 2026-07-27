@@ -23,7 +23,7 @@ window.setStatus = function(text) {
     else logToPanel(`[STATUS UPDATE] ${text}`);
 };
 
-// === Client Data Loader ===
+// === Client Data Loader (with balances sync) ===
 async function loadClientData(userId) {
     try {
         logToPanel(`[INFO] Fetching live database records for ${userId}...`);
@@ -31,32 +31,60 @@ async function loadClientData(userId) {
             headers: { "ngrok-skip-browser-warning": "true" }
         });
         const data = safeParse(await resp.text());
-        if (!data || !data.clients || data.clients.length === 0) {
+        if (!data?.clients?.length) {
             logToPanel("[WARN] No clients found in DB payload");
             return;
         }
-        const client = data.clients.find(c => c.profile && c.profile.name === userId);
+        const client = data.clients.find(c => c.profile?.name === userId);
         if (!client) {
             logToPanel(`[WARN] User ${userId} not found in database records.`);
             return;
         }
-        const walletBalance = client.wallet?.balance ? parseFloat(client.wallet.balance) : 1000;
-        const profitTarget  = client.settings?.profit_target ? parseFloat(client.settings.profit_target) : 1.0;
-        const stopLoss      = client.settings?.stop_loss ? parseFloat(client.settings.stop_loss) : 0.5;
+
+        const walletBalance = parseFloat(client.wallet?.balance || 0);
         const profileName   = client.profile.name || userId;
 
         logToPanel(`[DB SUCCESS] Loaded ${profileName}. Balance: ${walletBalance} USDT.`);
 
         document.getElementById("startBalance").value = walletBalance;
         document.getElementById("investBalance").value = walletBalance;
-        document.getElementById("profitTarget").value = profitTarget;
-        document.getElementById("stopLoss").value = stopLoss;
         const userLabel = document.getElementById("currentUserLabel");
         if (userLabel) userLabel.textContent = profileName;
+
+        // === Fetch live balances from backend ===
+        try {
+            const balResp = await fetch(`${window.BASE_URL}/runbot/balances`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({
+                    userid: window.USER_ID,
+                    wallet_address: window.USER_ADDR
+                })
+            });
+            const balData = safeParse(await balResp.text());
+            if (balData?.status === "balances fetched") {
+                logToPanel(`[INFO] Fund token balance: ${balData.fund_token_balance}, ETH balance: ${balData.eth_balance_wei}`);
+            }
+        } catch (balErr) {
+            logToPanel("[WARN] Could not fetch live balances: " + balErr.message);
+        }
+
+        // === Sync clients.db with current balance ===
+        await fetch(`${window.BASE_URL}/runbot/update_client`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                current_balance: walletBalance
+            })
+        });
+        logToPanel("[DB SUCCESS] Client balance synchronized on page load");
     } catch (e) {
         logToPanel("[ERROR] loadClientData query failed: " + e.message);
     }
 }
+
+
 // === Deposit Handler ===
 async function runDeposit(amount) {
     if (amount <= 0) {
