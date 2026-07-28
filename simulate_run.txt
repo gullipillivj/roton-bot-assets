@@ -112,31 +112,26 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
-// === Final Commit: Query Solidarity Fund, then mirror into DB/UI ===
 async function commitFinalBalanceFromFund() {
     try {
         // Step 1: Query solidarity fund
-        const resp = await fetch(`${window.BASE_URL}/balances`, {
+        const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ userid: window.USER_ID })
+            body: JSON.stringify({ userid: window.USER_ID, wallet_address: window.USER_ADDR })
         });
         const fundData = await resp.json();
 
         if (fundData?.balance !== undefined) {
             const finalBalance = parseFloat(fundData.balance);
 
-            // Step 2: Log clearly for user
             logToPanel(`[SOLIDARITY FUND] Final balance after simulation: ${finalBalance.toFixed(2)} USDT`);
 
             // Step 3: Mirror into clients.db
             const resp2 = await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({
-                    userid: window.USER_ID,
-                    new_balance: finalBalance
-                })
+                body: JSON.stringify({ userid: window.USER_ID, new_balance: finalBalance })
             });
 
             const parsed = safeParse(await resp2.text());
@@ -147,7 +142,7 @@ async function commitFinalBalanceFromFund() {
                 document.getElementById("investBalance").value = finalBalance.toFixed(2);
                 document.getElementById("startBalance").value = finalBalance.toFixed(2);
             } else {
-                logToPanel("[WARN] Database update rejected: " + parsed.message);
+                logToPanel("[WARN] Database update rejected: " + parsed?.message);
             }
         } else {
             logToPanel("[ERROR] Solidarity fund did not return a balance.");
