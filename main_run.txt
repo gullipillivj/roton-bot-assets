@@ -91,7 +91,7 @@ async function runApprove(amount) {
     }
 }
 
-// === Deposit Handler (patched for accumulation) ===
+// === Deposit Handler (final fix: accumulate + backend update) ===
 async function runDeposit(amount) {
     if (amount <= 0) return;
     const netAmount = applyDepositFees(amount);
@@ -111,20 +111,36 @@ async function runDeposit(amount) {
         if (parsed?.status === "deposit executed") {
             logToPanel(`DepositTx=${parsed.tx_hash}`);
 
-            // ✅ Accumulate balance locally before syncing
+            // ✅ Accumulate balance locally
             const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
             const newBalance = currentBalance + netAmount;
             document.getElementById("investBalance").value = newBalance.toFixed(2);
             document.getElementById("startBalance").value = newBalance.toFixed(2);
             logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
 
-            // Optional backend refresh
-            await syncBalanceFromFund();
+            // ✅ Push accumulated balance to backend
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
+            });
+
+            // Optional: refresh chart or UI
+            if (window.balanceChart) {
+                const timeLabel = new Date().toLocaleTimeString();
+                window.balanceChart.data.labels.push(timeLabel);
+                window.balanceChart.data.datasets[0].data.push(newBalance);
+                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
+                window.balanceChart.update();
+            }
         }
     } catch (err) {
         logToPanel(`DepositError=${err.message}`);
     }
 }
+
+
+
 // === Withdraw Handler ===
 async function runWithdraw(amount) {
     if (amount <= 0) return;
