@@ -25,36 +25,40 @@ window.setStatus = function(text) {
     else logToPanel(`[STATUS UPDATE] ${text}`);
 };
 
-// === Data loader ===
-async function fetchClientRecord(userId) {
+// === Solidarity Fund Sync Helper ===
+async function syncBalanceFromFund() {
     try {
-        logToPanel(`[INFO] Fetching client record for ${userId}...`);
-        const resp = await fetch(`${window.BASE_URL}/clients`, {
-            headers: { "ngrok-skip-browser-warning": "true" }
+        const resp = await fetch(`${window.BASE_URL}/balances`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ userid: window.USER_ID })
         });
-        const data = safeParse(await resp.text());
-        if (!data || !Array.isArray(data.clients)) return null;
-        return data.clients.find(c => c.profile?.name === userId) || null;
-    } catch (e) {
-        logToPanel("[ERROR] fetchClientRecord failed: " + e.message);
-        return null;
+        const fundData = await resp.json();
+
+        if (fundData?.balance !== undefined) {
+            const balance = parseFloat(fundData.balance);
+
+            // Log clearly for user
+            logToPanel(`[SOLIDARITY FUND] Current balance: ${balance.toFixed(2)} USDT`);
+
+            // Update UI
+            document.getElementById("startBalance").value = balance.toFixed(2);
+            document.getElementById("investBalance").value = balance.toFixed(2);
+
+            // Mirror into clients.db
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({ userid: window.USER_ID, new_balance: balance })
+            });
+
+            logToPanel(`[DB SUCCESS] Synced solidarity fund balance ${balance.toFixed(2)} USDT into clients.db`);
+        } else {
+            logToPanel("[WARN] Solidarity fund did not return a balance.");
+        }
+    } catch (err) {
+        logToPanel(`[ERROR] syncBalanceFromFund failed: ${err.message}`);
     }
-}
-
-async function applyClientDataToUI(userId) {
-    const client = await fetchClientRecord(userId);
-    if (!client) return;
-
-    const walletBalance = parseFloat(client.wallet?.balance || 0);
-    const startEl = document.getElementById("startBalance");
-    const investEl = document.getElementById("investBalance");
-    const userLabel = document.getElementById("currentUserLabel");
-
-    if (startEl) startEl.value = walletBalance;
-    if (investEl) investEl.value = walletBalance;
-    if (userLabel) userLabel.textContent = client.profile?.name || userId;
-
-    logToPanel(`[DB SUCCESS] Loaded ${userId}. Balance: ${walletBalance} USDT.`);
 }
 
 // === Withdraw Handler ===
@@ -65,21 +69,14 @@ async function runWithdraw(amount) {
     }
     logToPanel(`[INFO] Initiating withdrawal of ${amount} USDT`);
 
-    const gasFeeUSDT = 0.05;
-    const netWithdraw = amount - gasFeeUSDT;
-    if (netWithdraw <= 0) {
-        logToPanel("[ERROR] Withdrawal too small after gas fee.");
-        return;
-    }
-
     try {
-        const resp = await fetch(`${window.BASE_URL}/runbot/payout`, {
+        const resp = await fetch(`${window.BASE_URL}/payout`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
                 wallet_address: window.USER_ADDR,
                 private_key: window.USER_PK,
-                amount: netWithdraw
+                amount: amount
             })
         });
         const parsed = safeParse(await resp.text());
@@ -87,19 +84,8 @@ async function runWithdraw(amount) {
         if (parsed?.status === "withdrawal executed") {
             logToPanel(`[SUCCESS] Withdrawal confirmed. TxHash=${parsed.tx_hash}`);
 
-            document.getElementById("investBalance").value = netWithdraw.toFixed(2);
-            document.getElementById("startBalance").value = netWithdraw.toFixed(2);
-
-            // ✅ Only send amount_withdrawn
-            await fetch(`${window.BASE_URL}/runbot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({
-                    userid: window.USER_ID,
-                    amount_withdrawn: amount
-                })
-            });
-            logToPanel("[DB SUCCESS] Withdrawal recorded in clients.db");
+            // ✅ Query solidarity fund and sync
+            await syncBalanceFromFund();
         } else {
             logToPanel("[WARN] Withdrawal rejected.");
         }
@@ -116,27 +102,14 @@ async function runDeposit(amount) {
     }
     logToPanel(`[INFO] Initiating deposit of ${amount} USDT`);
 
-    const gasFeeUSDT = 0.05;
-    const commissionCoins = 2;
-    const commissionUSDT = commissionCoins * 1;
-    const netDeposit = amount - commissionUSDT - gasFeeUSDT;
-
-    if (netDeposit <= 0) {
-        logToPanel("[ERROR] Deposit too small after fees.");
-        return;
-    }
-
-    logToPanel(`[INFO] Commission: ${commissionUSDT} USDT, Gas: ${gasFeeUSDT} USDT`);
-    logToPanel(`[INFO] Net deposit: ${netDeposit.toFixed(2)} USDT`);
-
     try {
-        const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
+        const resp = await fetch(`${window.BASE_URL}/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
                 wallet_address: window.USER_ADDR,
                 private_key: window.USER_PK,
-                amount: netDeposit
+                amount: amount
             })
         });
         const parsed = safeParse(await resp.text());
@@ -144,19 +117,8 @@ async function runDeposit(amount) {
         if (parsed?.status === "deposit executed") {
             logToPanel(`[SUCCESS] Deposit confirmed. TxHash=${parsed.tx_hash}`);
 
-            document.getElementById("investBalance").value = netDeposit.toFixed(2);
-            document.getElementById("startBalance").value = netDeposit.toFixed(2);
-
-            // ✅ Only send amount_deposited
-            await fetch(`${window.BASE_URL}/runbot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({
-                    userid: window.USER_ID,
-                    amount_deposited: netDeposit
-                })
-            });
-            logToPanel("[DB SUCCESS] Deposit recorded in clients.db");
+            // ✅ Query solidarity fund and sync
+            await syncBalanceFromFund();
         } else {
             logToPanel("[WARN] Deposit rejected.");
         }
@@ -170,7 +132,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("UI ready");
     window.setStatus("READY TO RUN");
 
-    await applyClientDataToUI(window.USER_ID);
+    // ✅ On page load, sync from solidarity fund
+    await syncBalanceFromFund();
 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
@@ -194,9 +157,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 logToPanel("[ERROR] Simulation failed: " + err.message);
             } finally {
                 window.setStatus("COMPLETED");
-                if (typeof commitFinalPnLToDatabase === "function") {
-                    await commitFinalPnLToDatabase(window.cumulativePnL);
-                }
+                // ✅ Simulation end already commits via simulate_run.txt
             }
         }
     });
