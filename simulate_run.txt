@@ -112,35 +112,50 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
-async function commitFinalPnLToDatabase(finalPnL) {
+// === Final Commit: Query Solidarity Fund, then mirror into DB/UI ===
+async function commitFinalBalanceFromFund() {
     try {
-        const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
-        const updatedNetBalance = startingAllocated + finalPnL;
-
-        logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
-
-        const resp = await fetch(`${window.BASE_URL}/runbot/commit_balance`, {
+        // Step 1: Query solidarity fund
+        const resp = await fetch(`${window.BASE_URL}/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                userid: window.USER_ID,
-                new_balance: updatedNetBalance
-            })
+            body: JSON.stringify({ userid: window.USER_ID })
         });
+        const fundData = await resp.json();
 
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "balance committed") {
-            logToPanel(`[SQLITE SUCCESS] Final performance data persisted for user ${window.USER_ID}.`);
-            document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
-            document.getElementById("startBalance").value = updatedNetBalance.toFixed(2);
+        if (fundData?.balance !== undefined) {
+            const finalBalance = parseFloat(fundData.balance);
+
+            // Step 2: Log clearly for user
+            logToPanel(`[SOLIDARITY FUND] Final balance after simulation: ${finalBalance.toFixed(2)} USDT`);
+
+            // Step 3: Mirror into clients.db
+            const resp2 = await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({
+                    userid: window.USER_ID,
+                    new_balance: finalBalance
+                })
+            });
+
+            const parsed = safeParse(await resp2.text());
+            if (parsed?.status === "client updated") {
+                logToPanel(`[SQLITE SUCCESS] Final balance persisted for user ${window.USER_ID}.`);
+
+                // Step 4: Update UI
+                document.getElementById("investBalance").value = finalBalance.toFixed(2);
+                document.getElementById("startBalance").value = finalBalance.toFixed(2);
+            } else {
+                logToPanel("[WARN] Database update rejected: " + parsed.message);
+            }
         } else {
-            logToPanel("[WARN] Database adjustment rejected: " + parsed.message);
+            logToPanel("[ERROR] Solidarity fund did not return a balance.");
         }
     } catch (err) {
-        logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
+        logToPanel(`[DATABASE CRITICAL ERROR] Failed to sync final balance: ${err.message}`);
     }
 }
-
 
 // === Simulation Engine ===
 async function startSimulation(totalCycles) {
@@ -183,8 +198,8 @@ async function startSimulation(totalCycles) {
     setStatus("STOPPED");
     logToPanel("[FINISH] Simulation run complete.");
 
-    // ✅ Commit final PnL only once at the end
-    await commitFinalPnLToDatabase(window.cumulativePnL);
+    // ✅ Commit final balance only once at the end
+    await commitFinalBalanceFromFund();
 }
 
 // Expose globally so main_run.txt can find it
