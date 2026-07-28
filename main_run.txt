@@ -140,11 +140,11 @@ async function runDeposit(amount) {
 }
 
 
-
-// === Withdraw Handler ===
+// === Withdraw Handler (final fix: subtract + backend update) ===
 async function runWithdraw(amount) {
     if (amount <= 0) return;
     const netAmount = applyWithdrawFees(amount);
+
     try {
         const resp = await fetch(`${window.BASE_URL}/runbot/payout`, {
             method: "POST",
@@ -155,15 +155,40 @@ async function runWithdraw(amount) {
                 amount: netAmount
             })
         });
+
         const parsed = safeParse(await resp.text());
         if (parsed?.status === "withdrawal executed") {
             logToPanel(`WithdrawTx=${parsed.tx_hash}`);
-            await syncBalanceFromFund();
+
+            // ✅ Subtract balance locally
+            const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+            const newBalance = currentBalance - netAmount;
+            document.getElementById("investBalance").value = newBalance.toFixed(2);
+            document.getElementById("startBalance").value = newBalance.toFixed(2);
+            logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
+
+            // ✅ Push updated balance to backend
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
+            });
+
+            // Optional: refresh chart or UI
+            if (window.balanceChart) {
+                const timeLabel = new Date().toLocaleTimeString();
+                window.balanceChart.data.labels.push(timeLabel);
+                window.balanceChart.data.datasets[0].data.push(newBalance);
+                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
+                window.balanceChart.update();
+            }
         }
     } catch (err) {
         logToPanel(`WithdrawError=${err.message}`);
     }
 }
+
+
 
 // === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
