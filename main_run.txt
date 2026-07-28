@@ -1,4 +1,4 @@
-// main_run.txt — Corrected cumulative balance handling
+// main_run.txt — Corrected cumulative balance handling with fee breakdown
 logToPanel("main_run.txt loaded (Global Declarations + UI Wiring)");
 
 // === Global Declarations ===
@@ -24,6 +24,26 @@ window.setStatus = function(text) {
     if (statusLabel) statusLabel.textContent = "STATE: " + text;
     else logToPanel(`[STATUS UPDATE] ${text}`);
 };
+
+// === Fee Helpers ===
+function applyDepositFees(amount) {
+    const commission = (amount * 2) / 5000; // proportional commission
+    const gasFee = 0.001 * amount;          // 0.1% gas
+    const pancakeFee = 0.0025 * amount;     // 0.25% swap fee
+    const netAmount = amount - commission - gasFee - pancakeFee;
+
+    logToPanel(`[FEE BREAKDOWN - DEPOSIT] Commission: ${commission.toFixed(4)} | Gas: ${gasFee.toFixed(4)} | Pancake: ${pancakeFee.toFixed(4)} | Net: ${netAmount.toFixed(4)}`);
+    return netAmount > 0 ? netAmount : 0;
+}
+
+function applyWithdrawFees(amount) {
+    const gasFee = 0.001 * amount;          // 0.1% gas
+    const pancakeFee = 0.0025 * amount;     // 0.25% swap fee
+    const netAmount = amount - gasFee - pancakeFee;
+
+    logToPanel(`[FEE BREAKDOWN - WITHDRAW] Gas: ${gasFee.toFixed(4)} | Pancake: ${pancakeFee.toFixed(4)} | Net: ${netAmount.toFixed(4)}`);
+    return netAmount > 0 ? netAmount : 0;
+}
 
 // === Solidarity Fund Sync Helper ===
 async function syncBalanceFromFund() {
@@ -94,7 +114,9 @@ async function runDeposit(amount) {
         logToPanel("[WARN] Deposit amount must be greater than zero.");
         return;
     }
-    logToPanel(`[INFO] Initiating deposit of ${amount} USDT`);
+
+    const netAmount = applyDepositFees(amount);
+    logToPanel(`[INFO] Initiating deposit of ${amount} USDT (net after fees: ${netAmount.toFixed(2)} USDT)`);
 
     try {
         const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
@@ -103,13 +125,14 @@ async function runDeposit(amount) {
             body: JSON.stringify({
                 wallet_address: window.USER_ADDR,
                 private_key: window.USER_PK,
-                amount: amount
+                amount: netAmount
             })
         });
         const parsed = safeParse(await resp.text());
 
         if (parsed?.status === "deposit executed") {
             logToPanel(`[SUCCESS] Deposit confirmed. TxHash=${parsed.tx_hash}`);
+            logToPanel(`[SUMMARY] Charity received proportional commission, Fund credited ${netAmount.toFixed(2)} USDT`);
             await syncBalanceFromFund();
         } else {
             logToPanel("[WARN] Deposit rejected.");
@@ -125,7 +148,9 @@ async function runWithdraw(amount) {
         logToPanel("[WARN] Withdraw amount must be greater than zero.");
         return;
     }
-    logToPanel(`[INFO] Initiating withdrawal of ${amount} USDT`);
+
+    const netAmount = applyWithdrawFees(amount);
+    logToPanel(`[INFO] Initiating withdrawal of ${amount} USDT (net after fees: ${netAmount.toFixed(2)} USDT)`);
 
     try {
         const resp = await fetch(`${window.BASE_URL}/runbot/payout`, {
@@ -134,13 +159,14 @@ async function runWithdraw(amount) {
             body: JSON.stringify({
                 wallet_address: window.USER_ADDR,
                 private_key: window.USER_PK,
-                amount: amount
+                amount: netAmount
             })
         });
         const parsed = safeParse(await resp.text());
 
         if (parsed?.status === "withdrawal executed") {
             logToPanel(`[SUCCESS] Withdrawal confirmed. TxHash=${parsed.tx_hash}`);
+            logToPanel(`[SUMMARY] User received ${netAmount.toFixed(2)} USDT after gas + Pancake fees`);
             await syncBalanceFromFund();
         } else {
             logToPanel("[WARN] Withdrawal rejected.");
@@ -177,25 +203,4 @@ document.addEventListener("DOMContentLoaded", async () => {
         const launchEngine = window.startSimulation;
         if (typeof launchEngine === "function") {
             window.setStatus("RUNNING");
-            logToPanel("[INFO] Starting simulation loop");
-            try {
-                await launchEngine(10);
-            } catch (err) {
-                logToPanel("[ERROR] Simulation failed: " + err.message);
-            } finally {
-                window.setStatus("COMPLETED");
-            }
-        }
-    });
-
-    document.getElementById("stopBtn")?.addEventListener("click", () => {
-        window.isBotRunning = false;
-        window.setStatus("STOPPED");
-        logToPanel("[MANUAL] Bot stopped.");
-    });
-
-    document.getElementById("logoutBtn")?.addEventListener("click", () => {
-        logToPanel("[INFO] Logging out...");
-        window.location.href = `${window.BASE_URL}/login`;
-    });
-});
+            logToPanel("[INFO] Starting simulation
