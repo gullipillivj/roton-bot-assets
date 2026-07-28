@@ -163,7 +163,7 @@ async function commitFinalBalanceFromFund() {
             const finalBalance = parseFloat(fundData.balance);
             logToPanel(`[SOLIDARITY FUND] Final balance after simulation: ${finalBalance.toFixed(2)} USDT`);
 
-            // Adjust this key to match your DB schema
+            // Adjust this key to match your DB schema (e.g. fund_balance, usdt_balance)
             const resp2 = await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -172,7 +172,25 @@ async function commitFinalBalanceFromFund() {
 
             const parsed = safeParse(await resp2.text());
             if (parsed?.status === "client updated") {
-                logToPanel(`[SQLITE SUCCESS] Final balance persisted—
+                logToPanel(`[SQLITE SUCCESS] Final balance persisted for user ${window.USER_ID}.`);
+            } else {
+                logToPanel("[WARN] Database update rejected: " + (parsed?.message || JSON.stringify(parsed)));
+            }
+
+            // Always update UI fields with the latest balance
+            document.getElementById("investBalance").value = finalBalance.toFixed(2);
+            document.getElementById("startBalance").value = finalBalance.toFixed(2);
+
+        } else {
+            logToPanel("[ERROR] Solidarity fund did not return a balance.");
+        }
+    } catch (err) {
+        logToPanel(`[DATABASE CRITICAL ERROR] Failed to sync final balance: ${err.message}`);
+    }
+}
+
+
+
 
 // === Simulation Engine ===
 async function startSimulation(totalCycles) {
