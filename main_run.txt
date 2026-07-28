@@ -90,13 +90,19 @@ async function runApprove(amount) {
         logToPanel(`ApproveError=${err.message}`);
     }
 }
-
-// === Deposit Handler (frontend accumulation + fund sync display) ===
+// === Deposit Handler (two-step: approve + deposit) ===
 async function runDeposit(amount) {
     if (amount <= 0) return;
     const netAmount = applyDepositFees(amount);
 
     try {
+        // Step 1: Approve token spending
+        logToPanel(`[WEB3] Broadcasting approval for ${netAmount.toFixed(2)} USDT...`);
+        const txApprove = await runApprove(netAmount);
+        if (txApprove?.tx_hash) logToPanel(`[SUCCESS] ApproveTx=${txApprove.tx_hash}`);
+
+        // Step 2: Execute deposit transaction
+        logToPanel(`[WEB3] Executing deposit for ${netAmount.toFixed(2)} USDT...`);
         const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -111,32 +117,20 @@ async function runDeposit(amount) {
         if (parsed?.status === "deposit executed") {
             logToPanel(`DepositTx=${parsed.tx_hash}`);
 
-            // ✅ Accumulate balance locally
+            // ✅ Update local + fund balance
             const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
             const newBalance = currentBalance + netAmount;
             document.getElementById("investBalance").value = newBalance.toFixed(2);
             document.getElementById("startBalance").value = newBalance.toFixed(2);
-            logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
+            window.SolidarityFundBalance = newBalance;
+            logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
 
-            // ✅ Push accumulated balance to backend
+            // ✅ Push to backend
             await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
                 body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
             });
-
-            // ✅ Update Solidarity Fund display locally
-            window.SolidarityFundBalance = newBalance;
-            logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
-
-            // Optional chart refresh
-            if (window.balanceChart) {
-                const timeLabel = new Date().toLocaleTimeString();
-                window.balanceChart.data.labels.push(timeLabel);
-                window.balanceChart.data.datasets[0].data.push(newBalance);
-                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
-                window.balanceChart.update();
-            }
         }
     } catch (err) {
         logToPanel(`DepositError=${err.message}`);
