@@ -91,10 +91,11 @@ async function runApprove(amount) {
     }
 }
 
-// === Deposit Handler ===
+// === Deposit Handler (patched for accumulation) ===
 async function runDeposit(amount) {
     if (amount <= 0) return;
     const netAmount = applyDepositFees(amount);
+
     try {
         const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
             method: "POST",
@@ -105,16 +106,25 @@ async function runDeposit(amount) {
                 amount: netAmount
             })
         });
+
         const parsed = safeParse(await resp.text());
         if (parsed?.status === "deposit executed") {
             logToPanel(`DepositTx=${parsed.tx_hash}`);
+
+            // ✅ Accumulate balance locally before syncing
+            const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+            const newBalance = currentBalance + netAmount;
+            document.getElementById("investBalance").value = newBalance.toFixed(2);
+            document.getElementById("startBalance").value = newBalance.toFixed(2);
+            logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
+
+            // Optional backend refresh
             await syncBalanceFromFund();
         }
     } catch (err) {
         logToPanel(`DepositError=${err.message}`);
     }
 }
-
 // === Withdraw Handler ===
 async function runWithdraw(amount) {
     if (amount <= 0) return;
