@@ -112,7 +112,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
-// === Commit Final PnL to Database ===
 async function commitFinalPnLToDatabase(finalPnL) {
     try {
         const startingAllocated = parseFloat(document.getElementById("startBalance").value) || 1000;
@@ -120,29 +119,28 @@ async function commitFinalPnLToDatabase(finalPnL) {
 
         logToPanel(`[DB UPDATE] Simulation complete. Synchronizing updated balance (${updatedNetBalance.toFixed(2)} USDT) to SQLite...`);
 
-        const resp = await fetch(`${window.BASE_URL}/runbot/update_client`, {
+        const resp = await fetch(`${window.BASE_URL}/runbot/commit_balance`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
                 userid: window.USER_ID,
-                current_balance: updatedNetBalance,
-                wallet_address: window.USER_ADDR,
-                email: `${window.USER_ID}@example.com`,
-                status: "ACTIVE"
+                new_balance: updatedNetBalance
             })
         });
 
         const parsed = safeParse(await resp.text());
-        if (parsed?.status === "client updated") {
+        if (parsed?.status === "balance committed") {
             logToPanel(`[SQLITE SUCCESS] Final performance data persisted for user ${window.USER_ID}.`);
             document.getElementById("investBalance").value = updatedNetBalance.toFixed(2);
+            document.getElementById("startBalance").value = updatedNetBalance.toFixed(2);
         } else {
-            logToPanel("[WARN] Database adjustment rejected by server script.");
+            logToPanel("[WARN] Database adjustment rejected: " + parsed.message);
         }
     } catch (err) {
         logToPanel(`[DATABASE CRITICAL ERROR] Failed to save end balance state: ${err.message}`);
     }
 }
+
 
 // === Simulation Engine ===
 async function startSimulation(totalCycles) {
