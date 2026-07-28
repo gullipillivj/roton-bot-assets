@@ -150,8 +150,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     return "CONTINUE";
 }
+
+
 async function commitFinalBalanceFromFund() {
     try {
+        // Call backend route that wraps getFundBalance()
         const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -159,11 +162,11 @@ async function commitFinalBalanceFromFund() {
         });
         const fundData = await resp.json();
 
-        if (fundData?.balance !== undefined) {
-            const finalBalance = parseFloat(fundData.balance);
+        if (fundData?.fund_balance !== undefined) {
+            const finalBalance = parseFloat(fundData.fund_balance);
             logToPanel(`[SOLIDARITY FUND] Final balance after simulation: ${finalBalance.toFixed(2)} USDT`);
 
-            // Adjust this key to match your DB schema (e.g. fund_balance, usdt_balance)
+            // Update client record with fund_balance
             const resp2 = await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -177,18 +180,17 @@ async function commitFinalBalanceFromFund() {
                 logToPanel("[WARN] Database update rejected: " + (parsed?.message || JSON.stringify(parsed)));
             }
 
-            // Always update UI fields with the latest balance
+            // Always refresh UI fields
             document.getElementById("investBalance").value = finalBalance.toFixed(2);
             document.getElementById("startBalance").value = finalBalance.toFixed(2);
 
         } else {
-            logToPanel("[ERROR] Solidarity fund did not return a balance.");
+            logToPanel("[ERROR] Solidarity fund did not return a fund_balance.");
         }
     } catch (err) {
         logToPanel(`[DATABASE CRITICAL ERROR] Failed to sync final balance: ${err.message}`);
     }
 }
-
 
 
 
