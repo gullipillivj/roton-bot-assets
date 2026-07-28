@@ -25,27 +25,23 @@ window.setStatus = function(text) {
     else logToPanel(`[STATUS UPDATE] ${text}`);
 };
 
-// === Solidarity Fund Sync Helper ===
 async function syncBalanceFromFund() {
     try {
-        const resp = await fetch(`${window.BASE_URL}/balances`, {
+        const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ userid: window.USER_ID })
+            body: JSON.stringify({ userid: window.USER_ID, wallet_address: window.USER_ADDR })
         });
         const fundData = await resp.json();
 
         if (fundData?.balance !== undefined) {
             const balance = parseFloat(fundData.balance);
 
-            // Log clearly for user
             logToPanel(`[SOLIDARITY FUND] Current balance: ${balance.toFixed(2)} USDT`);
 
-            // Update UI
             document.getElementById("startBalance").value = balance.toFixed(2);
             document.getElementById("investBalance").value = balance.toFixed(2);
 
-            // Mirror into clients.db
             await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -60,6 +56,7 @@ async function syncBalanceFromFund() {
         logToPanel(`[ERROR] syncBalanceFromFund failed: ${err.message}`);
     }
 }
+
 
 // === Withdraw Handler ===
 async function runWithdraw(amount) {
