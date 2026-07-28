@@ -1,20 +1,16 @@
-// simulate_run.txt — Pure Memory Trading Loop with Fees (skip-on-loss + redeposit + balance refresh)
-logToPanel("simulate_run.txt loaded (Pure Memory Trading Loop)");
-
-// use globals defined in main_run.txt
-// DO NOT redeclare cumulativePnL, startingBalanceAllocated, USER_ID, BASE_URL, etc.
+// simulate_run.txt — Trading Loop with Fees (skip-on-loss + redeposit + balance refresh)
+logToPanel("simulate_run.txt loaded");
 
 // === Config ===
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
-const autoReinvestProfits = true; // set false to disable automatic redeposit of positive net PnL
+const autoReinvestProfits = true;
 
 // === Coin Picker ===
 async function pickRandomCoin() {
     try {
         const pairs = await window.getBinancePairs();
         if (!pairs || pairs.length === 0) return "BTC";
-        const idx = Math.floor(Math.random() * pairs.length);
-        return pairs[idx].replace("USDT", "");
+        return pairs[Math.floor(Math.random() * pairs.length)].replace("USDT", "");
     } catch (e) {
         logToPanel("[ERROR] pickRandomCoin failed: " + e.message);
         return "BTC";
@@ -22,14 +18,12 @@ async function pickRandomCoin() {
 }
 window.pickRandomCoin = pickRandomCoin;
 
-// === Fee Helper (USD) ===
+// === Fee Helper ===
 function applyFeesUSD(pnlUSD, allocationUSD) {
-    // Commission: proportional 2 coins per 5000 USD -> commissionUSD = allocationUSD * 2 / 5000
     const commissionUSD = (allocationUSD * 2) / 5000;
-    const gasFeeUSD = 0.001 * allocationUSD;      // 0.1% gas
-    const pancakeFeeUSD = 0.0025 * allocationUSD; // 0.25% swap fee
-    const netAfterFees = pnlUSD - commissionUSD - gasFeeUSD - pancakeFeeUSD;
-    return { netAfterFees, commissionUSD, gasFeeUSD, pancakeFeeUSD };
+    const gasFeeUSD = 0.001 * allocationUSD;
+    const pancakeFeeUSD = 0.0025 * allocationUSD;
+    return { netAfterFees: pnlUSD - commissionUSD - gasFeeUSD - pancakeFeeUSD };
 }
 
 // === Simulation Cycle ===
@@ -37,179 +31,113 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}/${totalCycles} started`);
     setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
-    // Refresh latest fund balance before deciding allocation
     await syncBalanceFromFund();
     const tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
     const initialBalance = parseFloat(document.getElementById("startBalance").value) || 0;
 
-    if (tradingBalance <= 0) {
-        logToPanel(`[WARN] Cycle ${cycle}: Trading balance depleted. Skipping.`);
-        return "SKIP";
-    }
-    if (tradingBalance > initialBalance) {
-        logToPanel(`[WARN] Cycle ${cycle}: Trading balance cannot exceed initial balance.`);
-        return "SKIP";
-    }
+    if (tradingBalance <= 0) return "SKIP";
+    if (tradingBalance > initialBalance) return "SKIP";
 
-    // Allocate based on remaining cycles to avoid oversubscription
-    const remainingCycles = Math.max(1, totalCycles - (cycle - 1));
-    const allocationUSD = tradingBalance / remainingCycles;
-    logToPanel(`[INFO] Cycle ${cycle}: Allocating ${allocationUSD.toFixed(2)} USDT to trade path`);
-
+    const allocationUSD = tradingBalance / Math.max(1, totalCycles - (cycle - 1));
     const coinBase = await pickRandomCoin();
-    const fullSymbol = `${coinBase}USDT`;
-    logToPanel(`[DEBUG] Selected target validation pair: ${fullSymbol}`);
-
-    const stats = await window.getBinanceStats(fullSymbol);
-    if (!stats) {
-        logToPanel(`[WARN] Skipping cycle ${cycle}: No price feed telemetry for ${fullSymbol}`);
-        return "SKIP";
-    }
+    const stats = await window.getBinanceStats(`${coinBase}USDT`);
+    if (!stats || !stats.lastPrice) return "SKIP";
 
     const currentPrice = stats.lastPrice;
-    const standardDayChangePct = stats.priceChangePercent;
+    const newPrice = currentPrice * (1 + stats.priceChangePercent / 100);
+    const potentialPnLUSD = (newPrice - currentPrice) * (allocationUSD / currentPrice);
+    const { netAfterFees } = applyFeesUSD(potentialPnLUSD, allocationUSD);
 
-    if (!currentPrice || currentPrice <= 0) {
-        logToPanel(`[ERROR] Cycle ${cycle}: Invalid price feed for ${fullSymbol} (${currentPrice}). Skipping.`);
-        return "SKIP";
-    }
-
-    // === Potential Profit/Loss calculation (off-chain simulation) ===
-    const quantityBought = allocationUSD / currentPrice;
-    const newPrice = currentPrice * (1 + standardDayChangePct / 100);
-    const potentialPnLUSD = (newPrice - currentPrice) * quantityBought;
-
-    // Compute net PnL after fees (USD)
-    const { netAfterFees, commissionUSD, gasFeeUSD, pancakeFeeUSD } = applyFeesUSD(potentialPnLUSD, allocationUSD);
-
-    // If netAfterFees is not positive, skip on-chain swap to avoid fees
     if (netAfterFees <= 0) {
-        logToPanel(`SkipTrade: ${coinBase} | Allocation=${allocationUSD.toFixed(2)} | PotentialPnL=${potentialPnLUSD.toFixed(2)} | NetAfterFees=${netAfterFees.toFixed(2)} — Swap skipped`);
-        // Do not modify cumulativePnL or perform on-chain actions for losing trade
+        logToPanel(`SkipTrade: ${coinBase} | Allocation=${allocationUSD.toFixed(2)} | NetAfterFees=${netAfterFees.toFixed(2)} — skipped`);
+        // Always update chart even if skipped
+        if (window.balanceChart) {
+            const timeLabel = new Date().toLocaleTimeString();
+            window.balanceChart.data.labels.push(timeLabel);
+            window.balanceChart.data.datasets[0].data.push(tradingBalance);
+            window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
+            window.balanceChart.update();
+        }
         return "CONTINUE";
     }
 
-    // Proceed with on-chain approval + swap because simulation shows positive net result
     window.cumulativePnL = (window.cumulativePnL || 0) + netAfterFees;
 
-    logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
     try {
-        logToPanel(`[WEB3] Broadcasting approval transaction for ${coinBase}...`);
-        const txApprove = await window.approveToken(allocationUSD, window.USER_ADDR, window.USER_PK);
-        if (txApprove?.tx_hash) logToPanel(`[SUCCESS] Approve TX: ${txApprove.tx_hash}`);
-
-        logToPanel(`[WEB3] Routing swap payload via PancakeRouter proxy address...`);
-        const txSwap = await window.swapToTarget(allocationUSD, window.USER_ADDR, window.USER_PK);
-        if (txSwap?.tx_hash) logToPanel(`[SUCCESS] Swap TX: ${txSwap.tx_hash}`);
+        await runApprove(window.USER_ADDR, allocationUSD, window.USER_PK);
+        await runSwap(window.USER_ADDR, allocationUSD, window.USER_PK);
+        logToPanel(`[SUCCESS] Swap executed for ${coinBase}`);
     } catch (err) {
-        logToPanel(`[ERROR] Contract transaction trace failure: ${err.message}`);
-        // If on-chain fails, roll back the PnL addition
+        logToPanel(`[ERROR] Trade failed: ${err.message}`);
         window.cumulativePnL -= netAfterFees;
         return "CONTINUE";
     }
 
-    // Optionally redeposit positive net profit back into the fund
     if (autoReinvestProfits && netAfterFees > 0) {
         try {
-            // runDeposit expects gross amount to deposit; we deposit the net profit
-            await runDeposit(parseFloat(netAfterFees.toFixed(6)));
+            await runDeposit(window.USER_ADDR, parseFloat(netAfterFees.toFixed(6)), window.USER_PK);
             logToPanel(`REDEPOSIT: ${netAfterFees.toFixed(2)} USDT reinvested`);
         } catch (err) {
             logToPanel(`REDEPOSIT_ERROR=${err.message}`);
         }
     }
 
-    // === Chart Update ===
+    // Chart update after successful trade
     if (window.balanceChart) {
         const timeLabel = new Date().toLocaleTimeString();
         window.balanceChart.data.labels.push(timeLabel);
         window.balanceChart.data.datasets[0].data.push(tradingBalance + window.cumulativePnL);
         window.balanceChart.data.datasets[1].data.push(window.cumulativePnL);
         window.balanceChart.update();
-    } else {
-        logToPanel("[WARN] Chart update skipped — balanceChart not initialized.");
     }
 
-    const liveProfitSpan = document.getElementById("liveProfitValue");
-    if (liveProfitSpan) {
-        liveProfitSpan.textContent = `${window.cumulativePnL >= 0 ? '+' : ''}${window.cumulativePnL.toFixed(2)} USDT`;
-        liveProfitSpan.style.color = window.cumulativePnL >= 0 ? "#00FF00" : "#FF3333";
-    }
-
-    logToPanel(`[INFO] Cycle ${cycle} completed. Net P&L after fees: ${netAfterFees.toFixed(2)} USDT`);
     const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
-
-    if (totalChangePct >= profitTargetPct) {
-        logToPanel(`[TAKE PROFIT] Target of ${profitTargetPct}% matched! Triggering exit.`);
-        return "STOP_PROFIT";
-    }
-    if (totalChangePct <= -stopLossPct) {
-        logToPanel(`[STOP LOSS] Loss threshold of ${stopLossPct}% breached! Exiting.`);
-        return "STOP_LOSS";
-    }
+    if (totalChangePct >= profitTargetPct) return "STOP_PROFIT";
+    if (totalChangePct <= -stopLossPct) return "STOP_LOSS";
 
     return "CONTINUE";
 }
 
-
+// === Final Balance Commit ===
 async function commitFinalBalanceFromFund() {
     try {
         const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userid: window.USER_ID, wallet_address: window.USER_ADDR })
         });
         const fundData = await resp.json();
 
         if (fundData?.balance !== undefined) {
             const finalBalance = parseFloat(fundData.balance);
-            logToPanel(`[SOLIDARITY FUND] Final balance after simulation: ${finalBalance.toFixed(2)} USDT`);
+            logToPanel(`[SOLIDARITY FUND] Final balance: ${finalBalance.toFixed(2)} USDT`);
 
-            // Update client record with fund_balance
-            const resp2 = await fetch(`${window.BASE_URL}/runbot/update_client`, {
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({ userid: window.USER_ID, fund_balance: finalBalance })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userid: window.USER_ID, fund_balance: finalBalance }) // ✅ corrected field
             });
 
-            const parsed = safeParse(await resp2.text());
-            if (parsed?.status === "client updated") {
-                logToPanel(`[SQLITE SUCCESS] Final balance persisted for user ${window.USER_ID}.`);
-            } else {
-                logToPanel("[WARN] Database update rejected: " + (parsed?.message || JSON.stringify(parsed)));
-            }
-
-            // Refresh UI fields
             document.getElementById("investBalance").value = finalBalance.toFixed(2);
             document.getElementById("startBalance").value = finalBalance.toFixed(2);
 
-            // ✅ Push backend-confirmed balance + cumulativePnL into chart
             if (window.balanceChart) {
                 const timeLabel = new Date().toLocaleTimeString();
                 window.balanceChart.data.labels.push(timeLabel);
-                window.balanceChart.data.datasets[0].data.push(finalBalance); // Fund Balance line
-                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0); // Profit/Loss line
+                window.balanceChart.data.datasets[0].data.push(finalBalance);
+                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
                 window.balanceChart.update();
             }
-
-        } else {
-            logToPanel("[ERROR] Solidarity fund did not return a balance.");
         }
     } catch (err) {
-        logToPanel(`[DATABASE CRITICAL ERROR] Failed to sync final balance: ${err.message}`);
+        logToPanel(`[DATABASE ERROR] Final balance sync failed: ${err.message}`);
     }
 }
 
-
-
 // === Simulation Engine ===
 async function startSimulation(totalCycles) {
-    if (window.isBotRunning) {
-        logToPanel("[WARN] Bot runner already active.");
-        return;
-    }
-
-    logToPanel(`[START] Initializing pipeline for ${totalCycles} cycles`);
+    if (window.isBotRunning) return;
+    logToPanel(`[START] Running ${totalCycles} cycles`);
     window.isBotRunning = true;
     window.cumulativePnL = 0;
 
@@ -217,23 +145,13 @@ async function startSimulation(totalCycles) {
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
     for (let i = 1; i <= totalCycles; i++) {
-        if (!window.isBotRunning) {
-            logToPanel("[MANUAL] Simulation loop stopped.");
-            break;
-        }
-
         const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
-
-        if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") {
-            logToPanel("[INFO] Terminating simulation due to threshold condition.");
-            break;
-        }
+        if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") break;
 
         if (i < totalCycles) {
-            logToPanel(`[WAIT] Waiting 1 minute before Cycle ${i + 1}...`);
             for (let countdown = 60; countdown > 0; countdown--) {
                 if (!window.isBotRunning) break;
-                if (countdown % 15 === 0) setStatus(`WAITING (${countdown}s remaining)`);
+                if (countdown % 15 === 0) setStatus(`WAITING (${countdown}s)`);
                 await blockDelay(1000);
             }
         }
@@ -241,8 +159,7 @@ async function startSimulation(totalCycles) {
 
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[FINISH] Simulation run complete.");
-
+    logToPanel("[FINISH] Simulation complete.");
     await commitFinalBalanceFromFund();
 }
 
