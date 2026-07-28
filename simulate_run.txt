@@ -1,4 +1,4 @@
-// simulate_run.txt — Pure Memory Trading Loop
+// simulate_run.txt — Pure Memory Trading Loop with Fees
 logToPanel("simulate_run.txt loaded (Pure Memory Trading Loop)");
 
 // use globals defined in main_run.txt
@@ -20,6 +20,14 @@ async function pickRandomCoin() {
     }
 }
 window.pickRandomCoin = pickRandomCoin;
+
+// === Fee Helper ===
+function applyFees(pnl, allocationUSD) {
+    const commissionCoins = 2; // fixed commission
+    const gasFee = 0.001 * allocationUSD; // 0.1% gas
+    const pancakeFee = 0.0025 * allocationUSD; // 0.25% swap fee
+    return pnl - commissionCoins - gasFee - pancakeFee;
+}
 
 // === Simulation Cycle ===
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
@@ -54,17 +62,18 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const currentPrice = stats.lastPrice;
     const standardDayChangePct = stats.priceChangePercent;
 
-    // Guard against invalid price
     if (!currentPrice || currentPrice <= 0) {
         logToPanel(`[ERROR] Cycle ${cycle}: Invalid price feed for ${fullSymbol} (${currentPrice}). Skipping.`);
         return "SKIP";
     }
 
-    // === Corrected Profit/Loss calculation ===
+    // === Profit/Loss calculation with fees ===
     const quantityBought = allocationUSD / currentPrice;
     const newPrice = currentPrice * (1 + standardDayChangePct / 100);
     const cyclePnLUSD = (newPrice - currentPrice) * quantityBought;
-    window.cumulativePnL += cyclePnLUSD;
+    const netPnL = applyFees(cyclePnLUSD, allocationUSD);
+
+    window.cumulativePnL += netPnL;
 
     logToPanel(`[INFO] Trade execution index: ${coinBase} entry asset at ${currentPrice} USDT`);
 
@@ -97,7 +106,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         liveProfitSpan.style.color = window.cumulativePnL >= 0 ? "#00FF00" : "#FF3333";
     }
 
-    logToPanel(`[INFO] Cycle ${cycle} completed. P&L Delta: ${cyclePnLUSD.toFixed(2)} USDT`);
+    logToPanel(`[INFO] Cycle ${cycle} completed. Net P&L after fees: ${netPnL.toFixed(2)} USDT`);
 
     const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
     if (totalChangePct >= profitTargetPct) {
@@ -112,9 +121,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
+// === Final Commit ===
 async function commitFinalBalanceFromFund() {
     try {
-        // Step 1: Query solidarity fund
         const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -127,7 +136,6 @@ async function commitFinalBalanceFromFund() {
 
             logToPanel(`[SOLIDARITY FUND] Final balance after simulation: ${finalBalance.toFixed(2)} USDT`);
 
-            // Step 3: Mirror into clients.db
             const resp2 = await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -137,8 +145,6 @@ async function commitFinalBalanceFromFund() {
             const parsed = safeParse(await resp2.text());
             if (parsed?.status === "client updated") {
                 logToPanel(`[SQLITE SUCCESS] Final balance persisted for user ${window.USER_ID}.`);
-
-                // Step 4: Update UI
                 document.getElementById("investBalance").value = finalBalance.toFixed(2);
                 document.getElementById("startBalance").value = finalBalance.toFixed(2);
             } else {
@@ -193,9 +199,7 @@ async function startSimulation(totalCycles) {
     setStatus("STOPPED");
     logToPanel("[FINISH] Simulation run complete.");
 
-    // ✅ Commit final balance only once at the end
     await commitFinalBalanceFromFund();
 }
 
-// Expose globally so main_run.txt can find it
 window.startSimulation = startSimulation;
