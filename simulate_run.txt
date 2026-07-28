@@ -154,7 +154,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
 async function commitFinalBalanceFromFund() {
     try {
-        // Call backend route that wraps getFundBalance()
         const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
@@ -162,8 +161,8 @@ async function commitFinalBalanceFromFund() {
         });
         const fundData = await resp.json();
 
-        if (fundData?.fund_balance !== undefined) {
-            const finalBalance = parseFloat(fundData.fund_balance);
+        if (fundData?.balance !== undefined) {
+            const finalBalance = parseFloat(fundData.balance);
             logToPanel(`[SOLIDARITY FUND] Final balance after simulation: ${finalBalance.toFixed(2)} USDT`);
 
             // Update client record with fund_balance
@@ -180,12 +179,21 @@ async function commitFinalBalanceFromFund() {
                 logToPanel("[WARN] Database update rejected: " + (parsed?.message || JSON.stringify(parsed)));
             }
 
-            // Always refresh UI fields
+            // Refresh UI fields
             document.getElementById("investBalance").value = finalBalance.toFixed(2);
             document.getElementById("startBalance").value = finalBalance.toFixed(2);
 
+            // ✅ Push backend-confirmed balance + cumulativePnL into chart
+            if (window.balanceChart) {
+                const timeLabel = new Date().toLocaleTimeString();
+                window.balanceChart.data.labels.push(timeLabel);
+                window.balanceChart.data.datasets[0].data.push(finalBalance); // Fund Balance line
+                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0); // Profit/Loss line
+                window.balanceChart.update();
+            }
+
         } else {
-            logToPanel("[ERROR] Solidarity fund did not return a fund_balance.");
+            logToPanel("[ERROR] Solidarity fund did not return a balance.");
         }
     } catch (err) {
         logToPanel(`[DATABASE CRITICAL ERROR] Failed to sync final balance: ${err.message}`);
