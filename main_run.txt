@@ -91,7 +91,7 @@ async function runApprove(amount) {
     }
 }
 
-// === Deposit Handler (final fix: accumulate + backend update) ===
+// === Deposit Handler (frontend accumulation + fund sync display) ===
 async function runDeposit(amount) {
     if (amount <= 0) return;
     const netAmount = applyDepositFees(amount);
@@ -125,7 +125,11 @@ async function runDeposit(amount) {
                 body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
             });
 
-            // Optional: refresh chart or UI
+            // ✅ Update Solidarity Fund display locally
+            window.SolidarityFundBalance = newBalance;
+            logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
+
+            // Optional chart refresh
             if (window.balanceChart) {
                 const timeLabel = new Date().toLocaleTimeString();
                 window.balanceChart.data.labels.push(timeLabel);
@@ -138,7 +142,6 @@ async function runDeposit(amount) {
         logToPanel(`DepositError=${err.message}`);
     }
 }
-
 
 // === Withdraw Handler (final fix: subtract + backend update) ===
 async function runWithdraw(amount) {
