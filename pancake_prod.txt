@@ -1,0 +1,156 @@
+// pancake_prod.txt — PancakeSwap connector layer (Parameter Aligned Layout)
+logToPanel("pancake_prod.txt loaded");
+
+function safeParse(text) {
+  try { return JSON.parse(text); } catch { return null; }
+}
+
+function logResult(action, data) {
+  if (data && data.tx_hash) {
+    logToPanel(`[RESULT] ${action} — TxHash=${data.tx_hash}, Status=${data.status || "UNKNOWN"}`);
+  } else {
+    logToPanel(`[RESULT] ${action} — Raw=${JSON.stringify(data)}`);
+  }
+}
+
+// === Backend Calls ===
+async function approveToken(amount, userAddress, privateKey) {
+  try {
+    logToPanel(`[DEBUG] approveToken called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/approve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    return safeParse(await res.text());
+  } catch (err) {
+    logToPanel(`[ERROR] Approve failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function depositToFund(amount, userAddress, privateKey) {
+  try {
+    logToPanel(`[DEBUG] depositToFund called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    const parsed = safeParse(await res.text());
+    if (parsed?.fund_token_balance !== undefined) {
+      logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
+    }
+    if (parsed?.solidarity_balance !== undefined) {
+      logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} units.`);
+    }
+    if (parsed?.eth_balance_wei !== undefined) {
+      logToPanel(`[INFO] ETH Balance (Wei): ${parsed.eth_balance_wei}`);
+    }
+    return parsed;
+  } catch (err) {
+    logToPanel(`[ERROR] Deposit failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function withdrawFromFund(amount, userAddress, privateKey) {
+  try {
+    logToPanel(`[DEBUG] withdrawFromFund called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/payout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    return safeParse(await res.text());
+  } catch (err) {
+    logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function swapToTarget(amount, userAddress, privateKey) {
+  try {
+    logToPanel(`[DEBUG] swapToTarget called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/swap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    return safeParse(await res.text());
+  } catch (err) {
+    logToPanel(`[ERROR] Swap failed: ${err.message}`);
+    return null;
+  }
+}
+
+async function getBalances(userAddress) {
+  try {
+    logToPanel(`[DEBUG] getBalances called for user=${userAddress}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/balances`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress })
+    });
+    const parsed = safeParse(await res.text());
+
+    if (parsed?.fund_token_balance !== undefined) {
+      logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
+    }
+    if (parsed?.solidarity_balance !== undefined) {
+      logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} units.`);
+    }
+    if (parsed?.eth_balance_wei !== undefined) {
+      logToPanel(`[INFO] ETH Balance (Wei): ${parsed.eth_balance_wei}`);
+    }
+
+    return parsed;
+  } catch (err) {
+    logToPanel(`[ERROR] Balances failed: ${err.message}`);
+    return null;
+  }
+}
+
+// === Wrappers ===
+async function runApprove(userAddress, amount, privateKey) {
+  const parsed = await approveToken(amount, userAddress, privateKey);
+  logResult("Approve", parsed);
+  return parsed;
+}
+
+async function runDeposit(userAddress, amount, privateKey) {
+  const parsed = await depositToFund(amount, userAddress, privateKey);
+  logResult("Deposit", parsed);
+  return parsed;
+}
+
+async function runWithdraw(userAddress, amount, privateKey) {
+  const parsed = await withdrawFromFund(amount, userAddress, privateKey);
+  logResult("Withdraw/Payout", parsed);
+  return parsed;
+}
+
+async function runSwap(userAddress, amount, privateKey) {
+  const parsed = await swapToTarget(amount, userAddress, privateKey);
+  logResult("Swap", parsed);
+  return parsed;
+}
+
+async function runBalances(userAddress) {
+  const parsed = await getBalances(userAddress);
+  logResult("Balances", parsed);
+  return parsed;
+}
+
+// === Expose globally ===
+window.approveToken     = approveToken;
+window.depositToFund    = depositToFund;
+window.withdrawFromFund = withdrawFromFund;
+window.swapToTarget     = swapToTarget;
+window.getBalances      = getBalances;
+window.runApprove       = runApprove;
+window.runDeposit       = runDeposit;
+window.runWithdraw      = runWithdraw;
+window.runSwap          = runSwap;
+window.runBalances      = runBalances;
+window.logResult        = logResult;
