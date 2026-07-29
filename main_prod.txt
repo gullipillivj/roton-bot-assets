@@ -1,5 +1,5 @@
 // main_prod.txt — Corrected cumulative balance handling with clean fee breakdown
-logToPanel("main_run.txt loaded (Global Declarations + UI Wiring)");
+logToPanel("main_prod.txt loaded (Global Declarations + UI Wiring)");
 
 // === Global Declarations ===
 window.USER_ID   = "mockuser1";
