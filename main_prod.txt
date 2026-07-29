@@ -1,0 +1,233 @@
+// main_prod.txt — Corrected cumulative balance handling with clean fee breakdown
+logToPanel("main_run.txt loaded (Global Declarations + UI Wiring)");
+
+// === Global Declarations ===
+window.USER_ID   = "mockuser1";
+window.USER_ADDR = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"; 
+window.USER_PK   = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"; 
+window.BASE_URL  = "https://almanac-sierra-rundown.ngrok-free.dev";
+
+window.cumulativePnL = 0;
+window.startingBalanceAllocated = 0;
+window.isBotRunning = false;
+window.currentCycle = 1;
+
+// === Helpers ===
+function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    if (panel) panel.value += msg + "\n";
+    else console.log(msg);
+}
+window.setStatus = function(text) {
+    const statusLabel = document.getElementById("statusLabel");
+    if (statusLabel) statusLabel.textContent = "STATE: " + text;
+    else logToPanel(`STATE: ${text}`);
+};
+
+// === Fee Helpers ===
+function applyDepositFees(amount) {
+    const commission = (amount * 2) / 5000;
+    const netAmount = amount - commission;
+    logToPanel(`Deposit: Gross=${amount.toFixed(2)} | Commission=${commission.toFixed(2)} | FundCredited=${netAmount.toFixed(2)}`);
+    return netAmount > 0 ? netAmount : 0;
+}
+
+function applyWithdrawFees(amount) {
+    const gasFee = 0.001 * amount;
+    const pancakeFee = 0.0025 * amount;
+    const netAmount = amount - gasFee - pancakeFee;
+    logToPanel(`Withdraw: Gross=${amount.toFixed(2)} | Gas=${gasFee.toFixed(2)} | Pancake=${pancakeFee.toFixed(2)} | UserReceived=${netAmount.toFixed(2)}`);
+    return netAmount > 0 ? netAmount : 0;
+}
+
+// === Solidarity Fund Sync Helper ===
+async function syncBalanceFromFund() {
+    try {
+        const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({ userid: window.USER_ID, wallet_address: window.USER_ADDR })
+        });
+        const fundData = await resp.json();
+
+        if (fundData?.balance !== undefined) {
+            const balance = parseFloat(fundData.balance);
+            logToPanel(`SolidarityFundBalance=${balance.toFixed(2)} USDT`);
+
+            document.getElementById("startBalance").value = balance.toFixed(2);
+            document.getElementById("investBalance").value = balance.toFixed(2);
+
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({ userid: window.USER_ID, new_balance: balance })
+            });
+        }
+    } catch (err) {
+        logToPanel(`SyncError=${err.message}`);
+    }
+}
+
+// === Approve Handler ===
+async function runApprove(amount) {
+    if (amount <= 0) return;
+    try {
+        const resp = await fetch(`${window.BASE_URL}/runbot/approve`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                wallet_address: window.USER_ADDR,
+                private_key: window.USER_PK,
+                amount: amount
+            })
+        });
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "approve executed") {
+            logToPanel(`ApproveTx=${parsed.tx_hash}`);
+        }
+    } catch (err) {
+        logToPanel(`ApproveError=${err.message}`);
+    }
+}
+// === Deposit Handler (two-step: approve + deposit) ===
+async function runDeposit(amount) {
+    if (amount <= 0) return;
+    const netAmount = applyDepositFees(amount);
+
+    try {
+        // Step 1: Approve token spending
+        logToPanel(`[WEB3] Broadcasting approval for ${netAmount.toFixed(2)} USDT...`);
+        const txApprove = await runApprove(netAmount);
+        if (txApprove?.tx_hash) logToPanel(`[SUCCESS] ApproveTx=${txApprove.tx_hash}`);
+
+        // Step 2: Execute deposit transaction
+        logToPanel(`[WEB3] Executing deposit for ${netAmount.toFixed(2)} USDT...`);
+        const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                wallet_address: window.USER_ADDR,
+                private_key: window.USER_PK,
+                amount: netAmount
+            })
+        });
+
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "deposit executed") {
+            logToPanel(`DepositTx=${parsed.tx_hash}`);
+
+            // ✅ Update local + fund balance
+            const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+            const newBalance = currentBalance + netAmount;
+            document.getElementById("investBalance").value = newBalance.toFixed(2);
+            document.getElementById("startBalance").value = newBalance.toFixed(2);
+            window.SolidarityFundBalance = newBalance;
+            logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
+
+            // ✅ Push to backend
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
+            });
+        }
+    } catch (err) {
+        logToPanel(`DepositError=${err.message}`);
+    }
+}
+
+// === Withdraw Handler (final fix: subtract + backend update) ===
+async function runWithdraw(amount) {
+    if (amount <= 0) return;
+    const netAmount = applyWithdrawFees(amount);
+
+    try {
+        const resp = await fetch(`${window.BASE_URL}/runbot/payout`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+            body: JSON.stringify({
+                wallet_address: window.USER_ADDR,
+                private_key: window.USER_PK,
+                amount: netAmount
+            })
+        });
+
+        const parsed = safeParse(await resp.text());
+        if (parsed?.status === "withdrawal executed") {
+            logToPanel(`WithdrawTx=${parsed.tx_hash}`);
+
+            // ✅ Subtract balance locally
+            const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+            const newBalance = currentBalance - netAmount;
+            document.getElementById("investBalance").value = newBalance.toFixed(2);
+            document.getElementById("startBalance").value = newBalance.toFixed(2);
+            logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
+
+            // ✅ Push updated balance to backend
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
+                body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
+            });
+
+            // Optional: refresh chart or UI
+            if (window.balanceChart) {
+                const timeLabel = new Date().toLocaleTimeString();
+                window.balanceChart.data.labels.push(timeLabel);
+                window.balanceChart.data.datasets[0].data.push(newBalance);
+                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
+                window.balanceChart.update();
+            }
+        }
+    } catch (err) {
+        logToPanel(`WithdrawError=${err.message}`);
+    }
+}
+
+
+
+// === UI Glue ===
+document.addEventListener("DOMContentLoaded", async () => {
+    window.setStatus("READY TO RUN");
+    await syncBalanceFromFund();
+
+    document.getElementById("approveBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("approveAmount")?.value || "0") || 0;
+        runApprove(amt);
+    });
+
+    document.getElementById("depositBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
+        runDeposit(amt);
+    });
+
+    document.getElementById("withdrawBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
+        runWithdraw(amt);
+    });
+
+    document.getElementById("startBtn")?.addEventListener("click", async () => {
+        window.cumulativePnL = 0;
+        const launchEngine = window.startSimulation;
+        if (typeof launchEngine === "function") {
+            window.setStatus("RUNNING");
+            try {
+                await launchEngine(10);
+            } catch (err) {
+                logToPanel(`SimulationError=${err.message}`);
+            } finally {
+                window.setStatus("COMPLETED");
+            }
+        }
+    });
+
+    document.getElementById("stopBtn")?.addEventListener("click", () => {
+        window.isBotRunning = false;
+        window.setStatus("STOPPED");
+    });
+
+    document.getElementById("logoutBtn")?.addEventListener("click", () => {
+        window.location.href = `${window.BASE_URL}/login`;
+    });
+});
