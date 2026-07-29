@@ -1,0 +1,166 @@
+// simulate_prod.txt — Trading Loop with Fees (skip-on-loss + redeposit + balance refresh)
+logToPanel("simulate_prod.txt loaded");
+
+// === Config ===
+const blockDelay = ms => new Promise(res => setTimeout(res, ms));
+const autoReinvestProfits = true;
+
+// === Coin Picker ===
+async function pickRandomCoin() {
+    try {
+        const pairs = await window.getBinancePairs();
+        if (!pairs || pairs.length === 0) return "BTC";
+        return pairs[Math.floor(Math.random() * pairs.length)].replace("USDT", "");
+    } catch (e) {
+        logToPanel("[ERROR] pickRandomCoin failed: " + e.message);
+        return "BTC";
+    }
+}
+window.pickRandomCoin = pickRandomCoin;
+
+// === Fee Helper ===
+function applyFeesUSD(pnlUSD, allocationUSD) {
+    const commissionUSD = (allocationUSD * 2) / 5000;
+    const gasFeeUSD = 0.001 * allocationUSD;
+    const pancakeFeeUSD = 0.0025 * allocationUSD;
+    return { netAfterFees: pnlUSD - commissionUSD - gasFeeUSD - pancakeFeeUSD };
+}
+
+// === Simulation Cycle ===
+async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}/${totalCycles} started`);
+    setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
+
+    await syncBalanceFromFund();
+    const tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    const initialBalance = parseFloat(document.getElementById("startBalance").value) || 0;
+
+    if (tradingBalance <= 0) return "SKIP";
+    if (tradingBalance > initialBalance) return "SKIP";
+
+    const allocationUSD = tradingBalance / Math.max(1, totalCycles - (cycle - 1));
+    const coinBase = await pickRandomCoin();
+    const stats = await window.getBinanceStats(`${coinBase}USDT`);
+    if (!stats || !stats.lastPrice) return "SKIP";
+
+    const currentPrice = stats.lastPrice;
+    const newPrice = currentPrice * (1 + stats.priceChangePercent / 100);
+    const potentialPnLUSD = (newPrice - currentPrice) * (allocationUSD / currentPrice);
+    const { netAfterFees } = applyFeesUSD(potentialPnLUSD, allocationUSD);
+
+    if (netAfterFees <= 0) {
+        logToPanel(`SkipTrade: ${coinBase} | Allocation=${allocationUSD.toFixed(2)} | NetAfterFees=${netAfterFees.toFixed(2)} — skipped`);
+        // Always update chart even if skipped
+        if (window.balanceChart) {
+            const timeLabel = new Date().toLocaleTimeString();
+            window.balanceChart.data.labels.push(timeLabel);
+            window.balanceChart.data.datasets[0].data.push(tradingBalance);
+            window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
+            window.balanceChart.update();
+        }
+        return "CONTINUE";
+    }
+
+    window.cumulativePnL = (window.cumulativePnL || 0) + netAfterFees;
+
+    try {
+        await runApprove(window.USER_ADDR, allocationUSD, window.USER_PK);
+        await runSwap(window.USER_ADDR, allocationUSD, window.USER_PK);
+        logToPanel(`[SUCCESS] Swap executed for ${coinBase}`);
+    } catch (err) {
+        logToPanel(`[ERROR] Trade failed: ${err.message}`);
+        window.cumulativePnL -= netAfterFees;
+        return "CONTINUE";
+    }
+
+    if (autoReinvestProfits && netAfterFees > 0) {
+        try {
+            await runDeposit(window.USER_ADDR, parseFloat(netAfterFees.toFixed(6)), window.USER_PK);
+            logToPanel(`REDEPOSIT: ${netAfterFees.toFixed(2)} USDT reinvested`);
+        } catch (err) {
+            logToPanel(`REDEPOSIT_ERROR=${err.message}`);
+        }
+    }
+
+    // Chart update after successful trade
+    if (window.balanceChart) {
+        const timeLabel = new Date().toLocaleTimeString();
+        window.balanceChart.data.labels.push(timeLabel);
+        window.balanceChart.data.datasets[0].data.push(tradingBalance + window.cumulativePnL);
+        window.balanceChart.data.datasets[1].data.push(window.cumulativePnL);
+        window.balanceChart.update();
+    }
+
+    const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
+    if (totalChangePct >= profitTargetPct) return "STOP_PROFIT";
+    if (totalChangePct <= -stopLossPct) return "STOP_LOSS";
+
+    return "CONTINUE";
+}
+
+// === Final Balance Commit ===
+async function commitFinalBalanceFromFund() {
+    try {
+        const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: window.USER_ID, wallet_address: window.USER_ADDR })
+        });
+        const fundData = await resp.json();
+
+        if (fundData?.balance !== undefined) {
+            const finalBalance = parseFloat(fundData.balance);
+            logToPanel(`[SOLIDARITY FUND] Final balance: ${finalBalance.toFixed(2)} USDT`);
+
+            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userid: window.USER_ID, fund_balance: finalBalance }) // ✅ corrected field
+            });
+
+            document.getElementById("investBalance").value = finalBalance.toFixed(2);
+            document.getElementById("startBalance").value = finalBalance.toFixed(2);
+
+            if (window.balanceChart) {
+                const timeLabel = new Date().toLocaleTimeString();
+                window.balanceChart.data.labels.push(timeLabel);
+                window.balanceChart.data.datasets[0].data.push(finalBalance);
+                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
+                window.balanceChart.update();
+            }
+        }
+    } catch (err) {
+        logToPanel(`[DATABASE ERROR] Final balance sync failed: ${err.message}`);
+    }
+}
+
+// === Simulation Engine ===
+async function startSimulation(totalCycles) {
+    if (window.isBotRunning) return;
+    logToPanel(`[START] Running ${totalCycles} cycles`);
+    window.isBotRunning = true;
+    window.cumulativePnL = 0;
+
+    const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
+    const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
+
+    for (let i = 1; i <= totalCycles; i++) {
+        const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
+        if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") break;
+
+        if (i < totalCycles) {
+            for (let countdown = 60; countdown > 0; countdown--) {
+                if (!window.isBotRunning) break;
+                if (countdown % 15 === 0) setStatus(`WAITING (${countdown}s)`);
+                await blockDelay(1000);
+            }
+        }
+    }
+
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[FINISH] Simulation complete.");
+    await commitFinalBalanceFromFund();
+}
+
+window.startSimulation = startSimulation;
