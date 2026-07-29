@@ -44,7 +44,7 @@ function applyWithdrawFees(amount) {
 // === Solidarity Fund Sync Helper ===
 async function syncBalanceFromFund() {
     try {
-        const resp = await fetch(`${window.BASE_URL}/runbot/balances`, {
+        const resp = await fetch(`${window.BASE_URL}/prodbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({ userid: window.USER_ID, wallet_address: window.USER_ADDR })
@@ -73,7 +73,7 @@ async function syncBalanceFromFund() {
 async function runApprove(amount) {
     if (amount <= 0) return;
     try {
-        const resp = await fetch(`${window.BASE_URL}/runbot/approve`, {
+        const resp = await fetch(`${window.BASE_URL}/prodbot/approve`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
@@ -103,7 +103,7 @@ async function runDeposit(amount) {
 
         // Step 2: Execute deposit transaction
         logToPanel(`[WEB3] Executing deposit for ${netAmount.toFixed(2)} USDT...`);
-        const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
+        const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
@@ -126,7 +126,7 @@ async function runDeposit(amount) {
             logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
 
             // ✅ Push to backend
-            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+            await fetch(`${window.BASE_URL}/prodbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
                 body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
@@ -143,7 +143,7 @@ async function runWithdraw(amount) {
     const netAmount = applyWithdrawFees(amount);
 
     try {
-        const resp = await fetch(`${window.BASE_URL}/runbot/payout`, {
+        const resp = await fetch(`${window.BASE_URL}/prodbot/payout`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
             body: JSON.stringify({
@@ -165,7 +165,7 @@ async function runWithdraw(amount) {
             logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
 
             // ✅ Push updated balance to backend
-            await fetch(`${window.BASE_URL}/runbot/update_client`, {
+            await fetch(`${window.BASE_URL}/probot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
                 body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
