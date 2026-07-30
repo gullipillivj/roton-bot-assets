@@ -90,52 +90,7 @@ async function runApprove(amount) {
         logToPanel(`ApproveError=${err.message}`);
     }
 }
-// === Deposit Handler (two-step: approve + deposit) ===
-async function runDeposit(amount) {
-    if (amount <= 0) return;
-    const netAmount = applyDepositFees(amount);
 
-    try {
-        // Step 1: Approve token spending
-        logToPanel(`[WEB3] Broadcasting approval for ${netAmount.toFixed(2)} USDT...`);
-        const txApprove = await runApprove(netAmount);
-        if (txApprove?.tx_hash) logToPanel(`[SUCCESS] ApproveTx=${txApprove.tx_hash}`);
-
-        // Step 2: Execute deposit transaction
-        logToPanel(`[WEB3] Executing deposit for ${netAmount.toFixed(2)} USDT...`);
-        const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                wallet_address: window.USER_ADDR,
-                private_key: window.USER_PK,
-                amount: netAmount
-            })
-        });
-
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "deposit executed") {
-            logToPanel(`DepositTx=${parsed.tx_hash}`);
-
-            // ✅ Update local + fund balance
-            const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-            const newBalance = currentBalance + netAmount;
-            document.getElementById("investBalance").value = newBalance.toFixed(2);
-            document.getElementById("startBalance").value = newBalance.toFixed(2);
-            window.SolidarityFundBalance = newBalance;
-            logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
-
-            // ✅ Push to backend
-            await fetch(`${window.BASE_URL}/prodbot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
-            });
-        }
-    } catch (err) {
-        logToPanel(`DepositError=${err.message}`);
-    }
-}
 
 // === Withdraw Handler (final fix: subtract + backend update) ===
 async function runWithdraw(amount) {
@@ -197,10 +152,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         runApprove(amt);
     });
 
-    document.getElementById("depositBtn")?.addEventListener("click", () => {
-        const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
-        runDeposit(amt);
-    });
+    
 
     document.getElementById("withdrawBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
