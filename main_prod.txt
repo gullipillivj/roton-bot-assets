@@ -201,7 +201,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         runApprove(amt);
     });
 
-    
+    document.getElementById("depositBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
+        runDeposit(amt);
+    });
+
 
     document.getElementById("withdrawBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
