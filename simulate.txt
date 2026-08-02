@@ -17,7 +17,7 @@ async function simulateCycle(cycle) {
 
     const buyPrice = parseFloat(stats.lastPrice);
 
-    // Hide coin name in logs
+    // Hide coin name in logs, but still use it internally
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ..... at ${buyPrice} USDT`);
 
     // Profit/loss based on actual 24hr % change
@@ -32,6 +32,7 @@ async function simulateCycle(cycle) {
         logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
     }
 
+    // Chart update (make sure updateChart is defined in your UI)
     updateChart(buyPrice, result);
 
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
