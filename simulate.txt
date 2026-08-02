@@ -67,6 +67,13 @@ async function pickRandomCoin() {
     }
 }
 
+function updateLiveProfit(value) {
+    const el = document.getElementById("liveProfitValue");
+    if (el) {
+        el.textContent = `${value.toFixed(2)} USDT`;
+    }
+}
+
 function calculatePnL(price, percentChange) {
     if (!percentChange) return 0;
     const changeFactor = percentChange / 100;
