@@ -15,11 +15,16 @@ async function simulateCycle(cycle) {
         return;
     }
 
-    const buyPrice = stats.lastPrice;
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT`);
+    const buyPrice = parseFloat(stats.lastPrice);
+
+    // Hide coin name in logs
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ..... at ${buyPrice} USDT`);
 
     // Profit/loss based on actual 24hr % change
-    const result = calculatePnL(buyPrice, stats.priceChangePercent);
+    const result = calculatePnL(buyPrice, parseFloat(stats.priceChangePercent));
+
+    // Update the live profit label
+    updateLiveProfit(result);
 
     if (result >= 0) {
         logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit ${result.toFixed(2)} USDT`);
