@@ -22,8 +22,14 @@ window.pickRandomCoin = pickRandomCoin;
 function applyFeesUSD(pnlUSD, allocationUSD) {
     const commissionUSD = (allocationUSD * 2) / 5000;
     const gasFeeUSD = 0.001 * allocationUSD;
-    const pancakeFeeUSD = 0.0025 * allocationUSD;
-    return { netAfterFees: pnlUSD - commissionUSD - gasFeeUSD - pancakeFeeUSD };
+    const dexFeeUSD = 0.0025 * allocationUSD; // generic DEX fee
+    return { netAfterFees: pnlUSD - commissionUSD - gasFeeUSD - dexFeeUSD };
+}
+
+// === Token Unit Converter ===
+function toTokenUnits(amount, symbol) {
+    const decimals = (symbol === "USDT" ? 6 : 18); // adjust per token
+    return web3.utils.toBN(amount * (10 ** decimals)).toString();
 }
 
 // === Simulation Cycle ===
@@ -50,7 +56,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     if (netAfterFees <= 0) {
         logToPanel(`SkipTrade: ${coinBase} | Allocation=${allocationUSD.toFixed(2)} | NetAfterFees=${netAfterFees.toFixed(2)} — skipped`);
-        // Always update chart even if skipped
         if (window.balanceChart) {
             const timeLabel = new Date().toLocaleTimeString();
             window.balanceChart.data.labels.push(timeLabel);
@@ -63,10 +68,17 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     window.cumulativePnL = (window.cumulativePnL || 0) + netAfterFees;
 
+    // === Swap via 1inch ===
     try {
-        await runApprove(window.USER_ADDR, allocationUSD, window.USER_PK);
-        await runSwap(window.USER_ADDR, allocationUSD, window.USER_PK);
-        logToPanel(`[SUCCESS] Swap executed for ${coinBase}`);
+        const tokenAddr = await window.getTokenAddress(`${coinBase}USDT`);
+        if (!tokenAddr) {
+            logToPanel(`[ERROR] No token address found for ${coinBase}`);
+            return "CONTINUE";
+        }
+
+        const amountUnits = toTokenUnits(allocationUSD, "USDT");
+        await runSwap(amountUnits, window.USDT_ADDR, tokenAddr);
+        logToPanel(`[SUCCESS] 1inch swap executed for ${coinBase}`);
     } catch (err) {
         logToPanel(`[ERROR] Trade failed: ${err.message}`);
         window.cumulativePnL -= netAfterFees;
@@ -115,7 +127,7 @@ async function commitFinalBalanceFromFund() {
             await fetch(`${window.BASE_URL}/runbot/update_client`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userid: window.USER_ID, fund_balance: finalBalance }) // ✅ corrected field
+                body: JSON.stringify({ userid: window.USER_ID, fund_balance: finalBalance })
             });
 
             document.getElementById("investBalance").value = finalBalance.toFixed(2);
