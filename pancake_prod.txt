@@ -1,19 +1,19 @@
-// pancake_prod.txt — PancakeSwap connector layer (Parameter Aligned Layout)
-logToPanel("pancake_prod.txt loaded");
+// oneinch_prod.txt — 1inch connector layer
+logToPanel("oneinch_prod.txt loaded");
 
 function safeParse(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
 
 function logResult(action, data) {
-  if (data && data.tx_hash) {
-    logToPanel(`[RESULT] ${action} — TxHash=${data.tx_hash}, Status=${data.status || "UNKNOWN"}`);
+  if (data && data.txHash) {
+    logToPanel(`[RESULT] ${action} — TxHash=${data.txHash}`);
   } else {
     logToPanel(`[RESULT] ${action} — Raw=${JSON.stringify(data)}`);
   }
 }
 
-// === Backend Calls ===
+// === Backend Calls (approve/deposit/withdraw/balances) ===
 async function approveToken(amount, userAddress, privateKey) {
   try {
     logToPanel(`[DEBUG] approveToken called with amount=${amount}`);
@@ -69,21 +69,6 @@ async function withdrawFromFund(amount, userAddress, privateKey) {
   }
 }
 
-async function swapToTarget(amount, userAddress, privateKey) {
-  try {
-    logToPanel(`[DEBUG] swapToTarget called with amount=${amount}`);
-    const res = await fetch(`${window.BASE_URL}/runbot/swap`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
-    });
-    return safeParse(await res.text());
-  } catch (err) {
-    logToPanel(`[ERROR] Swap failed: ${err.message}`);
-    return null;
-  }
-}
-
 async function getBalances(userAddress) {
   try {
     logToPanel(`[DEBUG] getBalances called for user=${userAddress}`);
@@ -111,6 +96,31 @@ async function getBalances(userAddress) {
   }
 }
 
+// === 1inch Swap Call ===
+async function swapVia1inch(amountUnits, fromToken, toToken) {
+  try {
+    logToPanel(`[DEBUG] swapVia1inch called with amount=${amountUnits}, from=${fromToken}, to=${toToken}`);
+
+    const url = `https://api.1inch.io/v5.0/swap?fromTokenAddress=${fromToken}&toTokenAddress=${toToken}&amount=${amountUnits}&fromAddress=${window.USER_ADDR}&slippage=1`;
+
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.tx) {
+      logToPanel(`[INFO] 1inch prepared swap tx: ${JSON.stringify(data.tx)}`);
+      const txHash = await web3.eth.sendTransaction(data.tx);
+      logResult("Swap", { txHash });
+      return { txHash };
+    } else {
+      logToPanel(`[ERROR] 1inch swap failed: ${JSON.stringify(data)}`);
+      return null;
+    }
+  } catch (err) {
+    logToPanel(`[ERROR] SwapVia1inch failed: ${err.message}`);
+    return null;
+  }
+}
+
 // === Wrappers ===
 async function runApprove(userAddress, amount, privateKey) {
   const parsed = await approveToken(amount, userAddress, privateKey);
@@ -130,8 +140,8 @@ async function runWithdraw(userAddress, amount, privateKey) {
   return parsed;
 }
 
-async function runSwap(userAddress, amount, privateKey) {
-  const parsed = await swapToTarget(amount, userAddress, privateKey);
+async function runSwap(amountUnits, fromToken, toToken) {
+  const parsed = await swapVia1inch(amountUnits, fromToken, toToken);
   logResult("Swap", parsed);
   return parsed;
 }
@@ -146,8 +156,8 @@ async function runBalances(userAddress) {
 window.approveToken     = approveToken;
 window.depositToFund    = depositToFund;
 window.withdrawFromFund = withdrawFromFund;
-window.swapToTarget     = swapToTarget;
 window.getBalances      = getBalances;
+window.swapVia1inch     = swapVia1inch;
 window.runApprove       = runApprove;
 window.runDeposit       = runDeposit;
 window.runWithdraw      = runWithdraw;
