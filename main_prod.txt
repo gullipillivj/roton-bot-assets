@@ -42,151 +42,189 @@ function applyWithdrawFees(amount) {
 }
 
 // === Solidarity Fund Sync Helper ===
+// Web3 setup (already defined)
+const web3 = new Web3(window.ethereum);
+const fund = new web3.eth.Contract(fundAbi, "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e");
+const userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+
+// Balance sync helper
 async function syncBalanceFromFund() {
-    try {
-        const resp = await fetch(`${window.BASE_URL}/prodbot/balances`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({ userid: window.USER_ID, wallet_address: window.USER_ADDR })
-        });
-        const fundData = await resp.json();
+  try {
+    // Query ERC20 balance of SolidarityFund contract
+    const balance = await userToken.methods.balanceOf(fund.options.address).call();
+    const balanceFloat = parseFloat(web3.utils.fromWei(balance, 'ether'));
 
-        if (fundData?.balance !== undefined) {
-            const balance = parseFloat(fundData.balance);
-            logToPanel(`SolidarityFundBalance=${balance.toFixed(2)} USDT`);
+    logToPanel(`SolidarityFundBalance=${balanceFloat.toFixed(2)} USDT`);
 
-            document.getElementById("startBalance").value = balance.toFixed(2);
-            document.getElementById("investBalance").value = balance.toFixed(2);
+    // Update UI
+    document.getElementById("startBalance").value = balanceFloat.toFixed(2);
+    document.getElementById("investBalance").value = balanceFloat.toFixed(2);
+    window.SolidarityFundBalance = balanceFloat;
 
-            await fetch(`${window.BASE_URL}/runbot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({ userid: window.USER_ID, new_balance: balance })
-            });
-        }
-    } catch (err) {
-        logToPanel(`SyncError=${err.message}`);
-    }
+    // ✅ Push to backend DB (mirror only)
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: window.USER_ID, new_balance: balanceFloat })
+    });
+
+  } catch (err) {
+    logToPanel(`SyncError=${err.message}`);
+  }
 }
 
 // === Approve Handler ===
+
+// Web3 setup (already defined)
+const web3 = new Web3(window.ethereum);
+const f// Web3 setup (already defined)
+const web3 = new Web3(window.ethereum);
+const userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+const fund = new web3.eth.Contract(fundAbi, "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e");
+
+// Approve handler
 async function runApprove(amount) {
-    if (amount <= 0) return;
-    try {
-        const resp = await fetch(`${window.BASE_URL}/prodbot/approve`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                wallet_address: window.USER_ADDR,
-                private_key: window.USER_PK,
-                amount: amount
-            })
-        });
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "approve executed") {
-            logToPanel(`ApproveTx=${parsed.tx_hash}`);
-        }
-    } catch (err) {
-        logToPanel(`ApproveError=${err.message}`);
-    }
+  if (amount <= 0) return;
+
+  try {
+    // Request MetaMask account
+    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+    const from = accounts[0];
+
+    // Approve SolidarityFund to spend donor tokens
+    logToPanel(`[WEB3] Broadcasting approval for ${amount.toFixed(2)} USDT...`);
+    const tx = await userToken.methods.approve(fund.options.address, amount).send({ from });
+
+    logToPanel(`ApproveTx=${tx.transactionHash}`);
+
+    return tx; // return tx object for chaining (deposit/withdraw)
+  } catch (err) {
+    logToPanel(`ApproveError=${err.message}`);
+  }
 }
+const fund = new web3.eth.Contract(fundAbi, "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e");
+
+// Payout handler
+async function runPayout(amount) {
+  if (amount <= 0) return;
+  const netAmount = applyWithdrawFees(amount); // reuse fee helper
+
+  try {
+    // Request MetaMask account
+    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+    const from = accounts[0];
+
+    // Execute payout from SolidarityFund
+    logToPanel(`[WEB3] Executing payout for ${netAmount.toFixed(2)} USDT...`);
+    const tx = await fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, netAmount).send({ from });
+
+    logToPanel(`PayoutTx=${tx.transactionHash}`);
+
+    // ✅ Update local balance
+    const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    const newBalance = currentBalance - netAmount;
+    document.getElementById("investBalance").value = newBalance.toFixed(2);
+    document.getElementById("startBalance").value = newBalance.toFixed(2);
+    logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
+
+    // ✅ Push updated balance to backend DB
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: window.USER_ID, new_balance: newBalance })
+    });
+
+  } catch (err) {
+    logToPanel(`PayoutError=${err.message}`);
+  }
+}
+
+
 
 // === Deposit Handler (two-step: approve + deposit) ===
+// Web3 setup (MetaMask provider)
+const web3 = new Web3(window.ethereum);
+const fund = new web3.eth.Contract(fundAbi, "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e");
+
+// Deposit handler
 async function runDeposit(amount) {
-    if (amount <= 0) return;
-    const netAmount = applyDepositFees(amount);
+  if (amount <= 0) return;
+  const netAmount = applyDepositFees(amount);
 
-    try {
-        // Step 1: Approve token spending
-        logToPanel(`[WEB3] Broadcasting approval for ${netAmount.toFixed(2)} USDT...`);
-        const txApprove = await runApprove(netAmount);
-        if (txApprove?.tx_hash) logToPanel(`[SUCCESS] ApproveTx=${txApprove.tx_hash}`);
+  try {
+    // Request MetaMask account
+    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+    const from = accounts[0];
 
-        // Step 2: Execute deposit transaction
-        logToPanel(`[WEB3] Executing deposit for ${netAmount.toFixed(2)} USDT...`);
-        const resp = await fetch(`${window.BASE_URL}/runbot/deposit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                wallet_address: window.USER_ADDR,
-                private_key: window.USER_PK,
-                amount: netAmount
-            })
-        });
+    // Step 1: Approve token spending
+    logToPanel(`[WEB3] Broadcasting approval for ${netAmount.toFixed(2)} USDT...`);
+    await userToken.methods.approve(fund.options.address, netAmount).send({ from });
 
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "deposit executed") {
-            logToPanel(`DepositTx=${parsed.tx_hash}`);
+    // Step 2: Execute deposit
+    logToPanel(`[WEB3] Executing deposit for ${netAmount.toFixed(2)} USDT...`);
+    const tx = await fund.methods.depositFunds(USER_TOKEN_ADDR, netAmount).send({ from });
 
-            // ✅ Update local + fund balance
-            const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-            const newBalance = currentBalance + netAmount;
-            document.getElementById("investBalance").value = newBalance.toFixed(2);
-            document.getElementById("startBalance").value = newBalance.toFixed(2);
-            window.SolidarityFundBalance = newBalance;
-            logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
+    logToPanel(`DepositTx=${tx.transactionHash}`);
 
-            // ✅ Push to backend
-            await fetch(`${window.BASE_URL}/runbot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
-            });
-        }
-    } catch (err) {
-        logToPanel(`DepositError=${err.message}`);
-  
+    // ✅ Update local balance
+    const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    const newBalance = currentBalance + netAmount;
+    document.getElementById("investBalance").value = newBalance.toFixed(2);
+    document.getElementById("startBalance").value = newBalance.toFixed(2);
+    window.SolidarityFundBalance = newBalance;
+    logToPanel(`SolidarityFundBalance=${newBalance.toFixed(2)} USDT`);
+
+    // ✅ Push to backend DB (mirror only)
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: window.USER_ID, new_balance: newBalance })
+    });
+
+  } catch (err) {
+    logToPanel(`DepositError=${err.message}`);
+  }
 }
-}
-
 
 
 // === Withdraw Handler (final fix: subtract + backend update) ===
+// Web3 setup (already defined)
+const web3 = new Web3(window.ethereum);
+const fund = new web3.eth.Contract(fundAbi, "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e");
+
+// Withdraw handler
 async function runWithdraw(amount) {
-    if (amount <= 0) return;
-    const netAmount = applyWithdrawFees(amount);
+  if (amount <= 0) return;
+  const netAmount = applyWithdrawFees(amount);
 
-    try {
-        const resp = await fetch(`${window.BASE_URL}/prodbot/payout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-            body: JSON.stringify({
-                wallet_address: window.USER_ADDR,
-                private_key: window.USER_PK,
-                amount: netAmount
-            })
-        });
+  try {
+    // Request MetaMask account
+    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+    const from = accounts[0];
 
-        const parsed = safeParse(await resp.text());
-        if (parsed?.status === "withdrawal executed") {
-            logToPanel(`WithdrawTx=${parsed.tx_hash}`);
+    // Execute payout from SolidarityFund
+    logToPanel(`[WEB3] Executing withdrawal for ${netAmount.toFixed(2)} USDT...`);
+    const tx = await fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, netAmount).send({ from });
 
-            // ✅ Subtract balance locally
-            const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-            const newBalance = currentBalance - netAmount;
-            document.getElementById("investBalance").value = newBalance.toFixed(2);
-            document.getElementById("startBalance").value = newBalance.toFixed(2);
-            logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
+    logToPanel(`WithdrawTx=${tx.transactionHash}`);
 
-            // ✅ Push updated balance to backend
-            await fetch(`${window.BASE_URL}/probot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "ngrok-skip-browser-warning": "true" },
-                body: JSON.stringify({ userid: window.USER_ID, fund_balance: newBalance })
-            });
+    // ✅ Update local balance
+    const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    const newBalance = currentBalance - netAmount;
+    document.getElementById("investBalance").value = newBalance.toFixed(2);
+    document.getElementById("startBalance").value = newBalance.toFixed(2);
+    logToPanel(`Updated Local Balance=${newBalance.toFixed(2)} USDT`);
 
-            // Optional: refresh chart or UI
-            if (window.balanceChart) {
-                const timeLabel = new Date().toLocaleTimeString();
-                window.balanceChart.data.labels.push(timeLabel);
-                window.balanceChart.data.datasets[0].data.push(newBalance);
-                window.balanceChart.data.datasets[1].data.push(window.cumulativePnL || 0);
-                window.balanceChart.update();
-            }
-        }
-    } catch (err) {
-        logToPanel(`WithdrawError=${err.message}`);
-    }
+    // ✅ Push updated balance to backend DB
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: window.USER_ID, new_balance: newBalance })
+    });
+
+  } catch (err) {
+    logToPanel(`WithdrawError=${err.message}`);
+  }
 }
 
 
