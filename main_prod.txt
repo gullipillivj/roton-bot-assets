@@ -29,6 +29,19 @@ window.setStatus = function(text) {
   else logToPanel(`STATE: ${text}`);
 };
 
+async function handleLoginSuccess() {
+  const resp = await fetch("/clients");
+  const data = await resp.json();
+
+  if (data.client) {
+    window.USER_ID = data.client.profile.name;
+    window.USER_ADDR = data.client.wallet.address;
+    document.getElementById("currentUserLabel").textContent = window.USER_ID;
+    logToPanel(`Login success: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}`);
+  }
+}
+
+
 // === Fee Helpers ===
 function applyDepositFees(amount) {
   const commission = (amount * 2) / 5000;
