@@ -136,23 +136,34 @@ async function syncBalanceFromFund() {
 }
 
 // === Approve Handler ===
+const { ethers } = require("ethers");
+const { decryptKey } = require("./security.txt");
+
 async function runApprove(amount) {
   if (amount <= 0) return;
   try {
     if (!userToken || !fund) await initWeb3AndContracts();
-    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-    const from = accounts[0];
+
+    // 🔐 Decrypt private key securely
+    const encryptedKey = process.env.USER_PK_ENCRYPTED; // stored in DB or env
+    const privateKey = decryptKey(encryptedKey);
+    const provider = new ethers.JsonRpcProvider("YOUR_RPC_URL");
+    const userWallet = new ethers.Wallet(privateKey, provider);
 
     const amountUnits = toTokenUnits(amount);
-    logToPanel(`[WEB3] Broadcasting approval for ${amount.toFixed(6)} USDT...`);
-    const tx = await userToken.methods.approve(FUND_ADDRESS, amountUnits).send({ from });
-    logToPanel(`ApproveTx=${tx.transactionHash}`);
+    logToPanel(`[SECURE] Broadcasting approval for ${amount.toFixed(6)} USDT...`);
+
+    const tokenContract = new ethers.Contract(USER_TOKEN_ADDR, tokenAbi, userWallet);
+    const tx = await tokenContract.approve(FUND_ADDRESS, amountUnits);
+    await tx.wait();
+
+    logToPanel(`ApproveTx=${tx.hash}`);
+
+    // 🔐 Purge key after use
+    privateKey = null;
     return tx;
   } catch (err) {
-    logToPanel(`ApproveError=${err.message}`);
-    throw err;
-  }
-}
+    logToPanel(`ApproveError=${
 
 // === Deposit Handler (approve + deposit) ===
 async function runDeposit(amount) {
