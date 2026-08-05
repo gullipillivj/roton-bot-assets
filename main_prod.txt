@@ -166,23 +166,37 @@ async function runApprove(amount) {
     logToPanel(`ApproveError=${
 
 // === Deposit Handler (approve + deposit) ===
+const { ethers } = require("ethers");
+const { decryptKey } = require("./security.txt");
+
 async function runDeposit(amount) {
   if (amount <= 0) return;
   const netAmount = applyDepositFees(amount);
 
   try {
     if (!fund || !userToken) await initWeb3AndContracts();
-    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-    const from = accounts[0];
 
-    // Approve first (use runApprove to centralize)
+    // 🔐 Decrypt private key securely
+    const encryptedKey = process.env.USER_PK_ENCRYPTED; // stored in DB or env
+    const privateKey = decryptKey(encryptedKey);
+    const provider = new ethers.JsonRpcProvider("YOUR_RPC_URL");
+    const userWallet = new ethers.Wallet(privateKey, provider);
+
+    // Step A: Approve first
     await runApprove(netAmount);
 
-    // Execute deposit (token units)
+    // Step B: Deposit
     const amountUnits = toTokenUnits(netAmount);
-    logToPanel(`[WEB3] Executing deposit for ${netAmount.toFixed(6)} USDT...`);
-    const tx = await fund.methods.depositFunds(USER_TOKEN_ADDR, amountUnits).send({ from });
-    logToPanel(`DepositTx=${tx.transactionHash}`);
+    logToPanel(`[SECURE] Executing deposit for ${netAmount.toFixed(6)} USDT...`);
+
+    const solidarityContract = new ethers.Contract(FUND_ADDRESS, fundAbi, userWallet);
+    const tx = await solidarityContract.depositFunds(USER_TOKEN_ADDR, amountUnits);
+    await tx.wait();
+
+    logToPanel(`DepositTx=${tx.hash}`);
+
+    // 🔐 Purge key after use
+    privateKey = null;
 
     // Update local UI balances (human units)
     const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
@@ -192,7 +206,7 @@ async function runDeposit(amount) {
     window.SolidarityFundBalance = newBalance;
     logToPanel(`SolidarityFundBalance=${newBalance.toFixed(6)} USDT`);
 
-    // Mirror to DB
+    // Mirror to clients.db
     await fetch("/prodbot/update_client", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
