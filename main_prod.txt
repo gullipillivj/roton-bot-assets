@@ -221,28 +221,43 @@ async function runDeposit(amount) {
 }
 
 // === Withdraw / Payout Handler ===
+const { ethers } = require("ethers");
+const { decryptKey } = require("./security.txt");
+
 async function runWithdraw(amount) {
   if (amount <= 0) return;
   const netAmount = applyWithdrawFees(amount);
 
   try {
     if (!fund) await initWeb3AndContracts();
-    const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
-    const from = accounts[0];
+
+    // 🔐 Decrypt private key securely
+    const encryptedKey = process.env.USER_PK_ENCRYPTED; // stored in DB or env
+    const privateKey = decryptKey(encryptedKey);
+    const provider = new ethers.JsonRpcProvider("YOUR_RPC_URL");
+    const userWallet = new ethers.Wallet(privateKey, provider);
 
     const amountUnits = toTokenUnits(netAmount);
-    logToPanel(`[WEB3] Executing withdrawal for ${netAmount.toFixed(6)} USDT...`);
-    const tx = await fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, amountUnits).send({ from });
-    logToPanel(`WithdrawTx=${tx.transactionHash}`);
+    logToPanel(`[SECURE] Executing withdrawal for ${netAmount.toFixed(6)} USDT...`);
+
+    const solidarityContract = new ethers.Contract(FUND_ADDRESS, fundAbi, userWallet);
+    const tx = await solidarityContract.executeSolidarityPayout(USER_TOKEN_ADDR, amountUnits);
+    await tx.wait();
+
+    logToPanel(`WithdrawTx=${tx.hash}`);
+
+    // 🔐 Purge key after use
+    privateKey = null;
 
     // Update local UI balances
     const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
     const newBalance = currentBalance - netAmount;
     document.getElementById("investBalance").value = newBalance.toFixed(6);
     document.getElementById("startBalance").value = newBalance.toFixed(6);
+    window.SolidarityFundBalance = newBalance;
     logToPanel(`Updated Local Balance=${newBalance.toFixed(6)} USDT`);
 
-    // Mirror to DB
+    // Mirror to clients.db
     await fetch("/prodbot/update_client", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -255,7 +270,6 @@ async function runWithdraw(amount) {
     throw err;
   }
 }
-
 // Alias for explicit payout (same as withdraw)
 async function runPayout(amount) {
   return runWithdraw(amount);
