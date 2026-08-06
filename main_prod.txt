@@ -8,6 +8,18 @@ window.USER_ID = window.USER_ID || "mockuser1";
 window.USER_ADDR = window.USER_ADDR || "";
 window.BASE_URL = window.BASE_URL || "https://almanac-sierra-rundown.ngrok-free.dev";
 
+// === Session Validation via Label ===
+const currentUser = document.getElementById("currentUserLabel")?.textContent.trim();
+
+if (!currentUser) {
+  console.warn("No active session detected. Redirecting to login...");
+  window.location.href = `${window.BASE_URL}/login`;
+} else {
+  window.USER_ID = currentUser;
+  console.log("Session active for:", window.USER_ID);
+}
+
+
 window.cumulativePnL = 0;
 window.isBotRunning = false;
 window.currentCycle = 1;
