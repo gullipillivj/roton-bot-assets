@@ -1,4 +1,4 @@
-// oneinch_prod.txt — 1inch connector layer
+// pancake_prod.txt — 1inch connector layer
 logToPanel("oneinch_prod.txt loaded");
 
 function safeParse(text) {
