@@ -1,23 +1,30 @@
 // main_prod.txt — Consolidated MetaMask + Web3 frontend for SolidarityFund
 logToPanel("main_prod.txt loaded");
 
-/// === Global Defaults ===
+// === Global Defaults ===
 window.USER_ID   = window.USER_ID   || "mockuser1";
 window.USER_ADDR = window.USER_ADDR || "";   // wallet address
 window.BASE_URL  = window.BASE_URL  || "https://almanac-sierra-rundown.ngrok-free.dev";
 
 // === Session Validation via Labels ===
-const currentUser   = document.getElementById("currentUserLabel")?.textContent.trim();
-const currentWallet = document.getElementById("currentWalletLabel")?.textContent.trim();
+function initSessionFromLabels() {
+  const currentUser   = document.getElementById("currentUserLabel")?.textContent.trim();
+  const currentWallet = document.getElementById("currentWalletLabel")?.textContent.trim();
 
-if (!currentUser || !currentWallet) {
-  console.warn("No active session detected. Redirecting to login...");
-  window.location.href = `${window.BASE_URL}/login`;
-} else {
-  window.USER_ID   = currentUser;
-  window.USER_ADDR = currentWallet;
+  window.USER_ID   = currentUser || window.USER_ID;
+  window.USER_ADDR = currentWallet || window.USER_ADDR;
+
+  if (!window.USER_ID || !window.USER_ADDR) {
+    console.warn("No active session detected. Redirecting to login...");
+    window.location.href = `${window.BASE_URL}/login`;
+    return;
+  }
+
   console.log("Session active for:", window.USER_ID, "Wallet:", window.USER_ADDR);
 }
+
+// Call immediately after DOM is ready
+document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 
 
 window.cumulativePnL = 0;
