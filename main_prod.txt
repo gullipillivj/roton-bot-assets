@@ -29,6 +29,16 @@ window.setStatus = function(text) {
   else logToPanel(`STATE: ${text}`);
 };
 
+function disableAllControlsExcept(exceptId) {
+  document.querySelectorAll("button, input").forEach(el => {
+    if (el.id !== exceptId) el.disabled = true;
+  });
+}
+function enableAllControls() {
+  document.querySelectorAll("button, input").forEach(el => el.disabled = false);
+}
+
+
 async function handleLoginSuccess() {
   const resp = await fetch("/clients");
   const data = await resp.json();
