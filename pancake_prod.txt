@@ -1,4 +1,4 @@
-// pancake_prod.txt — 1inch connector layer
+// pancake_prod.txt — connector layer (approve/deposit/withdraw/swap)
 logToPanel("pancake_prod.txt loaded");
 
 function safeParse(text) {
@@ -14,13 +14,13 @@ function logResult(action, data) {
 }
 
 // === Backend Calls (approve/deposit/withdraw/balances) ===
-async function approveToken(amount, userAddress, privateKey) {
+async function approveToken(amount, userAddress) {
   try {
     logToPanel(`[DEBUG] approveToken called with amount=${amount}`);
     const res = await fetch(`${window.BASE_URL}/runbot/approve`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+      body: JSON.stringify({ wallet_address: userAddress, amount })
     });
     return safeParse(await res.text());
   } catch (err) {
@@ -29,13 +29,13 @@ async function approveToken(amount, userAddress, privateKey) {
   }
 }
 
-async function depositToFund(amount, userAddress, privateKey) {
+async function depositToFund(amount, userAddress) {
   try {
     logToPanel(`[DEBUG] depositToFund called with amount=${amount}`);
     const res = await fetch(`${window.BASE_URL}/runbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+      body: JSON.stringify({ wallet_address: userAddress, amount })
     });
     const parsed = safeParse(await res.text());
     if (parsed?.fund_token_balance !== undefined) {
@@ -54,13 +54,13 @@ async function depositToFund(amount, userAddress, privateKey) {
   }
 }
 
-async function withdrawFromFund(amount, userAddress, privateKey) {
+async function withdrawFromFund(amount, userAddress) {
   try {
     logToPanel(`[DEBUG] withdrawFromFund called with amount=${amount}`);
     const res = await fetch(`${window.BASE_URL}/runbot/payout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+      body: JSON.stringify({ wallet_address: userAddress, amount })
     });
     return safeParse(await res.text());
   } catch (err) {
@@ -122,20 +122,20 @@ async function swapVia1inch(amountUnits, fromToken, toToken) {
 }
 
 // === Wrappers ===
-async function runApprove(userAddress, amount, privateKey) {
-  const parsed = await approveToken(amount, userAddress, privateKey);
+async function runApprove(userAddress, amount) {
+  const parsed = await approveToken(amount, userAddress);
   logResult("Approve", parsed);
   return parsed;
 }
 
-async function runDeposit(userAddress, amount, privateKey) {
-  const parsed = await depositToFund(amount, userAddress, privateKey);
+async function runDeposit(userAddress, amount) {
+  const parsed = await depositToFund(amount, userAddress);
   logResult("Deposit", parsed);
   return parsed;
 }
 
-async function runWithdraw(userAddress, amount, privateKey) {
-  const parsed = await withdrawFromFund(amount, userAddress, privateKey);
+async function runWithdraw(userAddress, amount) {
+  const parsed = await withdrawFromFund(amount, userAddress);
   logResult("Withdraw/Payout", parsed);
   return parsed;
 }
