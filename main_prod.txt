@@ -1,5 +1,5 @@
-// main_prod.js — Consolidated MetaMask + Web3 frontend for SolidarityFund
-logToPanel("main_prod.js loaded");
+// main_prod.txt — Consolidated MetaMask + Web3 frontend for SolidarityFund
+logToPanel("main_prod.txt loaded");
 
 // === Global Declarations ===
 // NOTE: window.USER_ID should be injected by Flask when rendering the page, e.g.:
