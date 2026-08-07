@@ -16,7 +16,7 @@ function initSessionFromLabels() {
 
   if (!window.USER_ID || !window.USER_ADDR) {
     console.warn("No active session detected. Redirecting to login...");
-  //  window.location.href = `${window.BASE_URL}/login`;
+    window.location.href = `${window.BASE_URL}/login`;
     return;
   }
 
