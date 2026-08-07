@@ -39,6 +39,36 @@ const FUND_ADDRESS = "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e";
 // USER_TOKEN_ADDR will be set dynamically from clients.db for the logged-in user
 let USER_TOKEN_ADDR = null;
 
+async function handleLoginSuccess() {
+  try {
+    // Fetch latest balance from fund contract
+    if (!fund || !userToken) await initWeb3AndContracts();
+
+    const rawBalance = await fund.getFundBalance(USER_TOKEN_ADDR);
+    const balance = parseFloat(fromTokenUnits(rawBalance)) || 0;
+
+    // ✅ Set startBalance from Solidarity Fund balance
+    const startEl = document.getElementById("startBalance");
+    const investEl = document.getElementById("investBalance");
+    if (startEl) startEl.value = balance.toFixed(6);
+    if (investEl) investEl.value = "0.000000";
+
+    window.SolidarityFundBalance = balance;
+
+    // Mirror to clients.db immediately
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: window.USER_ID, new_balance: balance })
+    });
+
+    logToPanel(`Initial SolidarityFundBalance=${balance.toFixed(6)} USDT`);
+  } catch (err) {
+    logToPanel(`LoginInitError=${err.message}`);
+  }
+}
+
+
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
 function logToPanel(msg) {
@@ -427,6 +457,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     try { await runWithdraw(amt); } catch (e) { logToPanel(`WithdrawBtnError=${e?.message || e}`); }
     enableAllControls();
   });
+
+  await handleLoginSuccess();
 
   document.getElementById("startBtn")?.addEventListener("click", async () => {
     const startBalance = parseFloat(document.getElementById("startBalance")?.value || "0") || 0;
