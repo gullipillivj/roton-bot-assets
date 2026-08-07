@@ -256,35 +256,24 @@ async function syncBalanceFromFund() {
   }
 }
 
-// === Approve Handler (browser version) ===
-// ethers loaded via CDN: <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.0/dist/ethers.umd.min.js"></script>
-// security.txt loaded via CDN + injected: window.decryptKey available
-
-const ethers = window.ethers;
-
 async function runApprove(amount) {
   if (amount <= 0) return null;
   try {
-    if (!userToken || !fund) await initWeb3AndContracts();
+    const resp = await fetch("/prodbot/security", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        amount,
+        action: "approve"
+      })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
-    // Decrypt private key securely (from encrypted string in DB/env)
-    const encryptedKey = window.USER_PK_ENCRYPTED;   // set globally or injected
-    const privateKey = window.decryptKey(encryptedKey);
-    if (!privateKey) throw new Error("Decrypted private key is empty");
-
-    const provider = new ethers.JsonRpcProvider(INFURA_MAINNET_RPC);
-    const userWallet = new ethers.Wallet(privateKey, provider);
-
-    const amountUnits = toTokenUnits(amount);
-    logToPanel(`[SECURE] Broadcasting approval for ${amount.toFixed(6)} USDT...`);
-
-    const tokenContract = new ethers.Contract(USER_TOKEN_ADDR, tokenAbi, userWallet);
-    const tx = await tokenContract.approve(FUND_ADDRESS, amountUnits);
-    await tx.wait();
-
-    logToPanel(`ApproveTx=${tx.hash}`);
-
-    return userWallet; // reuse in deposit/withdraw
+    logToPanel(`ApproveTx=${data.tx_hash}`);
+    return true;
   } catch (err) {
     logToPanel(`ApproveError=${err.message}`);
     throw err;
@@ -292,138 +281,101 @@ async function runApprove(amount) {
 }
 
 
-
-// === Deposit Handler (browser version) ===
 async function runDeposit(amount) {
   if (amount <= 0) return;
   const netAmount = applyDepositFees(amount);
 
   try {
-    if (!fund || !userToken) await initWeb3AndContracts();
-
-    // Approve and get wallet
-    const userWallet = await runApprove(netAmount);
-    if (!userWallet) return;
-
-    // Deposit
-    const amountUnits = toTokenUnits(netAmount);
-    logToPanel(`[SECURE] Executing deposit for ${netAmount.toFixed(6)} USDT...`);
-
-    const solidarityContract = new ethers.Contract(FUND_ADDRESS, fundAbi, userWallet);
-    const tx = await solidarityContract.depositFunds(USER_TOKEN_ADDR, amountUnits);
-    await tx.wait();
-
-    logToPanel(`DepositTx=${tx.hash}`);
-
-    // Purge PK from memory
-    try { userWallet.privateKey = null; } catch {}
-
-    // Update local UI balances
-    const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    const newBalance = currentBalance + netAmount;
-    document.getElementById("investBalance").value = newBalance.toFixed(6);
-    document.getElementById("startBalance").value = newBalance.toFixed(6);
-    window.SolidarityFundBalance = newBalance;
-    logToPanel(`SolidarityFundBalance=${newBalance.toFixed(6)} USDT`);
-
-    // Mirror to clients.db
-    await fetch("/prodbot/update_client", {
+    const resp = await fetch("/prodbot/security", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: window.USER_ID, new_balance: newBalance })
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        amount: netAmount,
+        action: "deposit"
+      })
     });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
-    return tx;
+    logToPanel(`DepositTx=${data.tx_hash}`);
+
+    // ✅ Update balances from server response
+    document.getElementById("investBalance").value = data.invest_balance.toFixed(6);
+    document.getElementById("startBalance").value = data.start_balance.toFixed(6);
+    window.SolidarityFundBalance = data.start_balance;
+    logToPanel(`SolidarityFundBalance=${data.start_balance.toFixed(6)} USDT`);
+
+    return data.tx_hash;
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
     throw err;
   }
 }
 
-// === Withdraw Handler (browser version) ===
 async function runWithdraw(amount) {
   if (amount <= 0) return;
   const netAmount = applyWithdrawFees(amount);
 
   try {
-    if (!fund) await initWeb3AndContracts();
-
-    // Approve and get wallet
-    const userWallet = await runApprove(netAmount);
-    if (!userWallet) return;
-
-    const amountUnits = toTokenUnits(netAmount);
-    logToPanel(`[SECURE] Executing withdrawal for ${netAmount.toFixed(6)} USDT...`);
-
-    const solidarityContract = new ethers.Contract(FUND_ADDRESS, fundAbi, userWallet);
-    const tx = await solidarityContract.executeSolidarityPayout(USER_TOKEN_ADDR, amountUnits);
-    await tx.wait();
-
-    logToPanel(`WithdrawTx=${tx.hash}`);
-
-    // Purge PK from memory
-    try { userWallet.privateKey = null; } catch {}
-
-    // Update local UI balances
-    const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    const newBalance = currentBalance - netAmount;
-    document.getElementByPerfect, Vijay 🌅 — let’s clean up your **withdraw + payout handlers** and the **UI glue** so they’re consistent with the browser‑safe style we used for approve/deposit.  
-
----
-
-### ✅ Withdraw handler (browser‑safe)
-```js
-// === Withdraw Handler (browser version) ===
-async function runWithdraw(amount) {
-  if (amount <= 0) return;
-  const netAmount = applyWithdrawFees(amount);
-
-  try {
-    if (!fund) await initWeb3AndContracts();
-
-    // Approve and get wallet
-    const userWallet = await runApprove(netAmount);
-    if (!userWallet) return;
-
-    const amountUnits = toTokenUnits(netAmount);
-    logToPanel(`[SECURE] Executing withdrawal for ${netAmount.toFixed(6)} USDT...`);
-
-    const solidarityContract = new ethers.Contract(FUND_ADDRESS, fundAbi, userWallet);
-    const tx = await solidarityContract.executeSolidarityPayout(USER_TOKEN_ADDR, amountUnits);
-    await tx.wait();
-
-    logToPanel(`WithdrawTx=${tx.hash}`);
-
-    // Purge PK from memory
-    try { userWallet.privateKey = null; } catch {}
-
-    // Update local UI balances
-    const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    const newBalance = currentBalance - netAmount;
-    document.getElementById("investBalance").value = newBalance.toFixed(6);
-    document.getElementById("startBalance").value = newBalance.toFixed(6);
-    window.SolidarityFundBalance = newBalance;
-    logToPanel(`Updated Local Balance=${newBalance.toFixed(6)} USDT`);
-
-    // Mirror to clients.db
-    await fetch("/prodbot/update_client", {
+    const resp = await fetch("/prodbot/security", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: window.USER_ID, new_balance: newBalance })
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        amount: netAmount,
+        action: "withdraw"
+      })
     });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
-    return tx;
+    logToPanel(`WithdrawTx=${data.tx_hash}`);
+
+    // ✅ Update balances
+    document.getElementById("investBalance").value = data.invest_balance.toFixed(6);
+    document.getElementById("startBalance").value = data.start_balance.toFixed(6);
+    window.SolidarityFundBalance = data.start_balance;
+    logToPanel(`Updated Local Balance=${data.start_balance.toFixed(6)} USDT`);
+
+    return data.tx_hash;
   } catch (err) {
     logToPanel(`WithdrawError=${err.message}`);
     throw err;
   }
 }
 
-// Alias for explicit payout (same as withdraw)
 async function runPayout(amount) {
-  return runWithdraw(amount);
-}
+  if (amount <= 0) return;
+  try {
+    const resp = await fetch("/prodbot/security", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        amount,
+        action: "payout"
+      })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
+    logToPanel(`PayoutTx=${data.tx_hash}`);
+
+    // ✅ Update balances
+    document.getElementById("investBalance").value = data.invest_balance.toFixed(6);
+    document.getElementById("startBalance").value = data.start_balance.toFixed(6);
+    window.SolidarityFundBalance = data.start_balance;
+
+    return data.tx_hash;
+  } catch (err) {
+    logToPanel(`PayoutError=${err.message}`);
+    throw err;
+  }
+}
 // === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
   window.setStatus("READY TO RUN");
