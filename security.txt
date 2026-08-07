@@ -1,3 +1,7 @@
+// security.txt — Chart.js balance visualization helpers (Bar Graph)
+logToPanel("security.txt loaded");
+
+
 const ENCRYPTION_KEY = window.BOT_MASTER_KEY || "YOUR32CHARMASTERKEY"; // must be 32 chars
 const IV_LENGTH = 16; // AES block size
 
