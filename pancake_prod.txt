@@ -1,166 +1,68 @@
-// pancake_prod.txt — connector layer (approve/deposit/withdraw/swap)
+// pancake_prod.txt — connector layer (approve/deposit/withdraw/swap via secure backend)
 logToPanel("pancake_prod.txt loaded");
 
 function safeParse(text) {
   try { return JSON.parse(text); } catch { return null; }
 }
-
 function logResult(action, data) {
-  if (data && data.txHash) {
-    logToPanel(`[RESULT] ${action} — TxHash=${data.txHash}`);
+  if (data && data.tx_hash) {
+    logToPanel(`[RESULT] ${action} — TxHash=${data.tx_hash}`);
   } else {
     logToPanel(`[RESULT] ${action} — Raw=${JSON.stringify(data)}`);
   }
 }
 
-// === Backend Calls (approve/deposit/withdraw/balances) ===
-async function approveToken(amount, userAddress) {
+// === Secure Backend Calls ===
+async function callSecurity(action, amount) {
   try {
-    logToPanel(`[DEBUG] approveToken called with amount=${amount}`);
-    const res = await fetch(`${window.BASE_URL}/runbot/approve`, {
+    const res = await fetch("/prodbot/security", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, amount })
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        amount,
+        action
+      })
     });
-    return safeParse(await res.text());
+    return await res.json();
   } catch (err) {
-    logToPanel(`[ERROR] Approve failed: ${err.message}`);
-    return null;
-  }
-}
-
-async function depositToFund(amount, userAddress) {
-  try {
-    logToPanel(`[DEBUG] depositToFund called with amount=${amount}`);
-    const res = await fetch(`${window.BASE_URL}/runbot/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, amount })
-    });
-    const parsed = safeParse(await res.text());
-    if (parsed?.fund_token_balance !== undefined) {
-      logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
-    }
-    if (parsed?.solidarity_balance !== undefined) {
-      logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} units.`);
-    }
-    if (parsed?.eth_balance_wei !== undefined) {
-      logToPanel(`[INFO] ETH Balance (Wei): ${parsed.eth_balance_wei}`);
-    }
-    return parsed;
-  } catch (err) {
-    logToPanel(`[ERROR] Deposit failed: ${err.message}`);
-    return null;
-  }
-}
-
-async function withdrawFromFund(amount, userAddress) {
-  try {
-    logToPanel(`[DEBUG] withdrawFromFund called with amount=${amount}`);
-    const res = await fetch(`${window.BASE_URL}/runbot/payout`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, amount })
-    });
-    return safeParse(await res.text());
-  } catch (err) {
-    logToPanel(`[ERROR] Withdraw failed: ${err.message}`);
-    return null;
-  }
-}
-
-async function getBalances(userAddress) {
-  try {
-    logToPanel(`[DEBUG] getBalances called for user=${userAddress}`);
-    const res = await fetch(`${window.BASE_URL}/runbot/balances`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress })
-    });
-    const parsed = safeParse(await res.text());
-
-    if (parsed?.fund_token_balance !== undefined) {
-      logToPanel(`[INFO] Fund Smart Contract Balance: ${parsed.fund_token_balance} units.`);
-    }
-    if (parsed?.solidarity_balance !== undefined) {
-      logToPanel(`[INFO] Solidarity Fund Balance: ${parsed.solidarity_balance} units.`);
-    }
-    if (parsed?.eth_balance_wei !== undefined) {
-      logToPanel(`[INFO] ETH Balance (Wei): ${parsed.eth_balance_wei}`);
-    }
-
-    return parsed;
-  } catch (err) {
-    logToPanel(`[ERROR] Balances failed: ${err.message}`);
-    return null;
-  }
-}
-
-// === 1inch Swap Call ===
-async function swapVia1inch(amountUnits, fromToken, toToken) {
-  try {
-    logToPanel(`[DEBUG] swapVia1inch called with amount=${amountUnits}, from=${fromToken}, to=${toToken}`);
-
-    const url = `https://api.1inch.io/v5.0/swap?fromTokenAddress=${fromToken}&toTokenAddress=${toToken}&amount=${amountUnits}&fromAddress=${window.USER_ADDR}&slippage=1`;
-
-    const resp = await fetch(url);
-    const data = await resp.json();
-
-    if (data.tx) {
-      logToPanel(`[INFO] 1inch prepared swap tx: ${JSON.stringify(data.tx)}`);
-      const txHash = await web3.eth.sendTransaction(data.tx);
-      logResult("Swap", { txHash });
-      return { txHash };
-    } else {
-      logToPanel(`[ERROR] 1inch swap failed: ${JSON.stringify(data)}`);
-      return null;
-    }
-  } catch (err) {
-    logToPanel(`[ERROR] SwapVia1inch failed: ${err.message}`);
+    logToPanel(`[ERROR] ${action} failed: ${err.message}`);
     return null;
   }
 }
 
 // === Wrappers ===
-async function runApprove(userAddress, amount) {
-  const parsed = await approveToken(amount, userAddress);
+async function runApprove(amount) {
+  const parsed = await callSecurity("approve", amount);
   logResult("Approve", parsed);
   return parsed;
 }
-
-async function runDeposit(userAddress, amount) {
-  const parsed = await depositToFund(amount, userAddress);
+async function runDeposit(amount) {
+  const parsed = await callSecurity("deposit", amount);
   logResult("Deposit", parsed);
   return parsed;
 }
-
-async function runWithdraw(userAddress, amount) {
-  const parsed = await withdrawFromFund(amount, userAddress);
+async function runWithdraw(amount) {
+  const parsed = await callSecurity("withdraw", amount);
   logResult("Withdraw/Payout", parsed);
   return parsed;
 }
-
-async function runSwap(amountUnits, fromToken, toToken) {
-  const parsed = await swapVia1inch(amountUnits, fromToken, toToken);
+async function runSwap(amount) {
+  const parsed = await callSecurity("swap", amount);
   logResult("Swap", parsed);
   return parsed;
 }
-
-async function runBalances(userAddress) {
-  const parsed = await getBalances(userAddress);
-  logResult("Balances", parsed);
+async function runPayout(amount) {
+  const parsed = await callSecurity("payout", amount);
+  logResult("Payout", parsed);
   return parsed;
 }
 
 // === Expose globally ===
-window.approveToken     = approveToken;
-window.depositToFund    = depositToFund;
-window.withdrawFromFund = withdrawFromFund;
-window.getBalances      = getBalances;
-window.swapVia1inch     = swapVia1inch;
-window.runApprove       = runApprove;
-window.runDeposit       = runDeposit;
-window.runWithdraw      = runWithdraw;
-window.runSwap          = runSwap;
-window.runBalances      = runBalances;
-window.logResult        = logResult;
+window.runApprove = runApprove;
+window.runDeposit = runDeposit;
+window.runWithdraw = runWithdraw;
+window.runSwap = runSwap;
+window.runPayout = runPayout;
+window.logResult = logResult;
