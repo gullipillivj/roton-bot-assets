@@ -310,6 +310,40 @@ async function runDeposit(amount) {
   }
 }
 
+// === Withdraw Handler (browser version) ===
+async function runWithdraw(amount) {
+  if (amount <= 0) return;
+  const netAmount = applyWithdrawFees(amount);
+
+  try {
+    if (!fund) await initWeb3AndContracts();
+
+    // Approve and get wallet
+    const userWallet = await runApprove(netAmount);
+    if (!userWallet) return;
+
+    const amountUnits = toTokenUnits(netAmount);
+    logToPanel(`[SECURE] Executing withdrawal for ${netAmount.toFixed(6)} USDT...`);
+
+    const solidarityContract = new ethers.Contract(FUND_ADDRESS, fundAbi, userWallet);
+    const tx = await solidarityContract.executeSolidarityPayout(USER_TOKEN_ADDR, amountUnits);
+    await tx.wait();
+
+    logToPanel(`WithdrawTx=${tx.hash}`);
+
+    // Purge PK from memory
+    try { userWallet.privateKey = null; } catch {}
+
+    // Update local UI balances
+    const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    const newBalance = currentBalance - netAmount;
+    document.getElementByPerfect, Vijay 🌅 — let’s clean up your **withdraw + payout handlers** and the **UI glue** so they’re consistent with the browser‑safe style we used for approve/deposit.  
+
+---
+
+### ✅ Withdraw handler (browser‑safe)
+```js
+// === Withdraw Handler (browser version) ===
 async function runWithdraw(amount) {
   if (amount <= 0) return;
   const netAmount = applyWithdrawFees(amount);
@@ -341,7 +375,7 @@ async function runWithdraw(amount) {
     window.SolidarityFundBalance = newBalance;
     logToPanel(`Updated Local Balance=${newBalance.toFixed(6)} USDT`);
 
-    // Mirror to clients.db (must be called after withdraw)
+    // Mirror to clients.db
     await fetch("/prodbot/update_client", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
