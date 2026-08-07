@@ -226,23 +226,20 @@ async function syncBalanceFromFund() {
   }
 }
 
-// === Approve / Deposit / Withdraw Handlers ===
-// NOTE: This code expects a Node-like environment where require() works for 'ethers' and local security module.
-// If running purely in browser, adapt to bundler/imports accordingly.
-const { ethers } = require("ethers");
-const { decryptKey } = require("./security.txt");
+// === Approve Handler (browser version) ===
+// ethers loaded via CDN: <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.0/dist/ethers.umd.min.js"></script>
+// security.txt loaded via CDN + injected: window.decryptKey available
 
-// Use Infura mainnet RPC as requested
-const INFURA_MAINNET_RPC = "https://mainnet.infura.io/v3/6dc48b3fc4424773ad710e6042e54b23";
+const ethers = window.ethers;
 
 async function runApprove(amount) {
   if (amount <= 0) return null;
   try {
     if (!userToken || !fund) await initWeb3AndContracts();
 
-    // Decrypt private key securely
-    const encryptedKey = process.env.USER_PK_ENCRYPTED; // stored in DB or env
-    const privateKey = decryptKey(encryptedKey);
+    // Decrypt private key securely (from encrypted string in DB/env)
+    const encryptedKey = window.USER_PK_ENCRYPTED;   // set globally or injected
+    const privateKey = window.decryptKey(encryptedKey);
     if (!privateKey) throw new Error("Decrypted private key is empty");
 
     const provider = new ethers.JsonRpcProvider(INFURA_MAINNET_RPC);
@@ -257,14 +254,16 @@ async function runApprove(amount) {
 
     logToPanel(`ApproveTx=${tx.hash}`);
 
-    // Return wallet for reuse by deposit/withdraw
-    return userWallet;
+    return userWallet; // reuse in deposit/withdraw
   } catch (err) {
     logToPanel(`ApproveError=${err.message}`);
     throw err;
   }
 }
 
+
+
+// === Deposit Handler (browser version) ===
 async function runDeposit(amount) {
   if (amount <= 0) return;
   const netAmount = applyDepositFees(amount);
@@ -289,7 +288,7 @@ async function runDeposit(amount) {
     // Purge PK from memory
     try { userWallet.privateKey = null; } catch {}
 
-    // Update local UI balances (human units)
+    // Update local UI balances
     const currentBalance = parseFloat(document.getElementById("investBalance").value) || 0;
     const newBalance = currentBalance + netAmount;
     document.getElementById("investBalance").value = newBalance.toFixed(6);
@@ -297,7 +296,7 @@ async function runDeposit(amount) {
     window.SolidarityFundBalance = newBalance;
     logToPanel(`SolidarityFundBalance=${newBalance.toFixed(6)} USDT`);
 
-    // Mirror to clients.db (must be called after deposit)
+    // Mirror to clients.db
     await fetch("/prodbot/update_client", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
