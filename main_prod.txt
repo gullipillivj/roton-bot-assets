@@ -377,46 +377,128 @@ async function runPayout(amount) {
   }
 }
 // === UI Glue ===
+// === Global flag ===
+let firsttime = false;
+
+async function firstapprove() {
+  try {
+    const resp = await fetch("/prodbot/security", { method: "GET" });
+    const data = await resp.json();
+    if (data.message === "PK stored successfully") {
+      firsttime = true;
+      logToPanel("✅ Secured wallet initialized");
+    }
+  } catch (err) {
+    logToPanel(`FirstApproveError=${err.message}`);
+    throw err;
+  }
+}
+
+// === UI Glue ===
 document.addEventListener("DOMContentLoaded", async () => {
   window.setStatus("READY TO RUN");
 
-  // Ensure USER_ID is present (injected by Flask). If not, try to fetch minimal info.
   if (!window.USER_ID || window.USER_ID === "undefined") {
     logToPanel("No USER_ID found on page. Please ensure Flask injects session userid into the template.");
   }
 
-  // Populate user info from clients.db and initialize contracts
   await handleLoginSuccess();
 
-  // Wire buttons with disable/enable and validations
+  // Approve
   document.getElementById("approveBtn")?.addEventListener("click", async () => {
-    const amt = parseFloat(document.getElementById("approveAmount")?.value || "0") || 0;
     disableAllControls();
-    try { await runApprove(amt); } catch (e) { logToPanel(`ApproveBtnError=${e?.message || e}`); }
+    try {
+      if (!firsttime) {
+        await firstapprove();
+      } else {
+        await runApprove();
+      }
+    } catch (e) {
+      logToPanel(`ApproveBtnError=${e?.message || e}`);
+    }
     enableAllControls();
   });
 
+  // Deposit
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
-    const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
     disableAllControls();
-    try { await runDeposit(amt); } catch (e) { logToPanel(`DepositBtnError=${e?.message || e}`); }
+    try {
+      if (!firsttime) {
+        await firstapprove();
+      } else {
+        await runDeposit();
+      }
+    } catch (e) {
+      logToPanel(`DepositBtnError=${e?.message || e}`);
+    }
     enableAllControls();
   });
 
+  // Withdraw
   document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-    const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
     disableAllControls();
-    try { await runWithdraw(amt); } catch (e) { logToPanel(`WithdrawBtnError=${e?.message || e}`); }
+    try {
+      if (!firsttime) {
+        await firstapprove();
+      } else {
+        await runWithdraw();
+      }
+    } catch (e) {
+      logToPanel(`WithdrawBtnError=${e?.message || e}`);
+    }
     enableAllControls();
   });
 
-  await handleLoginSuccess();
+  // Swap
+  document.getElementById("swapBtn")?.addEventListener("click", async () => {
+    disableAllControls();
+    try {
+      if (!firsttime) {
+        await firstapprove();
+      } else {
+        await runSwap();
+      }
+    } catch (e) {
+      logToPanel(`SwapBtnError=${e?.message || e}`);
+    }
+    enableAllControls();
+  });
 
+  // Payout
+  document.getElementById("payoutBtn")?.addEventListener("click", async () => {
+    disableAllControls();
+    try {
+      if (!firsttime) {
+        await firstapprove();
+      } else {
+        await runPayout();
+      }
+    } catch (e) {
+      logToPanel(`PayoutBtnError=${e?.message || e}`);
+    }
+    enableAllControls();
+  });
+
+  // Balances
+  document.getElementById("balancesBtn")?.addEventListener("click", async () => {
+    disableAllControls();
+    try {
+      if (!firsttime) {
+        await firstapprove();
+      } else {
+        await runBalances();
+      }
+    } catch (e) {
+      logToPanel(`BalancesBtnError=${e?.message || e}`);
+    }
+    enableAllControls();
+  });
+
+  // Start/Stop/Logout remain unchanged
   document.getElementById("startBtn")?.addEventListener("click", async () => {
     const startBalance = parseFloat(document.getElementById("startBalance")?.value || "0") || 0;
     const investBalance = parseFloat(document.getElementById("investBalance")?.value || "0") || 0;
 
-    // Validation checks
     if (investBalance <= 0) {
       logToPanel("❌ Cannot start trading: Investment balance is 0.");
       return;
@@ -433,7 +515,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof launchEngine === "function") {
       window.setStatus("RUNNING");
       try {
-        await launchEngine(1); // run only 1 cycle
+        await launchEngine(1);
       } catch (err) {
         logToPanel(`SimulationError=${err.message}`);
       } finally {
@@ -448,7 +530,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("stopBtn")?.addEventListener("click", () => {
     window.isBotRunning = false;
-    // Purge any active PK references
     try { window.ACTIVE_PK = null; } catch {}
     window.setStatus("STOPPED");
     enableAllControls();
@@ -458,7 +539,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = `${window.BASE_URL}/logout`;
   });
 });
-
 // Expose for other modules
 window.runApprove = runApprove;
 window.runDeposit = runDeposit;
