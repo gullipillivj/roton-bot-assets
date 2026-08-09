@@ -304,9 +304,7 @@ async function runAction(amount, gas, fromAddress, toAddress, type) {
   }
 }
 
-
-// Deposit
-// Deposit
+// Deposit with two approvals + two deposits
 async function runDeposit(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
@@ -317,54 +315,47 @@ async function runDeposit(amount) {
     return;
   }
 
-  const netAmount = applyDepositFees(amount);
+  // Calculate commission + net
+  const commission = (amount * 2) / 5000; // proportional fee
+  const netAmount = amount - commission;
 
   try {
-    // Step 1: Approve first
-    const approveReceipt = await runApprove(amount);
-    if (!approveReceipt || approveReceipt.error) {
-      logToPanel("❌ Approval failed, deposit not attempted");
-      return;
-    }
-
-    // Step 2: Deposit
-async function runDeposit(amount) {
-  if (!pkvalue) {
-    logToPanel("❌ Please enter your personal key first");
-    return;
-  }
-  if (!amount || amount <= 0) {
-    logToPanel("❌ Invalid deposit amount");
-    return;
-  }
-
-  const netAmount = applyDepositFees(amount);
-
-  try {
-    // Step 1: Approve first
-    const approveReceipt = await runApprove(amount);
-    if (!approveReceipt || approveReceipt.error) {
-      logToPanel("❌ Approval failed, deposit not attempted");
-      return;
-    }
-
-    // Step 2: Deposit
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
     const fund = new web3.eth.Contract(fundAbi, solidarityFund);
 
-    const tx = fund.methods.depositFunds(USDT, netAmount);
-    const gas = await tx.estimateGas({ from: account.address });
+    // Step 1: Approve net amount
+    const approveNet = await runAction(netAmount, 0, account.address, solidarityFund, "deposit");
+    if (!approveNet || approveNet.error) {
+      logToPanel("❌ Net approval failed");
+      return;
+    }
 
-    const receipt = await tx.send({ from: account.address, gas });
-    logToPanel(`DepositTx=${receipt.transactionHash}`);
+    // Step 2: Deposit net amount
+    const txNet = fund.methods.depositFunds(USDT, toTokenUnits(netAmount));
+    const gasNet = await txNet.estimateGas({ from: account.address });
+    const receiptNet = await txNet.send({ from: account.address, gas: gasNet });
+    logToPanel(`DepositNetTx=${receiptNet.transactionHash}`);
+
+    // Step 3: Approve commission amount
+    const approveComm = await runAction(commission, 0, account.address, solidarityFund, "deposit");
+    if (!approveComm || approveComm.error) {
+      logToPanel("❌ Commission approval failed");
+      return;
+    }
+
+    // Step 4: Deposit commission amount
+    const txComm = fund.methods.depositFunds(USDT, toTokenUnits(commission));
+    const gasComm = await txComm.estimateGas({ from: account.address });
+    const receiptComm = await txComm.send({ from: account.address, gas: gasComm });
+    logToPanel(`DepositCommissionTx=${receiptComm.transactionHash}`);
 
     // ✅ Update balances locally
     document.getElementById("investBalance").value = netAmount.toFixed(6);
     document.getElementById("startBalance").value = netAmount.toFixed(6);
     window.SolidarityFundBalance = netAmount;
-    logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} USDT`);
+    logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} USDT | Commission=${commission.toFixed(6)}`);
 
     // Reset textboxes
     const depositEl = document.getElementById("depositAmount");
@@ -380,18 +371,20 @@ async function runDeposit(amount) {
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
         invest_balance: netAmount,
-        start_balance: netAmount,
-        last_tx: receipt.transactionHash,
+        charity_balance: commission,
+        last_tx: receiptComm.transactionHash,
         action: "update"
       })
     });
 
-    return receipt.transactionHash;
+    return { netTx: receiptNet.transactionHash, commissionTx: receiptComm.transactionHash };
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
     throw err;
   }
 }
+
+
 
 // Withdraw
 async function runWithdraw(amount) {
