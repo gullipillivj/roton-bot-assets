@@ -26,6 +26,11 @@ function initSessionFromLabels() {
 // Call immediately after DOM is ready
 document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 
+// === UI Glue ===
+// === Global flag ===
+let firsttime = false;
+
+
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
