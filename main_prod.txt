@@ -260,9 +260,10 @@ async function runApprove(amount) {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
-    const token = new web3.eth.Contract(erc20Abi, USDT);
+    // Use the correct ABI + token address
+    const token = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
 
-    const tx = token.methods.approve(solidarityFund, amount);
+    const tx = token.methods.approve(FUND_ADDRESS, toTokenUnits(amount));
     const gas = await tx.estimateGas({ from: account.address });
 
     const receipt = await tx.send({ from: account.address, gas });
