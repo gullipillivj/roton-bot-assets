@@ -60,7 +60,7 @@ const tokenAbi = [
 ];
 
 const FUND_ADDRESS = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5"; // your deployed SolidarityFund
-let USER_TOKEN_ADDR = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+let USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
