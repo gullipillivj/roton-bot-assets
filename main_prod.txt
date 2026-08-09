@@ -34,15 +34,30 @@ let pkvalue = null;
 window.cumulativePnL = 0;
 window.isBotRunning = false;
 window.currentCycle = 1;
-
 // === Replace these with your actual ABIs and fund address ===
-const fundAbi = window.fundAbi || [];        // set from a script tag or import
-const tokenAbi = window.tokenAbi || [];      // set from a script tag or import
-const FUND_ADDRESS = "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e";
+const fundAbi = [
+  { "constant": false, "inputs": [
+    { "name": "token", "type": "address" },
+    { "name": "amount", "type": "uint256" }
+  ], "name": "depositFunds", "outputs": [], "type": "function" },
+  { "constant": false, "inputs": [
+    { "name": "tokenIn", "type": "address" },
+    { "name": "amountIn", "type": "uint256" }
+  ], "name": "executeSolidarityPayout", "outputs": [], "type": "function" }
+];
 
-// USER_TOKEN_ADDR will be set dynamically from clients.db for the logged-in user
-let USER_TOKEN_ADDR = null;
+const tokenAbi = [
+  { "constant": false, "inputs": [
+    { "name": "spender", "type": "address" },
+    { "name": "amount", "type": "uint256" }
+  ], "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "type": "function" },
+  { "constant": true, "inputs": [
+    { "name": "account", "type": "address" }
+  ], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" }
+];
 
+const FUND_ADDRESS = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5"; // your deployed SolidarityFund
+let USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // default USDT, override from clients.db
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
 function logToPanel(msg) {
@@ -231,7 +246,6 @@ async function syncBalanceFromFund() {
 }
 
 // === Approve / Deposit / Withdraw / Payout ===
-// Approve
 async function runApprove(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
@@ -243,23 +257,18 @@ async function runApprove(amount) {
   }
 
   try {
-    // Connect to Ethereum
-    const provider = new ethers.JsonRpcProvider("https://ethereum-rpc.publicnode.com");
-    const wallet = new ethers.Wallet(pkvalue, provider);
+    const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
+    web3.eth.accounts.wallet.add(account);
 
-    // USDT contract
-    const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
-    const solidarityFund = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5";
+    const token = new web3.eth.Contract(erc20Abi, USDT);
 
-    const abi = ["function approve(address spender, uint256 amount) public returns (bool)"];
-    const token = new ethers.Contract(USDT, abi, wallet);
+    const tx = token.methods.approve(solidarityFund, amount);
+    const gas = await tx.estimateGas({ from: account.address });
 
-    // $1 USDT = 1,000,000 units
-    const tx = await token.approve(solidarityFund, amount);
-    const receipt = await tx.wait();
+    const receipt = await tx.send({ from: account.address, gas });
+    logToPanel(`ApproveTx=${receipt.transactionHash}`);
 
-    logToPanel(`ApproveTx=${tx.hash}`);
-    return { tx_hash: tx.hash, status: receipt.status };
+    return { tx_hash: receipt.transactionHash, status: receipt.status };
   } catch (err) {
     logToPanel(`ApproveError=${err.message}`);
     throw err;
@@ -290,19 +299,37 @@ async function runDeposit(amount) {
     }
 
     // Step 2: Deposit
-    const provider = new ethers.JsonRpcProvider("https://ethereum-rpc.publicnode.com");
-    const wallet = new ethers.Wallet(pkvalue, provider);
+async function runDeposit(amount) {
+  if (!pkvalue) {
+    logToPanel("❌ Please enter your personal key first");
+    return;
+  }
+  if (!amount || amount <= 0) {
+    logToPanel("❌ Invalid deposit amount");
+    return;
+  }
 
-    const solidarityFund = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5";
-    const abi = ["function depositFunds(address token, uint256 amount) external"];
-    const fund = new ethers.Contract(solidarityFund, abi, wallet);
+  const netAmount = applyDepositFees(amount);
 
-    const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+  try {
+    // Step 1: Approve first
+    const approveReceipt = await runApprove(amount);
+    if (!approveReceipt || approveReceipt.error) {
+      logToPanel("❌ Approval failed, deposit not attempted");
+      return;
+    }
 
-    const tx = await fund.depositFunds(USDT, netAmount);
-    const receipt = await tx.wait();
+    // Step 2: Deposit
+    const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
+    web3.eth.accounts.wallet.add(account);
 
-    logToPanel(`DepositTx=${tx.hash}`);
+    const fund = new web3.eth.Contract(fundAbi, solidarityFund);
+
+    const tx = fund.methods.depositFunds(USDT, netAmount);
+    const gas = await tx.estimateGas({ from: account.address });
+
+    const receipt = await tx.send({ from: account.address, gas });
+    logToPanel(`DepositTx=${receipt.transactionHash}`);
 
     // ✅ Update balances locally
     document.getElementById("investBalance").value = netAmount.toFixed(6);
@@ -325,12 +352,12 @@ async function runDeposit(amount) {
         wallet: window.USER_ADDR,
         invest_balance: netAmount,
         start_balance: netAmount,
-        last_tx: tx.hash,
+        last_tx: receipt.transactionHash,
         action: "update"
       })
     });
 
-    return tx.hash;
+    return receipt.transactionHash;
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
     throw err;
