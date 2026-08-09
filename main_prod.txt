@@ -101,8 +101,6 @@ function applyWithdrawFees(amount) {
   return netAmount > 0 ? netAmount : 0;
 }
 
-// === Web3 + Contract Initialization (single place) ===
-let web3, fund, userToken, tokenDecimals = 18;
 
 async function initWeb3AndContracts() {
   if (typeof window.ethereum === "undefined") {
