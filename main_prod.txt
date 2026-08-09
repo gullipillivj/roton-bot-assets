@@ -305,6 +305,7 @@ async function runAction(amount, gas, fromAddress, toAddress, type) {
 }
 
 // Deposit with two approvals + two deposits
+// Deposit with two approvals + two deposits
 async function runDeposit(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
@@ -323,30 +324,31 @@ async function runDeposit(amount) {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
-    const fund = new web3.eth.Contract(fundAbi, solidarityFund);
+    // ✅ Use FUND_ADDRESS instead of undefined solidarityFund
+    const fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
 
     // Step 1: Approve net amount
-    const approveNet = await runAction(netAmount, 0, account.address, solidarityFund, "deposit");
+    const approveNet = await runAction(netAmount, 0, account.address, FUND_ADDRESS, "deposit");
     if (!approveNet || approveNet.error) {
       logToPanel("❌ Net approval failed");
       return;
     }
 
     // Step 2: Deposit net amount
-    const txNet = fund.methods.depositFunds(USDT, toTokenUnits(netAmount));
+    const txNet = fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(netAmount));
     const gasNet = await txNet.estimateGas({ from: account.address });
     const receiptNet = await txNet.send({ from: account.address, gas: gasNet });
     logToPanel(`DepositNetTx=${receiptNet.transactionHash}`);
 
     // Step 3: Approve commission amount
-    const approveComm = await runAction(commission, 0, account.address, solidarityFund, "deposit");
+    const approveComm = await runAction(commission, 0, account.address, FUND_ADDRESS, "deposit");
     if (!approveComm || approveComm.error) {
       logToPanel("❌ Commission approval failed");
       return;
     }
 
     // Step 4: Deposit commission amount
-    const txComm = fund.methods.depositFunds(USDT, toTokenUnits(commission));
+    const txComm = fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(commission));
     const gasComm = await txComm.estimateGas({ from: account.address });
     const receiptComm = await txComm.send({ from: account.address, gas: gasComm });
     logToPanel(`DepositCommissionTx=${receiptComm.transactionHash}`);
@@ -383,8 +385,6 @@ async function runDeposit(amount) {
     throw err;
   }
 }
-
-
 
 // Withdraw
 async function runWithdraw(amount) {
