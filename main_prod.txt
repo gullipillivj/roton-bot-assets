@@ -270,40 +270,18 @@ async function runAction(amount, fromAddress, toAddress, type) {
     let receipts = [];
 
     if (type === "deposit") {
-      // Approve
       const approveTx = token.methods.approve(FUND_ADDRESS, units);
       const gasApprove = await approveTx.estimateGas({ from: fromAddress });
       const approveReceipt = await approveTx.send({ from: fromAddress, gas: gasApprove });
       receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
 
-      // Deposit
       const depositTx = fund.methods.depositFunds(USER_TOKEN_ADDR, units);
       const gasDeposit = await depositTx.estimateGas({ from: fromAddress });
       const depositReceipt = await depositTx.send({ from: fromAddress, gas: gasDeposit });
       receipts.push({ tx_hash: depositReceipt.transactionHash, status: depositReceipt.status });
-
-    } else if (type === "withdraw") {
-      const withdrawTx = token.methods.transfer(toAddress, units);
-      const gasWithdraw = await withdrawTx.estimateGas({ from: fromAddress });
-      const withdrawReceipt = await withdrawTx.send({ from: fromAddress, gas: gasWithdraw });
-      receipts.push({ tx_hash: withdrawReceipt.transactionHash, status: withdrawReceipt.status });
-
-    } else if (type === "swap") {
-      const approveTx = token.methods.approve(FUND_ADDRESS, units);
-      const gasApprove = await approveTx.estimateGas({ from: fromAddress });
-      const approveReceipt = await approveTx.send({ from: fromAddress, gas: gasApprove });
-      receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
-
-      const swapTx = fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, units);
-      const gasSwap = await swapTx.estimateGas({ from: fromAddress });
-      const swapReceipt = await swapTx.send({ from: fromAddress, gas: gasSwap });
-      receipts.push({ tx_hash: swapReceipt.transactionHash, status: swapReceipt.status });
-    } else {
-      throw new Error(`Unknown type: ${type}`);
     }
 
     return { type, results: receipts };
-
   } catch (err) {
     logToPanel(`ActionError=${err.message}`);
     return { error: err.message };
@@ -311,7 +289,6 @@ async function runAction(amount, fromAddress, toAddress, type) {
 }
 
 
-// Deposit with two approvals + two deposits
 async function runDeposit(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
@@ -322,74 +299,41 @@ async function runDeposit(amount) {
     return;
   }
 
-  // Calculate commission + net
-  const commission = (amount * 2) / 5000; // proportional fee
+  const commission = (amount * 2) / 5000;
   const netAmount = amount - commission;
 
   try {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
-    const fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-
-    // Step 1: Approve net amount
     const approveNet = await runAction(netAmount, account.address, FUND_ADDRESS, "deposit");
     if (!approveNet || approveNet.error) {
       logToPanel("❌ Net approval failed");
       return;
     }
+    logToPanel(`DepositNetTx=${approveNet.results[1].tx_hash}`);
 
-    // Step 2: Deposit net amount
-    const txNet = fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(netAmount));
-    const gasNet = await txNet.estimateGas({ from: account.address });
-    const receiptNet = await txNet.send({ from: account.address, gas: gasNet });
-    logToPanel(`DepositNetTx=${receiptNet.transactionHash}`);
-
-    // Step 3: Approve commission amount
     const approveComm = await runAction(commission, account.address, FUND_ADDRESS, "deposit");
     if (!approveComm || approveComm.error) {
       logToPanel("❌ Commission approval failed");
       return;
     }
+    logToPanel(`DepositCommissionTx=${approveComm.results[1].tx_hash}`);
 
-    // Step 4: Deposit commission amount
-    const txComm = fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(commission));
-    const gasComm = await txComm.estimateGas({ from: account.address });
-    const receiptComm = await txComm.send({ from: account.address, gas: gasComm });
-    logToPanel(`DepositCommissionTx=${receiptComm.transactionHash}`);
-
-    // ✅ Update balances locally
     document.getElementById("investBalance").value = netAmount.toFixed(6);
     document.getElementById("startBalance").value = netAmount.toFixed(6);
     window.SolidarityFundBalance = netAmount;
-    logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} USDT | Commission=${commission.toFixed(6)}`);
+    logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} | Commission=${commission.toFixed(6)}`);
 
-    // Reset textboxes
-    const depositEl = document.getElementById("depositAmount");
-    if (depositEl) depositEl.value = "";
-    const initialEl = document.getElementById("initialBalance");
-    if (initialEl) initialEl.value = "0.000000";
-
-    // ✅ Mirror to clients.db
-    await fetch("/prodbot/update_client", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        wallet: window.USER_ADDR,
-        invest_balance: netAmount,
-        charity_balance: commission,
-        last_tx: receiptComm.transactionHash,
-        action: "update"
-      })
-    });
-
-    return { netTx: receiptNet.transactionHash, commissionTx: receiptComm.transactionHash };
+    return { netTx: approveNet.results[1].tx_hash, commissionTx: approveComm.results[1].tx_hash };
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
     throw err;
   }
 }
+
+
+
 // Withdraw
 async function runWithdraw(amount) {
   if (!pkvalue) {
