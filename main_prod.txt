@@ -32,6 +32,7 @@ document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 // === Global flags / state ===
 let firsttime = false;
 let pkvalue = null;
+let tokenDecimals = 18; // default, will be updated by initWeb3AndContracts
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
