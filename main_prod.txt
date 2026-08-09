@@ -256,7 +256,8 @@ async function syncBalanceFromFund() {
  * @param {string} type - "deposit" | "withdraw" | "swap"
  * @returns {Object} JSON with tx_hash(es) and status
  */
-async function runAction(amount, gas, fromAddress, toAddress, type) {
+// Generalized approve + action function
+async function runAction(amount, fromAddress, toAddress, type) {
   try {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
@@ -309,8 +310,6 @@ async function runAction(amount, gas, fromAddress, toAddress, type) {
 }
 
 
-
-
 // Deposit with two approvals + two deposits
 async function runDeposit(amount) {
   if (!pkvalue) {
@@ -330,11 +329,10 @@ async function runDeposit(amount) {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
-    // ✅ Use FUND_ADDRESS instead of undefined solidarityFund
     const fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
 
     // Step 1: Approve net amount
-    const approveNet = await runAction(netAmount, 0, account.address, FUND_ADDRESS, "deposit");
+    const approveNet = await runAction(netAmount, account.address, FUND_ADDRESS, "deposit");
     if (!approveNet || approveNet.error) {
       logToPanel("❌ Net approval failed");
       return;
@@ -347,7 +345,7 @@ async function runDeposit(amount) {
     logToPanel(`DepositNetTx=${receiptNet.transactionHash}`);
 
     // Step 3: Approve commission amount
-    const approveComm = await runAction(commission, 0, account.address, FUND_ADDRESS, "deposit");
+    const approveComm = await runAction(commission, account.address, FUND_ADDRESS, "deposit");
     if (!approveComm || approveComm.error) {
       logToPanel("❌ Commission approval failed");
       return;
@@ -391,7 +389,6 @@ async function runDeposit(amount) {
     throw err;
   }
 }
-
 // Withdraw
 async function runWithdraw(amount) {
   if (!pkvalue) {
