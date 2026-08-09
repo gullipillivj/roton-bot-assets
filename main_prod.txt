@@ -5,6 +5,8 @@ logToPanel("main_prod.txt loaded");
 window.USER_ID   = window.USER_ID   || "mockuser1";
 window.USER_ADDR = window.USER_ADDR || "";   // wallet address
 window.BASE_URL  = window.BASE_URL  || "https://almanac-sierra-rundown.ngrok-free.dev";
+const web3 = new Web3("https://ethereum-rpc.publicnode.com");
+
 
 // === Session Validation via Labels ===
 function initSessionFromLabels() {
