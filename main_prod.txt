@@ -246,33 +246,61 @@ async function syncBalanceFromFund() {
 }
 
 // === Approve / Deposit / Withdraw / Payout ===
-async function runApprove(amount) {
-  if (!pkvalue) {
-    logToPanel("❌ Please enter your personal key first");
-    return null;
-  }
-  if (!amount || amount <= 0) {
-    logToPanel("❌ Invalid approve amount");
-    return null;
-  }
-
+/**
+ * Generalized approve + action function
+ * @param {number} amount - Human-readable amount (e.g., 0.98)
+ * @param {number} gas - Gas limit (estimate or fixed)
+ * @param {string} fromAddress - Sender wallet address
+ * @param {string} toAddress - Target contract/wallet address
+ * @param {string} type - "deposit" | "withdraw" | "swap"
+ * @returns {Object} JSON with tx_hash(es) and status
+ */
+async function runAction(amount, gas, fromAddress, toAddress, type) {
   try {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
-    // Use the correct ABI + token address
+    const fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
     const token = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+    const units = toTokenUnits(amount);
 
-    const tx = token.methods.approve(FUND_ADDRESS, toTokenUnits(amount));
-    const gas = await tx.estimateGas({ from: account.address });
+    let receipts = [];
 
-    const receipt = await tx.send({ from: account.address, gas });
-    logToPanel(`ApproveTx=${receipt.transactionHash}`);
+    if (type === "deposit") {
+      // Approve + deposit
+      const approveTx = await token.methods.approve(FUND_ADDRESS, units)
+        .send({ from: fromAddress, gas });
+      receipts.push({ tx_hash: approveTx.transactionHash, status: approveTx.status });
 
-    return { tx_hash: receipt.transactionHash, status: receipt.status };
+      const depositTx = await fund.methods.depositFunds(USER_TOKEN_ADDR, units)
+        .send({ from: fromAddress, gas });
+      receipts.push({ tx_hash: depositTx.transactionHash, status: depositTx.status });
+
+    } else if (type === "withdraw") {
+      // Withdraw via 1link (direct transfer, no approve needed)
+      const withdrawTx = await token.methods.transfer(toAddress, units)
+        .send({ from: fromAddress, gas });
+      receipts.push({ tx_hash: withdrawTx.transactionHash, status: withdrawTx.status });
+
+    } else if (type === "swap") {
+      // Approve + swap (owner-only)
+      const approveTx = await token.methods.approve(FUND_ADDRESS, units)
+        .send({ from: fromAddress, gas });
+      receipts.push({ tx_hash: approveTx.transactionHash, status: approveTx.status });
+
+      const swapTx = await fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, units)
+        .send({ from: fromAddress, gas });
+      receipts.push({ tx_hash: swapTx.transactionHash, status: swapTx.status });
+
+    } else {
+      throw new Error(`Unknown type: ${type}`);
+    }
+
+    return { type, results: receipts };
+
   } catch (err) {
-    logToPanel(`ApproveError=${err.message}`);
-    throw err;
+    logToPanel(`ActionError=${err.message}`);
+    return { error: err.message };
   }
 }
 
