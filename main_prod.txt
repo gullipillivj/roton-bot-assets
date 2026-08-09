@@ -462,9 +462,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("No USER_ID found on page. Please ensure Flask injects session userid into the template.");
   }
 
+  // Run login first to populate USER_ADDR
   await handleLoginSuccess();
 
-
+  // Then enforce safeguard check
+  initSessionFromLabels();
+  if (!window.USER_ID || !window.USER_ADDR) {
+    console.warn("No active session detected. Redirecting to login...");
+    window.location.href = `${window.BASE_URL}/login`;
+    return;
+  }
 
   // Deposit button
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
@@ -548,7 +555,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // PK submit handler (keep exactly as working)
+  // PK submit handler
   document.getElementById("pkBtn")?.addEventListener("click", () => {
     const pkInput = document.getElementById("pkInput");
     const pkSection = document.getElementById("pkSection");
@@ -558,8 +565,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       pkvalue = entered.trim();
       firsttime = true;
       logToPanel("✅ PK stored");
-      if (pkInput) pkInput.value = ""; // clear textbox
-      if (pkSection) pkSection.style.display = "none"; // hide section after submit
+      if (pkInput) pkInput.value = "";
+      if (pkSection) pkSection.style.display = "none";
     } else {
       logToPanel("❌ Please enter your personal key");
     }
@@ -578,7 +585,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = `${window.BASE_URL}/logout`;
   });
 });
-
 // Expose for other modules
 window.runApprove = runApprove;
 window.runDeposit = runDeposit;
