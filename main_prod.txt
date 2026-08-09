@@ -291,7 +291,7 @@ async function runAction(amount, fromAddress, toAddress, type) {
   }
 }
 
-
+// Deposit
 async function runDeposit(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
@@ -309,32 +309,54 @@ async function runDeposit(amount) {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
-    const approveNet = await runAction(netAmount, account.address, FUND_ADDRESS, "deposit");
-    if (!approveNet || approveNet.error) {
-      logToPanel("❌ Net approval failed");
-      return;
-    }
-    logToPanel(`DepositNetTx=${approveNet.results[1].tx_hash}`);
+    const token = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+    const fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
 
-    const approveComm = await runAction(commission, account.address, FUND_ADDRESS, "deposit");
-    if (!approveComm || approveComm.error) {
-      logToPanel("❌ Commission approval failed");
-      return;
-    }
-    logToPanel(`DepositCommissionTx=${approveComm.results[1].tx_hash}`);
+    // Convert to token units
+    const netUnits = toTokenUnits(netAmount);
+    const commUnits = toTokenUnits(commission);
 
+    // ✅ Step 1: Approve net amount
+    logToPanel(`Approving ${netAmount.toFixed(6)} USDT for Fund...`);
+    const approveNetReceipt = await token.methods
+      .approve(FUND_ADDRESS, netUnits)
+      .send({ from: account.address });
+    logToPanel(`ApproveNetTx=${approveNetReceipt.transactionHash}`);
+
+    // ✅ Step 2: Deposit net amount
+    const depositNetReceipt = await fund.methods
+      .depositFunds(USER_TOKEN_ADDR, netUnits)
+      .send({ from: account.address });
+    logToPanel(`DepositNetTx=${depositNetReceipt.transactionHash}`);
+
+    // ✅ Step 3: Approve commission
+    logToPanel(`Approving commission ${commission.toFixed(6)} USDT for Fund...`);
+    const approveCommReceipt = await token.methods
+      .approve(FUND_ADDRESS, commUnits)
+      .send({ from: account.address });
+    logToPanel(`ApproveCommTx=${approveCommReceipt.transactionHash}`);
+
+    // ✅ Step 4: Deposit commission
+    const depositCommReceipt = await fund.methods
+      .depositFunds(USER_TOKEN_ADDR, commUnits)
+      .send({ from: account.address });
+    logToPanel(`DepositCommissionTx=${depositCommReceipt.transactionHash}`);
+
+    // Update balances
     document.getElementById("investBalance").value = netAmount.toFixed(6);
     document.getElementById("startBalance").value = netAmount.toFixed(6);
     window.SolidarityFundBalance = netAmount;
     logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} | Commission=${commission.toFixed(6)}`);
 
-    return { netTx: approveNet.results[1].tx_hash, commissionTx: approveComm.results[1].tx_hash };
+    return {
+      netTx: depositNetReceipt.transactionHash,
+      commissionTx: depositCommReceipt.transactionHash
+    };
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
     throw err;
   }
 }
-
 
 
 // Withdraw
