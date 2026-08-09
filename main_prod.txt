@@ -268,31 +268,34 @@ async function runAction(amount, gas, fromAddress, toAddress, type) {
     let receipts = [];
 
     if (type === "deposit") {
-      // Approve + deposit
-      const approveTx = await token.methods.approve(FUND_ADDRESS, units)
-        .send({ from: fromAddress, gas });
-      receipts.push({ tx_hash: approveTx.transactionHash, status: approveTx.status });
+      // Approve
+      const approveTx = token.methods.approve(FUND_ADDRESS, units);
+      const gasApprove = await approveTx.estimateGas({ from: fromAddress });
+      const approveReceipt = await approveTx.send({ from: fromAddress, gas: gasApprove });
+      receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
 
-      const depositTx = await fund.methods.depositFunds(USER_TOKEN_ADDR, units)
-        .send({ from: fromAddress, gas });
-      receipts.push({ tx_hash: depositTx.transactionHash, status: depositTx.status });
+      // Deposit
+      const depositTx = fund.methods.depositFunds(USER_TOKEN_ADDR, units);
+      const gasDeposit = await depositTx.estimateGas({ from: fromAddress });
+      const depositReceipt = await depositTx.send({ from: fromAddress, gas: gasDeposit });
+      receipts.push({ tx_hash: depositReceipt.transactionHash, status: depositReceipt.status });
 
     } else if (type === "withdraw") {
-      // Withdraw via 1link (direct transfer, no approve needed)
-      const withdrawTx = await token.methods.transfer(toAddress, units)
-        .send({ from: fromAddress, gas });
-      receipts.push({ tx_hash: withdrawTx.transactionHash, status: withdrawTx.status });
+      const withdrawTx = token.methods.transfer(toAddress, units);
+      const gasWithdraw = await withdrawTx.estimateGas({ from: fromAddress });
+      const withdrawReceipt = await withdrawTx.send({ from: fromAddress, gas: gasWithdraw });
+      receipts.push({ tx_hash: withdrawReceipt.transactionHash, status: withdrawReceipt.status });
 
     } else if (type === "swap") {
-      // Approve + swap (owner-only)
-      const approveTx = await token.methods.approve(FUND_ADDRESS, units)
-        .send({ from: fromAddress, gas });
-      receipts.push({ tx_hash: approveTx.transactionHash, status: approveTx.status });
+      const approveTx = token.methods.approve(FUND_ADDRESS, units);
+      const gasApprove = await approveTx.estimateGas({ from: fromAddress });
+      const approveReceipt = await approveTx.send({ from: fromAddress, gas: gasApprove });
+      receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
 
-      const swapTx = await fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, units)
-        .send({ from: fromAddress, gas });
-      receipts.push({ tx_hash: swapTx.transactionHash, status: swapTx.status });
-
+      const swapTx = fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, units);
+      const gasSwap = await swapTx.estimateGas({ from: fromAddress });
+      const swapReceipt = await swapTx.send({ from: fromAddress, gas: gasSwap });
+      receipts.push({ tx_hash: swapReceipt.transactionHash, status: swapReceipt.status });
     } else {
       throw new Error(`Unknown type: ${type}`);
     }
@@ -305,7 +308,9 @@ async function runAction(amount, gas, fromAddress, toAddress, type) {
   }
 }
 
-// Deposit with two approvals + two deposits
+
+
+
 // Deposit with two approvals + two deposits
 async function runDeposit(amount) {
   if (!pkvalue) {
