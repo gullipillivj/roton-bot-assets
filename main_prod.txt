@@ -27,10 +27,9 @@ function initSessionFromLabels() {
 document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 
 // === UI Glue ===
-// === Global flag ===
+// === Global flags / state ===
 let firsttime = false;
-
-
+let pkvalue = null;
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
@@ -43,38 +42,6 @@ const FUND_ADDRESS = "0x50AB9b1A42D4338A80Dc3579D93eCd3243953E0e";
 
 // USER_TOKEN_ADDR will be set dynamically from clients.db for the logged-in user
 let USER_TOKEN_ADDR = null;
-
-
-
-async function handleLoginSuccess() {
-  try {
-    // Fetch latest balance from fund contract
-    if (!fund || !userToken) await initWeb3AndContracts();
-
-    const rawBalance = await fund.getFundBalance(USER_TOKEN_ADDR);
-    const balance = parseFloat(fromTokenUnits(rawBalance)) || 0;
-
-    // ✅ Set startBalance from Solidarity Fund balance
-    const startEl = document.getElementById("startBalance");
-    const investEl = document.getElementById("investBalance");
-    if (startEl) startEl.value = balance.toFixed(6);
-    if (investEl) investEl.value = "0.000000";
-
-    window.SolidarityFundBalance = balance;
-
-    // Mirror to clients.db immediately
-    await fetch("/prodbot/update_client", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: window.USER_ID, new_balance: balance })
-    });
-
-    logToPanel(`Initial SolidarityFundBalance=${balance.toFixed(6)} USDT`);
-  } catch (err) {
-    logToPanel(`LoginInitError=${err.message}`);
-  }
-}
-
 
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
@@ -262,17 +229,21 @@ async function syncBalanceFromFund() {
     logToPanel(`SyncError=${err.message}`);
   }
 }
-//Approve 
+
+// === Approve / Deposit / Withdraw / Payout ===
+// Approve
 async function runApprove(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
     return null;
   }
-  if (amount <= 0) return null;
+  if (!amount || amount <= 0) {
+    logToPanel("❌ Invalid approve amount");
+    return null;
+  }
 
   try {
-    // 1link Web3 approve call
-    const resp = await fetch("https://1link-node/approve", {
+    const resp = await fetch("/prodbot/security", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -295,24 +266,16 @@ async function runApprove(amount) {
   }
 }
 
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-
-    logToPanel(`ApproveTx=${data.tx_hash}`);
-    return data; // return full receipt JSON
-  } catch (err) {
-    logToPanel(`ApproveError=${err.message}`);
-    throw err;
-  }
-}
-
-//Deposit 
+// Deposit
 async function runDeposit(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
     return;
   }
-  if (amount <= 0) return;
+  if (!amount || amount <= 0) {
+    logToPanel("❌ Invalid deposit amount");
+    return;
+  }
 
   const netAmount = applyDepositFees(amount);
 
@@ -324,8 +287,8 @@ async function runDeposit(amount) {
       return;
     }
 
-    // Step 2: Deposit via 1link Web3 call
-    const resp = await fetch("https://1link-node/deposit", {
+    // Step 2: Deposit via backend
+    const resp = await fetch("/prodbot/security", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -342,19 +305,34 @@ async function runDeposit(amount) {
 
     logToPanel(`DepositTx=${data.tx_hash}`);
 
-    // ✅ Update balances from server response
+    // Update balances from server response
     document.getElementById("investBalance").value = data.invest_balance.toFixed(6);
     document.getElementById("startBalance").value = data.start_balance.toFixed(6);
     window.SolidarityFundBalance = data.start_balance;
     logToPanel(`SolidarityFundBalance=${data.start_balance.toFixed(6)} USDT`);
 
-    // ✅ Reset deposit textbox
-    document.getElementById("depositAmount").value = "";
+    // Reset deposit textbox
+    const depositEl = document.getElementById("depositAmount");
+    if (depositEl) depositEl.value = "";
 
-    // ✅ Reset initial investment balance
-    document.getElementById("initialBalance").value = "0.000000";
+    // Reset initial investment balance
+    const initialEl = document.getElementById("initialBalance");
+    if (initialEl) initialEl.value = "0.000000";
 
-    // ✅ Update clients.db (your existing code handles this)
+    // Mirror to clients.db
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        invest_balance: data.invest_balance,
+        start_balance: data.start_balance,
+        last_tx: data.tx_hash,
+        action: "update"
+      })
+    });
+
     return data.tx_hash;
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
@@ -362,9 +340,17 @@ async function runDeposit(amount) {
   }
 }
 
-//Withdraw 
+// Withdraw
 async function runWithdraw(amount) {
-  if (amount <= 0) return;
+  if (!pkvalue) {
+    logToPanel("❌ Please enter your personal key first");
+    return;
+  }
+  if (!amount || amount <= 0) {
+    logToPanel("❌ Invalid withdraw amount");
+    return;
+  }
+
   const netAmount = applyWithdrawFees(amount);
 
   try {
@@ -383,11 +369,25 @@ async function runWithdraw(amount) {
 
     logToPanel(`WithdrawTx=${data.tx_hash}`);
 
-    // ✅ Update balances
+    // Update balances
     document.getElementById("investBalance").value = data.invest_balance.toFixed(6);
     document.getElementById("startBalance").value = data.start_balance.toFixed(6);
     window.SolidarityFundBalance = data.start_balance;
     logToPanel(`Updated Local Balance=${data.start_balance.toFixed(6)} USDT`);
+
+    // Mirror to clients.db
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        invest_balance: data.invest_balance,
+        start_balance: data.start_balance,
+        last_tx: data.tx_hash,
+        action: "update"
+      })
+    });
 
     return data.tx_hash;
   } catch (err) {
@@ -396,8 +396,17 @@ async function runWithdraw(amount) {
   }
 }
 
+// Payout
 async function runPayout(amount) {
-  if (amount <= 0) return;
+  if (!pkvalue) {
+    logToPanel("❌ Please enter your personal key first");
+    return;
+  }
+  if (!amount || amount <= 0) {
+    logToPanel("❌ Invalid payout amount");
+    return;
+  }
+
   try {
     const resp = await fetch("/prodbot/security", {
       method: "POST",
@@ -414,31 +423,28 @@ async function runPayout(amount) {
 
     logToPanel(`PayoutTx=${data.tx_hash}`);
 
-    // ✅ Update balances
+    // Update balances
     document.getElementById("investBalance").value = data.invest_balance.toFixed(6);
     document.getElementById("startBalance").value = data.start_balance.toFixed(6);
     window.SolidarityFundBalance = data.start_balance;
 
+    // Mirror to clients.db
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        invest_balance: data.invest_balance,
+        start_balance: data.start_balance,
+        last_tx: data.tx_hash,
+        action: "update"
+      })
+    });
+
     return data.tx_hash;
   } catch (err) {
     logToPanel(`PayoutError=${err.message}`);
-    throw err;
-  }
-}
-// === UI Glue ===
-// === Global flag ===
-let firsttime = false;
-
-async function firstapprove() {
-  try {
-    const resp = await fetch("/prodbot/security", { method: "GET" });
-    const data = await resp.json();
-    if (data.message === "PK stored successfully") {
-      firsttime = true;
-      logToPanel("✅ Secured wallet initialized");
-    }
-  } catch (err) {
-    logToPanel(`FirstApproveError=${err.message}`);
     throw err;
   }
 }
@@ -453,14 +459,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await handleLoginSuccess();
 
-  // Approve
+  // Approve button
   document.getElementById("approveBtn")?.addEventListener("click", async () => {
     disableAllControls();
     try {
       if (!firsttime) {
-        await firstapprove();
+        logToPanel("❌ Please enter your personal key first");
       } else {
-        await runApprove();
+        const amount = parseFloat(document.getElementById("approveAmount")?.value || "0") || 0;
+        await runApprove(amount);
       }
     } catch (e) {
       logToPanel(`ApproveBtnError=${e?.message || e}`);
@@ -468,29 +475,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     enableAllControls();
   });
 
+  // Deposit button
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
-  disableAllControls();
-  try {
-    if (firsttime) {
-      await runDeposit();
-    } else {
-      logToPanel("❌ Please enter your personal key first");
+    disableAllControls();
+    try {
+      if (!firsttime) {
+        logToPanel("❌ Please enter your personal key first");
+      } else {
+        const amount = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
+        await runDeposit(amount);
+      }
+    } catch (e) {
+      logToPanel(`DepositBtnError=${e?.message || e}`);
     }
-  } catch (e) {
-    logToPanel(`DepositBtnError=${e?.message || e}`);
-  }
-  enableAllControls();
-});
+    enableAllControls();
+  });
 
-
-  // Withdraw
+  // Withdraw button
   document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     disableAllControls();
     try {
       if (!firsttime) {
-        await firstapprove();
+        logToPanel("❌ Please enter your personal key first");
       } else {
-        await runWithdraw();
+        const amount = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
+        await runWithdraw(amount);
       }
     } catch (e) {
       logToPanel(`WithdrawBtnError=${e?.message || e}`);
@@ -498,29 +507,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     enableAllControls();
   });
 
-  // Swap
-  document.getElementById("swapBtn")?.addEventListener("click", async () => {
-    disableAllControls();
-    try {
-      if (!firsttime) {
-        await firstapprove();
-      } else {
-        await runSwap();
-      }
-    } catch (e) {
-      logToPanel(`SwapBtnError=${e?.message || e}`);
-    }
-    enableAllControls();
-  });
-
-  // Payout
+  // Payout button
   document.getElementById("payoutBtn")?.addEventListener("click", async () => {
     disableAllControls();
     try {
       if (!firsttime) {
-        await firstapprove();
+        logToPanel("❌ Please enter your personal key first");
       } else {
-        await runPayout();
+        const amount = parseFloat(document.getElementById("payoutAmount")?.value || "0") || 0;
+        await runPayout(amount);
       }
     } catch (e) {
       logToPanel(`PayoutBtnError=${e?.message || e}`);
@@ -528,22 +523,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     enableAllControls();
   });
 
-  // Balances
-  document.getElementById("balancesBtn")?.addEventListener("click", async () => {
-    disableAllControls();
-    try {
-      if (!firsttime) {
-        await firstapprove();
-      } else {
-        await runBalances();
-      }
-    } catch (e) {
-      logToPanel(`BalancesBtnError=${e?.message || e}`);
-    }
-    enableAllControls();
-  });
-
-  // Start/Stop/Logout remain unchanged
+  // Start button
   document.getElementById("startBtn")?.addEventListener("click", async () => {
     const startBalance = parseFloat(document.getElementById("startBalance")?.value || "0") || 0;
     const investBalance = parseFloat(document.getElementById("investBalance")?.value || "0") || 0;
@@ -577,22 +557,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // PK submit handler (keep exactly as working)
   document.getElementById("pkBtn")?.addEventListener("click", () => {
-  const pkInput = document.getElementById("pkInput");
-  const pkSection = document.getElementById("pkSection");
-  let pkvalue = pkInput.value;
+    const pkInput = document.getElementById("pkInput");
+    const pkSection = document.getElementById("pkSection");
+    const entered = pkInput?.value || "";
 
-  if (pkvalue) {
-    firsttime = true;
-    logToPanel("✅ PK stored");
-    pkInput.value = ""; // clear textbox
-    pkSection.style.display = "none"; // hide section after submit
-  } else {
-    logToPanel("❌ Please enter your personal key");
-  }
+    if (entered.trim()) {
+      pkvalue = entered.trim();
+      firsttime = true;
+      logToPanel("✅ PK stored");
+      if (pkInput) pkInput.value = ""; // clear textbox
+      if (pkSection) pkSection.style.display = "none"; // hide section after submit
+    } else {
+      logToPanel("❌ Please enter your personal key");
+    }
   });
 
-
+  // Stop button
   document.getElementById("stopBtn")?.addEventListener("click", () => {
     window.isBotRunning = false;
     try { window.ACTIVE_PK = null; } catch {}
@@ -600,10 +582,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     enableAllControls();
   });
 
+  // Logout
   document.getElementById("logoutBtn")?.addEventListener("click", () => {
     window.location.href = `${window.BASE_URL}/logout`;
   });
 });
+
 // Expose for other modules
 window.runApprove = runApprove;
 window.runDeposit = runDeposit;
