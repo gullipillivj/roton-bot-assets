@@ -473,20 +473,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     enableAllControls();
   });
 
-  // Deposit
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
-    disableAllControls();
-    try {
-      if (!firsttime) {
-        firstapprove();
-      } else {
-        await runDeposit();
-      }
-    } catch (e) {
-      logToPanel(`DepositBtnError=${e?.message || e}`);
+  disableAllControls();
+  try {
+    if (firsttime) {
+      await runDeposit();
+    } else {
+      logToPanel("❌ Please enter your personal key first");
     }
-    enableAllControls();
-  });
+  } catch (e) {
+    logToPanel(`DepositBtnError=${e?.message || e}`);
+  }
+  enableAllControls();
+});
+
 
   // Withdraw
   document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
@@ -581,6 +581,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       enableAllControls();
     }
   });
+
+  document.getElementById("pkBtn")?.addEventListener("click", () => {
+  const pkInput = document.getElementById("pkInput");
+  const pkSection = document.getElementById("pkSection");
+  let pkvalue = pkInput.value;
+
+  if (pkvalue) {
+    firsttime = true;
+    logToPanel("✅ PK stored");
+    pkInput.value = ""; // clear textbox
+    pkSection.style.display = "none"; // hide section after submit
+  } else {
+    logToPanel("❌ Please enter your personal key");
+  }
+  });
+
 
   document.getElementById("stopBtn")?.addEventListener("click", () => {
     window.isBotRunning = false;
