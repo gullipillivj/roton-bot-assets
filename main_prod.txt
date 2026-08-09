@@ -167,7 +167,6 @@ async function handleLoginSuccess() {
     const resp = await fetch("/clients");
     const data = await resp.json();
 
-    // data.clients is expected to be an array
     const clients = data.clients || [];
     const client = clients.find(c => {
       const name = (c.profile && c.profile.name) ? c.profile.name.trim() : "";
@@ -179,37 +178,24 @@ async function handleLoginSuccess() {
       return;
     }
 
-    // ✅ Only update wallet address from clients.db
     window.USER_ADDR = client.wallet && client.wallet.address ? client.wallet.address : window.USER_ADDR;
-
-    // ✅ Keep USER_TOKEN_ADDR hard‑coded to USDT mainnet contract
     USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 
-    // Balance from clients.db (may be null)
     const balanceRaw = client.wallet && (client.wallet.balance !== null && client.wallet.balance !== undefined)
       ? parseFloat(client.wallet.balance)
       : 0;
-
     const balance = isNaN(balanceRaw) ? 0 : balanceRaw;
 
-    // Populate UI start/invest textboxes
-    const startEl = document.getElementById("startBalance");
-    const investEl = document.getElementById("investBalance");
-    if (startEl) startEl.value = balance.toFixed(6);
-    if (investEl) investEl.value = balance.toFixed(6);
-
+    document.getElementById("startBalance")?.value = balance.toFixed(6);
+    document.getElementById("investBalance")?.value = balance.toFixed(6);
     window.SolidarityFundBalance = balance;
 
-    // Update current user label
     const userLabel = document.getElementById("currentUserLabel");
     if (userLabel) userLabel.textContent = window.USER_ID;
 
     logToPanel(`Login success: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, Balance=${balance.toFixed(6)}`);
 
-    // Now initialize web3 contracts (token address is known)
     await initWeb3AndContracts();
-
-    // Sync on-chain fund balance if token contract initialized
     await syncBalanceFromFund();
   } catch (err) {
     logToPanel(`handleLoginSuccess error: ${err.message}`);
