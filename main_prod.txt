@@ -161,6 +161,7 @@ function fromTokenUnits(amountStr) {
 }
 
 // === Clients DB / Login handling ===
+// === Clients DB / Login handling ===
 async function handleLoginSuccess() {
   try {
     const resp = await fetch("/clients");
@@ -178,9 +179,11 @@ async function handleLoginSuccess() {
       return;
     }
 
-    // Set wallet address and token address from clients.db
+    // ✅ Only update wallet address from clients.db
     window.USER_ADDR = client.wallet && client.wallet.address ? client.wallet.address : window.USER_ADDR;
-    USER_TOKEN_ADDR = client.wallet && client.wallet.address ? client.wallet.address : USER_TOKEN_ADDR;
+
+    // ✅ Keep USER_TOKEN_ADDR hard‑coded to USDT mainnet contract
+    USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 
     // Balance from clients.db (may be null)
     const balanceRaw = client.wallet && (client.wallet.balance !== null && client.wallet.balance !== undefined)
