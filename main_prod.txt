@@ -506,21 +506,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await handleLoginSuccess();
 
-  // Approve button
-  document.getElementById("approveBtn")?.addEventListener("click", async () => {
-    disableAllControls();
-    try {
-      if (!firsttime) {
-        logToPanel("❌ Please enter your personal key first");
-      } else {
-        const amount = parseFloat(document.getElementById("approveAmount")?.value || "0") || 0;
-        await runApprove(amount);
-      }
-    } catch (e) {
-      logToPanel(`ApproveBtnError=${e?.message || e}`);
-    }
-    enableAllControls();
-  });
+
 
   // Deposit button
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
