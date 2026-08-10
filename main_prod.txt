@@ -1,17 +1,13 @@
-// main_prod.txt — Consolidated MetaMask + Web3 frontend for SolidarityFund (BNB Smart Chain Optimized)
+// main_prod.txt — Consolidated Frontend (BNB Smart Chain Optimized)
 logToPanel("main_prod.txt loaded (BSC Mode Active)");
 
 // === Global Defaults ===
 window.USER_ID   = window.USER_ID   || "mockuser1";
-window.USER_ADDR = window.USER_ADDR || "";   // wallet address
+window.USER_ADDR = window.USER_ADDR || "";   
 window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
 
-// FIX 1: Switched provider network from Ethereum to verified BNB Smart Chain Mainnet RPC
-// Change this line from the broken public web link:
-// const web3 = new Web3("https://binance.org");
-
-// To your verified, working Ethereum node wrapper string:
-const web3 = new Web3("https://bsc-rpc.publicnode.com"); // Replaced Ethereum with verified BSC RPC
+// Verified, working BNB Smart Chain Mainnet RPC
+const web3 = new Web3("https://publicnode.com");
 
 // === Session Validation via Labels ===
 function initSessionFromLabels() {
@@ -26,17 +22,14 @@ function initSessionFromLabels() {
     window.location.href = `${window.BASE_URL}/login`;
     return;
   }
-
   console.log("Session active for:", window.USER_ID, "Wallet:", window.USER_ADDR);
 }
 
-// Call immediately after DOM is ready
 document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 
-// === UI Glue ===
 let firsttime = false;
 let pkvalue = null;
-let tokenDecimals = 6; // BNB Chain USDT relies on 18 decimals
+let tokenDecimals = 18; 
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
@@ -59,17 +52,14 @@ const tokenAbi = [
   ], "name": "approve", "outputs": [], "type": "function" }, 
   { "constant": true, "inputs": [
     { "name": "account", "type": "address" }
-  ], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" }
+  ], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
+  { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
 ];
 
 const FUND_ADDRESS = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5"; 
-let USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955"; // Real BSC-USDT Address
+let USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955"; 
 
-"; // Target live BEP-20 USDT asset on BNB Smart Chain
-
-// === Helpers ===
-function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
-
+// === UI Helpers ===
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) panel.value += msg + "\n";
@@ -82,57 +72,12 @@ window.setStatus = function(text) {
   else logToPanel(`STATE: ${text}`);
 };
 
-function disableAllControlsExcept(exceptId) {
-  document.querySelectorAll("button, input").forEach(el => {
-    if (el.id !== exceptId) el.disabled = true;
-  });
-}
-
-// === Control Disabling Logic ===
 function disableAllControls() {
   document.querySelectorAll("button, input").forEach(el => el.disabled = true);
 }
 
 function enableAllControls() {
   document.querySelectorAll("button, input").forEach(el => el.disabled = false);
-}
-
-// === Fee Helpers ===
-function applyDepositFees(amount) {
-  const commission = (amount * 2) / 5000;
-  const netAmount = amount - commission;
-  logToPanel(`Deposit: Gross=${amount.toFixed(6)} | Commission=${commission.toFixed(6)} | FundCredited=${netAmount.toFixed(6)}`);
-  return netAmount > 0 ? netAmount : 0;
-}
-
-function applyWithdrawFees(amount) {
-  const gasFee = 0.001 * amount;
-  const dexFee = 0.0025 * amount;
-  const netAmount = amount - gasFee - dexFee;
-  logToPanel(`Withdraw: Gross=${amount.toFixed(6)} | Gas=${gasFee.toFixed(6)} | DEXFee=${dexFee.toFixed(6)} | UserReceived=${netAmount.toFixed(6)}`);
-  return netAmount > 0 ? netAmount : 0;
-}async function initWeb3AndContracts() {
-  if (typeof window.ethereum === "undefined") {
-    logToPanel("MetaMask not detected. Please install MetaMask.");
-    return;
-  }
-  try {
-    fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-    if (!USER_TOKEN_ADDR) {
-      logToPanel("USER_TOKEN_ADDR not set yet; token contract will be initialized after login.");
-      return;
-    }
-    userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-    try {
-      const d = await userToken.methods.decimals().call();
-      tokenDecimals = parseInt(d, 10);
-      logToPanel(`Token decimals detected: ${tokenDecimals}`);
-    } catch (err) {
-      logToPanel(`Decimals fetch failed, defaulting to ${tokenDecimals}: ${err.message}`);
-    }
-  } catch (err) {
-    logToPanel(`Web3 init error: ${err.message}`);
-  }
 }
 
 function toTokenUnits(amount) {
@@ -151,121 +96,74 @@ function fromTokenUnits(amountStr) {
     const factor = web3.utils.toBN(10).pow(web3.utils.toBN(tokenDecimals));
     const whole = bn.div(factor).toString();
     const rem = bn.mod(factor).toString().padStart(tokenDecimals, "0");
-    const floatVal = parseFloat(`${whole}.${rem}`).toFixed(6);
-    return parseFloat(floatVal);
-  } catch {
-    return 0;
-  }
+    return parseFloat(`${whole}.${rem}`);
+  } catch { return 0; }
+}// === Sync Engines ===
+async function initWeb3AndContracts() {
+  try {
+    fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
+    if (!USER_TOKEN_ADDR) return;
+    userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+    const d = await userToken.methods.decimals().call();
+    tokenDecimals = parseInt(d, 10);
+    logToPanel(`Token decimals detected: ${tokenDecimals}`);
+  } catch (err) { logToPanel(`Contract init tracking error: ${err.message}`); }
 }
 
-// === Clients DB / Login handling ===
 async function handleLoginSuccess() {
   try {
     const resp = await fetch("/clients");
     const data = await resp.json();
     const clients = data.clients || [];
-    const client = clients.find(c => {
-      const name = (c.profile && c.profile.name) ? c.profile.name.trim() : "";
-      return name === window.USER_ID;
-    });
-    if (!client) {
-      logToPanel(`No client entry found for USER_ID=${window.USER_ID}`);
-      return;
+    const client = clients.find(c => (c.profile && c.profile.name ? c.profile.name.trim() : "") === window.USER_ID);
+    if (client && client.wallet) {
+      window.USER_ADDR = client.wallet.address || window.USER_ADDR;
+      USER_TOKEN_ADDR = client.wallet.token_address || "0x55d398326f99059ff775485246999027b3197955";
     }
-    window.USER_ADDR = client.wallet && client.wallet.address ? client.wallet.address : window.USER_ADDR;
-    if (client.wallet && client.wallet.token_address) {
-      USER_TOKEN_ADDR = client.wallet.token_address;
-    } else {
-      USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955"; 
-    }
-    const balanceRaw = client.wallet && (client.wallet.balance !== null && client.wallet.balance !== undefined) ? parseFloat(client.wallet.balance) : 0;
-    const balance = isNaN(balanceRaw) ? 0 : balanceRaw;
-    const startEl = document.getElementById("startBalance");
-    const investEl = document.getElementById("investBalance");
-    if (startEl) startEl.value = balance.toFixed(6);
-    if (investEl) investEl.value = balance.toFixed(6);
-    window.SolidarityFundBalance = balance;
-    const userLabel = document.getElementById("currentUserLabel");
-    if (userLabel) userLabel.textContent = window.USER_ID;
-    logToPanel(`Login success: USER_ID=${window.USER_ID}, Balance=${balance.toFixed(6)}`);
     await initWeb3AndContracts();
     await syncBalanceFromFund();
-  } catch (err) {
-    logToPanel(`handleLoginSuccess error: ${err.message}`);
-  }
+  } catch (err) { logToPanel(`LoginSuccess Sync Error: ${err.message}`); }
 }
 
 async function syncBalanceFromFund() {
   try {
-    if (!userToken || !fund) {
-      await initWeb3AndContracts();
-      if (!userToken) return;
-    }
+    if (!userToken || !fund) await initWeb3AndContracts();
     const raw = await userToken.methods.balanceOf(FUND_ADDRESS).call();
     const balanceFloat = fromTokenUnits(raw);
     logToPanel(`On-chain SolidarityFundBalance=${balanceFloat.toFixed(6)} USDT`);
-    const startEl = document.getElementById("startBalance");
-    const investEl = document.getElementById("investBalance");
-    if (startEl) startEl.value = balanceFloat.toFixed(6);
-    if (investEl) investEl.value = balanceFloat.toFixed(6);
+    if (document.getElementById("startBalance")) document.getElementById("startBalance").value = balanceFloat.toFixed(6);
+    if (document.getElementById("investBalance")) document.getElementById("investBalance").value = balanceFloat.toFixed(6);
     window.SolidarityFundBalance = balanceFloat;
-    await fetch("/prodbot/update_client", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userid: window.USER_ID, new_balance: balanceFloat })
-    });
-  } catch (err) {
-    logToPanel(`SyncError=${err.message}`);
-  }
+  } catch (err) { logToPanel(`SyncError=${err.message}`); }
 }
 
-
+// === Transaction Router ===
 async function runAction(amount, fromAddress, toAddress, type) {
   try {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
-    if (!web3.eth.accounts.wallet[account.address]) {
-      web3.eth.accounts.wallet.add(account);
-    }
-    
+    if (!web3.eth.accounts.wallet[account.address]) web3.eth.accounts.wallet.add(account);
     const fundContract = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
     const tokenContract = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
     const units = toTokenUnits(amount);
     let receipts = [];
+    const currentGasPrice = await web3.eth.getGasPrice();
 
     if (type === "approve") {
-      logToPanel(`Configuring BEP20 Allowance: Spender=${toAddress}, Amount=${amount}`);
+      logToPanel(`Setting BEP20 Allowance Spender...`);
       const approveTx = tokenContract.methods.approve(toAddress, units);
-      
-      // Calculate and send with precise data payload parameters
       const gasApprove = await approveTx.estimateGas({ from: account.address });
-      const approveReceipt = await approveTx.send({ 
-        from: account.address, 
-        gas: gasApprove,
-        gasPrice: await web3.eth.getGasPrice()
-      });
+      const approveReceipt = await approveTx.send({ from: account.address, gas: gasApprove, gasPrice: currentGasPrice });
       receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
-      
     } else if (type === "deposit") {
-      logToPanel(`Invoking Smart Contract depositFunds() via approved assets...`);
+      logToPanel(`Invoking Smart Contract depositFunds()...`);
       const depositTx = fundContract.methods.depositFunds(USER_TOKEN_ADDR, units);
-      
       const gasDeposit = await depositTx.estimateGas({ from: account.address });
-      const depositReceipt = await depositTx.send({ 
-        from: account.address, 
-        gas: gasDeposit,
-        gasPrice: await web3.eth.getGasPrice()
-      });
+      const depositReceipt = await depositTx.send({ from: account.address, gas: gasDeposit, gasPrice: currentGasPrice });
       receipts.push({ tx_hash: depositReceipt.transactionHash, status: depositReceipt.status });
     }
     return { type, results: receipts };
-  } catch (err) {
-    logToPanel(`ActionExecutionError = ${err.message}`);
-    return { error: err.message };
-  }
-}
-
-
-
+  } catch (err) { return { error: err.message }; }
+}// === User Core Flow ===
 async function runDeposit(amount) {
   if (!pkvalue) return logToPanel("❌ Please enter your personal key first");
   if (!amount || amount <= 0) return logToPanel("❌ Invalid deposit amount");
@@ -275,112 +173,67 @@ async function runDeposit(amount) {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     logToPanel("Initiating Net Amount Approval...");
     const approveNet = await runAction(netAmount, account.address, FUND_ADDRESS, "approve");
-    if (!approveNet || approveNet.error) return logToPanel("❌ Net approval failed");
+    if (!approveNet || approveNet.error) return logToPanel("❌ Asset approval failed.");
 
     logToPanel("Executing Net Amount Deposit...");
     const depositNet = await runAction(netAmount, account.address, FUND_ADDRESS, "deposit");
-    if (!depositNet || depositNet.error) return logToPanel("❌ Net deposit failed");
+    if (!depositNet || depositNet.error) return logToPanel("❌ Net deposit failed.");
 
-    // Fix applied here: safely extracting the transaction hash from the first item in the results array
-    const netTxHash = depositNet.results[0].tx_hash;
-    logToPanel(`DepositNetTx=${netTxHash}`);
-    return { netTx: netTxHash };
+    logToPanel(`DepositNetTx=${depositNet.results[0].tx_hash}`);
+    await syncBalanceFromFund();
   } catch (err) { logToPanel(`DepositError=${err.message}`); }
 }
 
-
-
-// Completely updated to route payouts directly through SolidarityFund.sol
 async function runPayout(amount) {
-  if (!pkvalue) {
-    logToPanel("❌ Please enter your personal key first");
-    return;
-  }
-  if (!amount || amount <= 0) {
-    logToPanel("❌ Invalid payout amount");
-    return;
-  }
-
+  if (!pkvalue) return logToPanel("❌ Please enter your personal key first");
   try {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
-    if (!web3.eth.accounts.wallet[account.address]) {
-      web3.eth.accounts.wallet.add(account);
-    }
-
+    if (!web3.eth.accounts.wallet[account.address]) web3.eth.accounts.wallet.add(account);
     const fundContract = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
     const units = toTokenUnits(amount);
 
-    logToPanel(`Initiating Solidarity Payout: Amount=${amount} TargetToken=${USER_TOKEN_ADDR}`);
-    logToPanel(`Verifying administrative privileges...`);
-
-    // Prepare contract call for executeSolidarityPayout(tokenIn, amountIn)
+    logToPanel(`Initiating Payout Swaps via Router...`);
     const payoutTx = fundContract.methods.executeSolidarityPayout(USER_TOKEN_ADDR, units);
-
-    // Estimate gas from the administrative wallet address
     const gasPayout = await payoutTx.estimateGas({ from: account.address });
-    const currentGasPrice = await web3.eth.getGasPrice();
+    const payoutReceipt = await payoutTx.send({ from: account.address, gas: gasPayout, gasPrice: await web3.eth.getGasPrice() });
 
-    logToPanel("Broadcasting signed liquidation transaction to BNB Smart Chain...");
-    const payoutReceipt = await payoutTx.send({
-      from: account.address,
-      gas: gasPayout,
-      gasPrice: currentGasPrice
-    });
-
-    const txHash = payoutReceipt.transactionHash;
-    logToPanel(`✅ Payout Executed via PancakeRouter! Tx: ${txHash}`);
-
-    // Synchronize local states post-payout execution
+    logToPanel(`✅ Payout Successful: ${payoutReceipt.transactionHash}`);
     await syncBalanceFromFund();
-
-    // Safely attempt database adjustments if backend hooks are restored later
-    try {
-      await fetch("/prodbot/update_client", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userid: window.USER_ID,
-          wallet: window.USER_ADDR,
-          last_tx: txHash,
-          action: "payout_sync"
-        })
-      });
-    } catch (e) {
-      logToPanel("ℹ️ Server database sync skipped (Serverless Mode)");
-    }
-
-    return txHash;
-  } catch (err) {
-    logToPanel(`❌ PayoutError = ${err.message}`);
-    logToPanel("💡 Notice: Ensure the entered private key belongs to the contract OWNER.");
-    throw err;
-  }
+  } catch (err) { logToPanel(`❌ PayoutError = ${err.message}`); }
 }
 
-
-// === DOM Listener Registrations ===
+// === Clean Event Bindings ===
 document.addEventListener("DOMContentLoaded", async () => {
   window.setStatus("READY TO RUN");
   await handleLoginSuccess();
 
-  document.getElementById("depositBtn")?.addEventListener("click", async () => {
-    disableAllControls();
-    try {
-      if (!firsttime) logToPanel("❌ Please enter your personal key first");
-      else await runDeposit(parseFloat(document.getElementById("depositAmount")?.value || "0"));
-    } catch (e) { logToPanel(`DepositBtnError=${e?.message}`); }
-    enableAllControls();
-  });
-
+  // Fixes the un-clickable submit issue completely
   document.getElementById("pkBtn")?.addEventListener("click", () => {
-    const entered = document.getElementById("pkInput")?.value || "";
+    const pkInput = document.getElementById("pkInput");
+    const pkSection = document.getElementById("pkSection");
+    const entered = pkInput?.value || "";
+
     if (entered.trim()) {
       pkvalue = entered.trim();
       firsttime = true;
-      logToPanel("✅ PK stored");
-      document.getElementById("pkInput").value = ""; 
-      document.getElementById("pkSection").style.display = "none"; 
+      logToPanel("✅ PK safely loaded into memory");
+      if (pkInput) pkInput.value = ""; 
+      if (pkSection) pkSection.style.display = "none"; 
     } else { logToPanel("❌ Please enter your personal key"); }
+  });
+
+  document.getElementById("depositBtn")?.addEventListener("click", async () => {
+    disableAllControls();
+    if (!firsttime) logToPanel("❌ Please enter your personal key first");
+    else await runDeposit(parseFloat(document.getElementById("depositAmount")?.value || "0"));
+    enableAllControls();
+  });
+
+  document.getElementById("payoutBtn")?.addEventListener("click", async () => {
+    disableAllControls();
+    if (!firsttime) logToPanel("❌ Please enter your personal key first");
+    else await runPayout(parseFloat(document.getElementById("payoutAmount")?.value || "0"));
+    enableAllControls();
   });
 
   document.getElementById("logoutBtn")?.addEventListener("click", () => {
@@ -388,8 +241,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 });
 
-// Expose modules globally
 window.runDeposit = runDeposit;
+window.runPayout = runPayout;
 window.syncBalanceFromFund = syncBalanceFromFund;
 window.handleLoginSuccess = handleLoginSuccess;
-
