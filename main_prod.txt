@@ -217,41 +217,54 @@ async function syncBalanceFromFund() {
   } catch (err) {
     logToPanel(`SyncError=${err.message}`);
   }
-}async function runAction(amount, fromAddress, toAddress, type) {
+}
+
+
+async function runAction(amount, fromAddress, toAddress, type) {
   try {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
-    if (!web3.eth.accounts.wallet[account.address]) web3.eth.accounts.wallet.add(account);
+    if (!web3.eth.accounts.wallet[account.address]) {
+      web3.eth.accounts.wallet.add(account);
+    }
+    
     const fundContract = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
     const tokenContract = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
     const units = toTokenUnits(amount);
     let receipts = [];
 
     if (type === "approve") {
-      logToPanel("Clearing potential preexisting token allowances...");
-      try {
-        const resetTx = tokenContract.methods.approve(toAddress, "0");
-        const gasReset = await resetTx.estimateGas({ from: fromAddress });
-        await resetTx.send({ from: fromAddress, gas: gasReset });
-      } catch (resetErr) { /* skipped if unneeded */ }
-
-      logToPanel(`Requesting asset allowance configuration for ${amount} tokens...`);
+      logToPanel(`Configuring BEP20 Allowance: Spender=${toAddress}, Amount=${amount}`);
       const approveTx = tokenContract.methods.approve(toAddress, units);
-      const gasApprove = await approveTx.estimateGas({ from: fromAddress });
-      const approveReceipt = await approveTx.send({ from: fromAddress, gas: gasApprove });
+      
+      // Calculate and send with precise data payload parameters
+      const gasApprove = await approveTx.estimateGas({ from: account.address });
+      const approveReceipt = await approveTx.send({ 
+        from: account.address, 
+        gas: gasApprove,
+        gasPrice: await web3.eth.getGasPrice()
+      });
       receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
       
     } else if (type === "deposit") {
+      logToPanel(`Invoking Smart Contract depositFunds() via approved assets...`);
       const depositTx = fundContract.methods.depositFunds(USER_TOKEN_ADDR, units);
-      const gasDeposit = await depositTx.estimateGas({ from: fromAddress });
-      const depositReceipt = await depositTx.send({ from: fromAddress, gas: gasDeposit });
+      
+      const gasDeposit = await depositTx.estimateGas({ from: account.address });
+      const depositReceipt = await depositTx.send({ 
+        from: account.address, 
+        gas: gasDeposit,
+        gasPrice: await web3.eth.getGasPrice()
+      });
       receipts.push({ tx_hash: depositReceipt.transactionHash, status: depositReceipt.status });
     }
     return { type, results: receipts };
   } catch (err) {
-    logToPanel(`ActionError=${err.message}`);
+    logToPanel(`ActionExecutionError = ${err.message}`);
     return { error: err.message };
   }
 }
+
+
 
 async function runDeposit(amount) {
   if (!pkvalue) return logToPanel("❌ Please enter your personal key first");
@@ -273,6 +286,75 @@ async function runDeposit(amount) {
     logToPanel(`DepositNetTx=${netTxHash}`);
     return { netTx: netTxHash };
   } catch (err) { logToPanel(`DepositError=${err.message}`); }
+}
+
+
+
+// Completely updated to route payouts directly through SolidarityFund.sol
+async function runPayout(amount) {
+  if (!pkvalue) {
+    logToPanel("❌ Please enter your personal key first");
+    return;
+  }
+  if (!amount || amount <= 0) {
+    logToPanel("❌ Invalid payout amount");
+    return;
+  }
+
+  try {
+    const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
+    if (!web3.eth.accounts.wallet[account.address]) {
+      web3.eth.accounts.wallet.add(account);
+    }
+
+    const fundContract = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
+    const units = toTokenUnits(amount);
+
+    logToPanel(`Initiating Solidarity Payout: Amount=${amount} TargetToken=${USER_TOKEN_ADDR}`);
+    logToPanel(`Verifying administrative privileges...`);
+
+    // Prepare contract call for executeSolidarityPayout(tokenIn, amountIn)
+    const payoutTx = fundContract.methods.executeSolidarityPayout(USER_TOKEN_ADDR, units);
+
+    // Estimate gas from the administrative wallet address
+    const gasPayout = await payoutTx.estimateGas({ from: account.address });
+    const currentGasPrice = await web3.eth.getGasPrice();
+
+    logToPanel("Broadcasting signed liquidation transaction to BNB Smart Chain...");
+    const payoutReceipt = await payoutTx.send({
+      from: account.address,
+      gas: gasPayout,
+      gasPrice: currentGasPrice
+    });
+
+    const txHash = payoutReceipt.transactionHash;
+    logToPanel(`✅ Payout Executed via PancakeRouter! Tx: ${txHash}`);
+
+    // Synchronize local states post-payout execution
+    await syncBalanceFromFund();
+
+    // Safely attempt database adjustments if backend hooks are restored later
+    try {
+      await fetch("/prodbot/update_client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userid: window.USER_ID,
+          wallet: window.USER_ADDR,
+          last_tx: txHash,
+          action: "payout_sync"
+        })
+      });
+    } catch (e) {
+      logToPanel("ℹ️ Server database sync skipped (Serverless Mode)");
+    }
+
+    return txHash;
+  } catch (err) {
+    logToPanel(`❌ PayoutError = ${err.message}`);
+    logToPanel("💡 Notice: Ensure the entered private key belongs to the contract OWNER.");
+    throw err;
+  }
 }
 
 
@@ -310,3 +392,4 @@ document.addEventListener("DOMContentLoaded", async () => {
 window.runDeposit = runDeposit;
 window.syncBalanceFromFund = syncBalanceFromFund;
 window.handleLoginSuccess = handleLoginSuccess;
+
