@@ -267,15 +267,13 @@ async function runDeposit(amount) {
     const depositNet = await runAction(netAmount, account.address, FUND_ADDRESS, "deposit");
     if (!depositNet || depositNet.error) return logToPanel("❌ Net deposit failed");
 
-  
-
-// To this fixed version:
-const netTxHash = depositNet.results[0].tx_hash;
-
+    // Fix applied here: safely extracting the transaction hash from the first item in the results array
+    const netTxHash = depositNet.results[0].tx_hash;
     logToPanel(`DepositNetTx=${netTxHash}`);
     return { netTx: netTxHash };
   } catch (err) { logToPanel(`DepositError=${err.message}`); }
 }
+
 
 // === DOM Listener Registrations ===
 document.addEventListener("DOMContentLoaded", async () => {
