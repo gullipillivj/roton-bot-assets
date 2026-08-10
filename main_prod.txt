@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 // === UI Glue ===
 let firsttime = false;
 let pkvalue = null;
-let tokenDecimals = 18; // BNB Chain USDT relies on 18 decimals
+let tokenDecimals = 6; // BNB Chain USDT relies on 18 decimals
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
@@ -64,7 +64,7 @@ const tokenAbi = [
 ];
 
 const FUND_ADDRESS = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5"; 
-let USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955"; // Target live BEP-20 USDT asset on BNB Smart Chain
+let USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // Target live BEP-20 USDT asset on BNB Smart Chain
 
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
