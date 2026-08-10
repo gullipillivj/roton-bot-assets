@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 // === Global flags / state ===
 let firsttime = false;
 let pkvalue = null;
-let tokenDecimals = 6; // default, will be updated by initWeb3AndContracts
+let tokenDecimals = 18; // default, will be updated by initWeb3AndContracts
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
@@ -60,8 +60,7 @@ const tokenAbi = [
 ];
 
 const FUND_ADDRESS = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5"; // your deployed SolidarityFund
-let USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
-
+let USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // default USDT, override from clients.db
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
 function logToPanel(msg) {
@@ -161,12 +160,12 @@ function fromTokenUnits(amountStr) {
 }
 
 // === Clients DB / Login handling ===
-// === Clients DB / Login handling ===
 async function handleLoginSuccess() {
   try {
     const resp = await fetch("/clients");
     const data = await resp.json();
 
+    // data.clients is expected to be an array
     const clients = data.clients || [];
     const client = clients.find(c => {
       const name = (c.profile && c.profile.name) ? c.profile.name.trim() : "";
@@ -178,24 +177,35 @@ async function handleLoginSuccess() {
       return;
     }
 
+    // Set wallet address and token address from clients.db
     window.USER_ADDR = client.wallet && client.wallet.address ? client.wallet.address : window.USER_ADDR;
-    USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+    USER_TOKEN_ADDR = client.wallet && client.wallet.address ? client.wallet.address : USER_TOKEN_ADDR;
 
+    // Balance from clients.db (may be null)
     const balanceRaw = client.wallet && (client.wallet.balance !== null && client.wallet.balance !== undefined)
       ? parseFloat(client.wallet.balance)
       : 0;
+
     const balance = isNaN(balanceRaw) ? 0 : balanceRaw;
 
-    document.getElementById("startBalance")?.value = balance.toFixed(6);
-    document.getElementById("investBalance")?.value = balance.toFixed(6);
+    // Populate UI start/invest textboxes
+    const startEl = document.getElementById("startBalance");
+    const investEl = document.getElementById("investBalance");
+    if (startEl) startEl.value = balance.toFixed(6);
+    if (investEl) investEl.value = balance.toFixed(6);
+
     window.SolidarityFundBalance = balance;
 
+    // Update current user label
     const userLabel = document.getElementById("currentUserLabel");
     if (userLabel) userLabel.textContent = window.USER_ID;
 
     logToPanel(`Login success: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, Balance=${balance.toFixed(6)}`);
 
+    // Now initialize web3 contracts (token address is known)
     await initWeb3AndContracts();
+
+    // Sync on-chain fund balance if token contract initialized
     await syncBalanceFromFund();
   } catch (err) {
     logToPanel(`handleLoginSuccess error: ${err.message}`);
@@ -259,25 +269,48 @@ async function runAction(amount, fromAddress, toAddress, type) {
     let receipts = [];
 
     if (type === "deposit") {
+      // Approve
       const approveTx = token.methods.approve(FUND_ADDRESS, units);
       const gasApprove = await approveTx.estimateGas({ from: fromAddress });
       const approveReceipt = await approveTx.send({ from: fromAddress, gas: gasApprove });
       receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
 
+      // Deposit
       const depositTx = fund.methods.depositFunds(USER_TOKEN_ADDR, units);
       const gasDeposit = await depositTx.estimateGas({ from: fromAddress });
       const depositReceipt = await depositTx.send({ from: fromAddress, gas: gasDeposit });
       receipts.push({ tx_hash: depositReceipt.transactionHash, status: depositReceipt.status });
+
+    } else if (type === "withdraw") {
+      const withdrawTx = token.methods.transfer(toAddress, units);
+      const gasWithdraw = await withdrawTx.estimateGas({ from: fromAddress });
+      const withdrawReceipt = await withdrawTx.send({ from: fromAddress, gas: gasWithdraw });
+      receipts.push({ tx_hash: withdrawReceipt.transactionHash, status: withdrawReceipt.status });
+
+    } else if (type === "swap") {
+      const approveTx = token.methods.approve(FUND_ADDRESS, units);
+      const gasApprove = await approveTx.estimateGas({ from: fromAddress });
+      const approveReceipt = await approveTx.send({ from: fromAddress, gas: gasApprove });
+      receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
+
+      const swapTx = fund.methods.executeSolidarityPayout(USER_TOKEN_ADDR, units);
+      const gasSwap = await swapTx.estimateGas({ from: fromAddress });
+      const swapReceipt = await swapTx.send({ from: fromAddress, gas: gasSwap });
+      receipts.push({ tx_hash: swapReceipt.transactionHash, status: swapReceipt.status });
+    } else {
+      throw new Error(`Unknown type: ${type}`);
     }
 
     return { type, results: receipts };
+
   } catch (err) {
     logToPanel(`ActionError=${err.message}`);
     return { error: err.message };
   }
 }
 
-// Deposit
+
+// Deposit with two approvals + two deposits
 async function runDeposit(amount) {
   if (!pkvalue) {
     logToPanel("❌ Please enter your personal key first");
@@ -288,63 +321,74 @@ async function runDeposit(amount) {
     return;
   }
 
-  const commission = (amount * 2) / 5000;
+  // Calculate commission + net
+  const commission = (amount * 2) / 5000; // proportional fee
   const netAmount = amount - commission;
 
   try {
     const account = web3.eth.accounts.privateKeyToAccount(pkvalue);
     web3.eth.accounts.wallet.add(account);
 
-    const token = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
     const fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
 
-    // Convert to token units
-    const netUnits = toTokenUnits(netAmount);
-    const commUnits = toTokenUnits(commission);
+    // Step 1: Approve net amount
+    const approveNet = await runAction(netAmount, account.address, FUND_ADDRESS, "deposit");
+    if (!approveNet || approveNet.error) {
+      logToPanel("❌ Net approval failed");
+      return;
+    }
 
-    // ✅ Step 1: Approve net amount
-    logToPanel(`Approving ${netAmount.toFixed(6)} USDT for Fund...`);
-    const approveNetReceipt = await token.methods
-      .approve(FUND_ADDRESS, netUnits)
-      .send({ from: account.address });
-    logToPanel(`ApproveNetTx=${approveNetReceipt.transactionHash}`);
+    // Step 2: Deposit net amount
+    const txNet = fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(netAmount));
+    const gasNet = await txNet.estimateGas({ from: account.address });
+    const receiptNet = await txNet.send({ from: account.address, gas: gasNet });
+    logToPanel(`DepositNetTx=${receiptNet.transactionHash}`);
 
-    // ✅ Step 2: Deposit net amount
-    const depositNetReceipt = await fund.methods
-      .depositFunds(USER_TOKEN_ADDR, netUnits)
-      .send({ from: account.address });
-    logToPanel(`DepositNetTx=${depositNetReceipt.transactionHash}`);
+    // Step 3: Approve commission amount
+    const approveComm = await runAction(commission, account.address, FUND_ADDRESS, "deposit");
+    if (!approveComm || approveComm.error) {
+      logToPanel("❌ Commission approval failed");
+      return;
+    }
 
-    // ✅ Step 3: Approve commission
-    logToPanel(`Approving commission ${commission.toFixed(6)} USDT for Fund...`);
-    const approveCommReceipt = await token.methods
-      .approve(FUND_ADDRESS, commUnits)
-      .send({ from: account.address });
-    logToPanel(`ApproveCommTx=${approveCommReceipt.transactionHash}`);
+    // Step 4: Deposit commission amount
+    const txComm = fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(commission));
+    const gasComm = await txComm.estimateGas({ from: account.address });
+    const receiptComm = await txComm.send({ from: account.address, gas: gasComm });
+    logToPanel(`DepositCommissionTx=${receiptComm.transactionHash}`);
 
-    // ✅ Step 4: Deposit commission
-    const depositCommReceipt = await fund.methods
-      .depositFunds(USER_TOKEN_ADDR, commUnits)
-      .send({ from: account.address });
-    logToPanel(`DepositCommissionTx=${depositCommReceipt.transactionHash}`);
-
-    // Update balances
+    // ✅ Update balances locally
     document.getElementById("investBalance").value = netAmount.toFixed(6);
     document.getElementById("startBalance").value = netAmount.toFixed(6);
     window.SolidarityFundBalance = netAmount;
-    logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} | Commission=${commission.toFixed(6)}`);
+    logToPanel(`SolidarityFundBalance=${netAmount.toFixed(6)} USDT | Commission=${commission.toFixed(6)}`);
 
-    return {
-      netTx: depositNetReceipt.transactionHash,
-      commissionTx: depositCommReceipt.transactionHash
-    };
+    // Reset textboxes
+    const depositEl = document.getElementById("depositAmount");
+    if (depositEl) depositEl.value = "";
+    const initialEl = document.getElementById("initialBalance");
+    if (initialEl) initialEl.value = "0.000000";
+
+    // ✅ Mirror to clients.db
+    await fetch("/prodbot/update_client", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        invest_balance: netAmount,
+        charity_balance: commission,
+        last_tx: receiptComm.transactionHash,
+        action: "update"
+      })
+    });
+
+    return { netTx: receiptNet.transactionHash, commissionTx: receiptComm.transactionHash };
   } catch (err) {
     logToPanel(`DepositError=${err.message}`);
     throw err;
   }
 }
-
-
 // Withdraw
 async function runWithdraw(amount) {
   if (!pkvalue) {
@@ -462,16 +506,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     logToPanel("No USER_ID found on page. Please ensure Flask injects session userid into the template.");
   }
 
-  // Run login first to populate USER_ADDR
   await handleLoginSuccess();
 
-  // Then enforce safeguard check
-  initSessionFromLabels();
-  if (!window.USER_ID || !window.USER_ADDR) {
-    console.warn("No active session detected. Redirecting to login...");
-    window.location.href = `${window.BASE_URL}/login`;
-    return;
-  }
+
 
   // Deposit button
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
@@ -555,7 +592,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  // PK submit handler
+  // PK submit handler (keep exactly as working)
   document.getElementById("pkBtn")?.addEventListener("click", () => {
     const pkInput = document.getElementById("pkInput");
     const pkSection = document.getElementById("pkSection");
@@ -565,8 +602,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       pkvalue = entered.trim();
       firsttime = true;
       logToPanel("✅ PK stored");
-      if (pkInput) pkInput.value = "";
-      if (pkSection) pkSection.style.display = "none";
+      if (pkInput) pkInput.value = ""; // clear textbox
+      if (pkSection) pkSection.style.display = "none"; // hide section after submit
     } else {
       logToPanel("❌ Please enter your personal key");
     }
@@ -585,6 +622,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.location.href = `${window.BASE_URL}/logout`;
   });
 });
+
 // Expose for other modules
 window.runApprove = runApprove;
 window.runDeposit = runDeposit;
