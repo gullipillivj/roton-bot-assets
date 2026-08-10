@@ -7,7 +7,12 @@ window.USER_ADDR = window.USER_ADDR || "";   // wallet address
 window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
 
 // FIX 1: Switched provider network from Ethereum to verified BNB Smart Chain Mainnet RPC
-const web3 = new Web3("https://binance.org");
+// Change this line from the broken public web link:
+// const web3 = new Web3("https://binance.org");
+
+// To your verified, working Ethereum node wrapper string:
+const web3 = new Web3("https://ethereum-rpc.publicnode.com");
+
 
 // === Session Validation via Labels ===
 function initSessionFromLabels() {
