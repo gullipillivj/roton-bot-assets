@@ -267,8 +267,7 @@ async function runDeposit(amount) {
     const depositNet = await runAction(netAmount, account.address, FUND_ADDRESS, "deposit");
     if (!depositNet || depositNet.error) return logToPanel("❌ Net deposit failed");
 
-    // Change this line:
-// const netTxHash = depositNet.results.tx_hash;
+  
 
 // To this fixed version:
 const netTxHash = depositNet.results[0].tx_hash;
