@@ -63,7 +63,9 @@ const tokenAbi = [
 ];
 
 const FUND_ADDRESS = "0xa5Daf94b8b3dCE7D758bd419ffDd7aC1B83CE0c5"; 
-let USER_TOKEN_ADDR = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // Target live BEP-20 USDT asset on BNB Smart Chain
+let USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955"; // Real BSC-USDT Address
+
+"; // Target live BEP-20 USDT asset on BNB Smart Chain
 
 // === Helpers ===
 function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
