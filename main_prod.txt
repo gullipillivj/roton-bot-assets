@@ -7,13 +7,7 @@ window.USER_ADDR = window.USER_ADDR || "";
 window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
 
 // Verified, working BNB Smart Chain Mainnet RPC
-// Replace your old web3 line with this backup-safe initialization loop:
-let web3;
-try {
-  web3 = new Web3("https://llamarpc.com");
-} catch(e) {
-  web3 = new Web3("https://binance.org");
-}
+const web3 = new Web3("https://bsc-dataseed1.binance.org:443");
 
 
 
