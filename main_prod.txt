@@ -9,6 +9,30 @@ window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
 // Verified, working BNB Smart Chain Mainnet RPC
 const web3 = new Web3("https://bsc-dataseed1.binance.org:443");
 
+// Define network configurations (e.g., Binance Smart Chain)
+const bscMainnet = {
+  chainId: 56,
+  name: 'Binance Smart Chain',
+  currency: 'BNB',
+  explorerUrl: 'https://bscscan.com',
+  rpcUrl: 'https://binance.org'
+};
+
+const metadata = {
+  name: 'roton',
+  description: 'App Description',
+  url: window.location.origin,
+  icons: ['https://githubusercontent.com']
+};
+
+// Initialize the Web3Modal configuration
+const web3Modal = Web3ModalEthers.createWeb3Modal({
+  ethersConfig: Web3ModalEthers.defaultConfig({ metadata }),
+  chains: [bscMainnet],
+  projectId: 'db6af3372f722385b2e4c5df24341c63'
+ // Get from ://walletconnect.com
+});
+
 let firsttime = true;
 
 // === Session Validation via Labels ===
