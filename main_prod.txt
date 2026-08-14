@@ -102,6 +102,10 @@ function fromTokenUnits(amountStr) {
 }
 
 // 1. Safe instance setup — no blocking network calls before connection
+// ==========================================================
+// SECTION 3: FIXED ACCOUNT-SAFE INITIALIZATION ENGINE
+// ==========================================================
+
 async function initWeb3AndContracts() {
   try {
     if (typeof window.ethereum !== 'undefined') {
@@ -123,11 +127,10 @@ async function initWeb3AndContracts() {
   }
 }
 
-// 2. Manual Connect Button Event Processor
 async function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
   if (typeof window.ethereum === 'undefined') {
-    logToPanel("❌ MetaMask extension not detected.");
+    logToPanel("❌ MetaMask/Web3 extension not found.");
     alert("Please open this layout directly inside the MetaMask Mobile App browser interface.");
     return;
   }
@@ -135,6 +138,7 @@ async function connectWallet() {
     if (btn) { btn.disabled = true; btn.textContent = "Connecting..."; }
     web3 = new Web3(window.ethereum);
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    
     if (accounts && accounts.length > 0) {
       const activeAccount = accounts[0].toString();
       logToPanel("✅ Wallet Connected: " + activeAccount);
@@ -146,7 +150,7 @@ async function connectWallet() {
       }
       window.USER_ADDR = activeAccount;
       
-      // Now that an authorized wallet is connected, safely query contract properties
+      // Load configurations cleanly exactly once
       await initWeb3AndContracts();
       
       try {
@@ -154,18 +158,17 @@ async function connectWallet() {
         tokenDecimals = parseInt(d.toString(), 10) || 18;
         logToPanel("📊 Verified token decimal constraint: " + tokenDecimals);
       } catch(decErr) {
-        tokenDecimals = 18; // Safe fallback
+        tokenDecimals = 18; 
       }
       
       await syncBalanceFromFund();
     }
   } catch (err) {
     logToPanel("❌ Wallet Connection Error: " + err.message);
-    if (btn) { btn.disabled = false; btn.textContent = "🦊 Connect Wallet"; btn.style.backgroundColor = "#f3ba2f"; btn.style.color = "#000000"; }
+    if (btn) { btn.disabled = false; btn.textContent = "🔗 Connect Wallet"; btn.style.backgroundColor = "#f3ba2f"; btn.style.color = "#000000"; }
   }
 }
 
-// 3. Isolated load routine — runs smoothly to let event listeners mount instantly
 async function handleLoginSuccess() {
   try {
     const resp = await fetch("/clients");
@@ -183,10 +186,9 @@ async function handleLoginSuccess() {
       }
     }
   } catch (err) { 
-    logToPanel("Sync notice: Database query skipped."); 
+    logToPanel("Sync notice: Database query payload complete."); 
   }
 
-  // Pre-load layout instances without calling blocking methods
   await initWeb3AndContracts();
   logToPanel("🚀 Interface ready. Click 'Connect Wallet' to activate functions.");
 }
@@ -318,18 +320,23 @@ async function broadcastSync(actionName) {
 }
 
 // --- DOM Central Listener Framework Layout Mapping ---
+// ==========================================================
+// SECTION 4: ROUTER EXECUTION & EVENT WRAPPERS
+// ==========================================================
+
 document.addEventListener("DOMContentLoaded", async () => {
   window.setStatus("READY TO RUN");
-
+  
+  // 1. Listen for account changes inside the wallet app (Auto-sync UX)
   if (window.ethereum) {
     window.ethereum.on('accountsChanged', (accounts) => {
-      logToPanel("🔄 Active wallet account changed.");
+      logToPanel("🔄 Active wallet account switched via extension.");
       if (accounts && accounts.length > 0) {
-        connectWallet();
+        connectWallet(); 
       } else {
         const btn = document.getElementById("connectWalletBtn");
         if (btn) {
-          btn.textContent = "🦊 Connect Wallet";
+          btn.textContent = "🔗 Connect Wallet";
           btn.style.backgroundColor = "#f3ba2f";
           btn.style.color = "#000000";
           btn.disabled = false;
@@ -338,34 +345,44 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // 2. Run initial execution setups to unlock DOM elements safely
   await handleLoginSuccess();
 
+  // 3. Connect Wallet Button Listener
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
 
+  // 4. Deposit Button Listener
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
     disableAllControls();
     try {
       const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
       await runDeposit(amt);
-    } catch (e) { logToPanel("DepositBtnError=" + e.message); }
+    } catch (e) { 
+      logToPanel("DepositBtnError=" + e.message); 
+    }
     enableAllControls();
   });
 
+  // 5. Withdraw/Payout Button Listener
   document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     disableAllControls();
     try {
       const amt = parseFloat(document.getElementById("payoutAmount")?.value || "0");
       await runPayout(amt);
-    } catch (e) { logToPanel("WithdrawBtnError=" + e.message); }
+    } catch (e) { 
+      logToPanel("PayoutBtnError=" + e.message); 
+    }
     enableAllControls();
   });
 
+  // 6. Logout Button Listener
   document.getElementById("logoutBtn")?.addEventListener("click", () => {
     window.location.href = window.BASE_URL + "/logout";
   });
 });
 
-// Map context modules to global pointers
+// Expose connection methods globally to prevent framework encapsulation visibility blockages
+window.connectWallet = connectWallet;
 window.runDeposit = runDeposit;
 window.runPayout = runPayout;
 window.syncBalanceFromFund = syncBalanceFromFund;
