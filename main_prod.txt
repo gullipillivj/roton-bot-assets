@@ -291,6 +291,7 @@ async function runAction(amount, fromAddress, toAddress, type) {
 }
 
 
+
 // === User Core Flow ===
 // === Fully Re-Optimized User Actions for Part 4 ===
 async function runDeposit(amount) {
@@ -317,26 +318,6 @@ async function runDeposit(amount) {
   } catch (err) { logToPanel(`DepositError=${err.message}`); }
 }
 
-// === FUNCTION 3 & 4: Live Swap / Withdrawal Routine ===
-async function runSwap(amount, amountOutMin = "0") {
-  if (!amount || amount <= 0) return logToPanel("❌ Invalid swap amount");
-  
-  try {
-    logToPanel(`Initiating contract Swap/Payout sequence for ${amount} units...`);
-    const swapResult = await runWalletAction(amount, "swap", { amountOutMin });
-    
-    if (!swapResult || swapResult.error) {
-      return logToPanel(`❌ Wallet Swap Signature Rejected/Failed: ${swapResult?.error}`);
-    }
-
-    if (swapResult.results && swapResult.results[0] && swapResult.results[0].tx_hash) {
-      logToPanel(`🎉 Swap Transaction Successfully Confirmed! Hash: ${swapResult.results[0].tx_hash}`);
-    }
-
-    await syncBalanceFromFund();
-    await broadcastSync("swap_sync");
-  } catch (err) { logToPanel(`❌ SwapExecutionError = ${err.message}`); }
-}
 
 async function runPayout(amount) {
   return await runSwap(amount, "0"); // Mapped to match your HTML button bindings
