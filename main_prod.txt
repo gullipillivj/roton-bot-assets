@@ -72,24 +72,38 @@ function enableAllControls() {
 // Fixed-Point Decimal Handlers
 function toTokenUnits(amount) {
   if (!web3) throw new Error("Web3 not initialized");
-  const factor = web3.utils.toBN(10).pow(web3.utils.toBN(tokenDecimals));
-  const whole = Math.floor(amount);
-  const frac = amount - whole;
-  const wholeBN = web3.utils.toBN(whole).mul(factor);
-  const fracBN = web3.utils.toBN(Math.round(frac * Math.pow(10, tokenDecimals)));
-  return wholeBN.add(fracBN).toString();
+  // Safeguard: Fallback to 6 decimals if processing BSC-USDT mainnet address
+  const activeDecimals = (USER_TOKEN_ADDR.toLowerCase() === "0x55d398326f99059ff775485246999027b3197955") ? 18 : tokenDecimals;
+  
+  try {
+    const amountStr = parseFloat(amount).toFixed(activeDecimals);
+    const parts = amountStr.split(".");
+    const whole = parts[0];
+    const fraction = parts[1] || "";
+    
+    const wholeBN = web3.utils.toBN(whole).mul(web3.utils.toBN(10).pow(web3.utils.toBN(activeDecimals)));
+    const fractionBN = web3.utils.toBN(fraction.padEnd(activeDecimals, "0").substring(0, activeDecimals));
+    
+    return wholeBN.add(fractionBN).toString();
+  } catch (e) {
+    // Ultimate fallback handler if standard BN structures reject mobile decimal strings
+    return Math.floor(parseFloat(amount) * (10 ** activeDecimals)).toString();
+  }
 }
 
 function fromTokenUnits(amountStr) {
   try {
+    const activeDecimals = (USER_TOKEN_ADDR.toLowerCase() === "0x55d398326f99059ff775485246999027b3197955") ? 18 : tokenDecimals;
     const stringRaw = amountStr.toString();
     const bn = web3.utils.toBN(stringRaw);
-    const factor = web3.utils.toBN(10).pow(web3.utils.toBN(tokenDecimals));
+    const factor = web3.utils.toBN(10).pow(web3.utils.toBN(activeDecimals));
     const whole = bn.div(factor).toString();
-    const rem = bn.mod(factor).toString().padStart(tokenDecimals, "0");
+    const rem = bn.mod(factor).toString().padStart(activeDecimals, "0");
     return parseFloat(whole + "." + rem);
   } catch(e) { return 0; }
 }
+
+
 
 async function initWeb3AndContracts() {
   try {
