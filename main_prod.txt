@@ -127,36 +127,50 @@ async function initWeb3AndContracts() {
   }
 }
 
+// === Dedicated Manual Connection Handler (Mobile Webview Optimized) ===
 async function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
+  
   if (typeof window.ethereum === 'undefined') {
     logToPanel("❌ MetaMask/Web3 extension not found.");
-    alert("Please open this layout directly inside the MetaMask Mobile App browser interface.");
+    alert("Please make sure you are using this page INSIDE the built-in MetaMask Mobile App Browser!");
     return;
   }
+
   try {
-    if (btn) { btn.disabled = true; btn.textContent = "Connecting..."; }
-    web3 = new Web3(window.ethereum);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Connecting...";
+    }
+
+    // FIX STEP 1: Request account authorization straight from the native bridge FIRST.
+    // Do NOT instantiate the heavy Web3 network instance before this finishes.
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     
     if (accounts && accounts.length > 0) {
-      const activeAccount = accounts[0].toString();
-      logToPanel("✅ Wallet Connected: " + activeAccount);
+      const activeAccount = accounts[0];
+      logToPanel("✅ Native Wallet Authorized: " + activeAccount);
       
+      // FIX STEP 2: Safe initialization now that a valid authorized account is available
+      web3 = new Web3(window.ethereum);
+      
+      // Assign session state properties safely
+      window.USER_ADDR = activeAccount;
+
+      // Update structural visual feedback button texts
       if (btn) {
         btn.textContent = "Connected: " + activeAccount.substring(0, 6) + "..." + activeAccount.substring(activeAccount.length - 4);
-        btn.style.backgroundColor = "#28a745";
+        btn.style.backgroundColor = "#28a745"; 
         btn.style.color = "#ffffff";
       }
-      window.USER_ADDR = activeAccount;
-      
-      // Load configurations cleanly exactly once
+
+      // Re-trigger contract configurations and fetch properties smoothly
       await initWeb3AndContracts();
       
       try {
         const d = await userToken.methods.decimals().call({ from: activeAccount });
         tokenDecimals = parseInt(d.toString(), 10) || 18;
-        logToPanel("📊 Verified token decimal constraint: " + tokenDecimals);
+        logToPanel("📊 Active Token Decimal Rule: " + tokenDecimals);
       } catch(decErr) {
         tokenDecimals = 18; 
       }
@@ -165,9 +179,15 @@ async function connectWallet() {
     }
   } catch (err) {
     logToPanel("❌ Wallet Connection Error: " + err.message);
-    if (btn) { btn.disabled = false; btn.textContent = "🔗 Connect Wallet"; btn.style.backgroundColor = "#f3ba2f"; btn.style.color = "#000000"; }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🔗 Connect Wallet";
+      btn.style.backgroundColor = "#f3ba2f";
+      btn.style.color = "#000000";
+    }
   }
 }
+
 
 async function handleLoginSuccess() {
   try {
