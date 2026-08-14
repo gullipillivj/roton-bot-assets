@@ -267,6 +267,61 @@ async function verifyActiveWalletMatches() {
   return true;
 }
 
+// === Injected Extension Transaction Router (Fixed & Restored) ===
+async function runWalletAction(amount, type, executionParams = {}) {
+  try {
+    if (!window.ethereum) {
+      throw new Error("No browser wallet extension detected. Please install or unlock MetaMask.");
+    }
+    
+    // 1. Verify if account alignment is active
+    const accounts = await web3.eth.getAccounts();
+    if (accounts.length === 0) {
+      // Explicitly request user account binding if it dropped out
+      const structureAccounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      if (structureAccounts.length === 0) throw new Error("Wallet is locked or unauthorized.");
+      accounts[0] = structureAccounts[0];
+    }
+    
+    const currentAccount = accounts[0];
+    const units = toTokenUnits(amount);
+    let receipts = [];
+
+    // Initialize instances if they haven't been bound yet
+    if (!tokenContractInstance || !fundContractInstance) {
+      fundContractInstance = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
+      tokenContractInstance = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+    }
+
+    // 2. Route Operations to window.ethereum Intercepts
+    if (type === "approve") {
+      logToPanel(`Prompting wallet to Approve token allowance...`);
+      const txReceipt = await tokenContractInstance.methods.approve(FUND_ADDRESS, units)
+        .send({ from: currentAccount });
+      receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
+
+    } else if (type === "deposit") {
+      logToPanel(`Prompting wallet to execute depositFunds()...`);
+      const txReceipt = await fundContractInstance.methods.depositFunds(USER_TOKEN_ADDR, units)
+        .send({ from: currentAccount });
+      receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
+
+    } else if (type === "swap" || type === "withdraw") {
+      logToPanel(`Prompting wallet to execute executeSolidarityPayout()...`);
+      const minOut = executionParams.amountOutMin || "0";
+      const txReceipt = await fundContractInstance.methods.executeSolidarityPayout(units, USER_TOKEN_ADDR, minOut)
+        .send({ from: currentAccount });
+      receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
+    }
+
+    return { type, results: receipts };
+  } catch (err) {
+    return { error: err.message };
+
+}
+}
+
+
 
 // === Transaction Router ===
 async function runAction(amount, fromAddress, toAddress, type) {
