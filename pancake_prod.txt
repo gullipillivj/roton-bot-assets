@@ -13,7 +13,7 @@ function logResult(action, data) {
 }
 
 // === Secure Backend Calls ===
-async function callSecurity(action, amount) {
+async function callSecurity(action, payload) {
   try {
     const res = await fetch("/prodbot/security", {
       method: "POST",
@@ -21,7 +21,7 @@ async function callSecurity(action, amount) {
       body: JSON.stringify({
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
-        amount,
+        ...payload,
         action
       })
     });
@@ -32,52 +32,45 @@ async function callSecurity(action, amount) {
   }
 }
 
-async function swapToTarget(amount, userAddress, privateKey) {
-  try {
-    logToPanel(`[DEBUG] swapToTarget called with amount=${amount}`);
-    const res = await fetch(`${window.BASE_URL}/runbot/swap`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
-    });
-    return safeParse(await res.text());
-  } catch (err) {
-    logToPanel(`[ERROR] Swap failed: ${err.message}`);
-    return null;
-  }
-}
-
 // === Wrappers ===
-async function runApprove(amount) {
-  const parsed = await callSecurity("approve", amount);
+// Approve ERC20 token for spending by SolidarityFundV2
+async function runApprove(amount, tokenAddress) {
+  const parsed = await callSecurity("approve", { amount, tokenAddress });
   logResult("Approve", parsed);
   return parsed;
 }
-async function runDeposit(amount) {
-  const parsed = await callSecurity("deposit", amount);
+
+// Deposit ERC20 into SolidarityFundV2
+async function runDeposit(amount, tokenAddress) {
+  const parsed = await callSecurity("deposit", { amount, tokenAddress });
   logResult("Deposit", parsed);
   return parsed;
 }
-async function runWithdraw(amount) {
-  const parsed = await callSecurity("withdraw", amount);
-  logResult("Withdraw/Payout", parsed);
+
+// Withdraw / Swap to donation token (calls SolidarityFundV2.swapToDonation)
+async function runSwap(amount, tokenAddress, amountOutMin = "0") {
+  // include gas calculation
+  const gas = await window.getGasFees("bsc");
+  const parsed = await callSecurity("swapToDonation", {
+    amount,
+    tokenAddress,
+    amountOutMin,
+    gasPrice: gas.gasPrice,
+    gasCostUSD: gas.usdCost
+  });
+  logResult("SwapToDonation", parsed);
   return parsed;
 }
-async function runSwap(amount) {
-  const parsed = await callSecurity("swap", amount);
-  logResult("Swap", parsed);
-  return parsed;
-}
-async function runPayout(amount) {
-  const parsed = await callSecurity("payout", amount);
-  logResult("Payout", parsed);
-  return parsed;
+
+// Convenience alias for payout
+async function runPayout(amount, tokenAddress) {
+  return await runSwap(amount, tokenAddress, "0");
 }
 
 // === Expose globally ===
 window.runApprove = runApprove;
 window.runDeposit = runDeposit;
-window.runWithdraw = runWithdraw;
+window.runWithdraw = runSwap;   // withdraw is swapToDonation
 window.runSwap = runSwap;
 window.runPayout = runPayout;
 window.logResult = logResult;
