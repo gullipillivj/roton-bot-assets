@@ -271,77 +271,82 @@ async function verifyActiveWalletMatches() {
 
 // === Injected Extension Transaction Router (Fixed & Restored) ===
 // === Injected Extension Transaction Router (With URL & Extension Guards) ===
-// === Modern Web3.js + MetaMask Transaction Approval Router (Deadlock Repaired) ===
 async function runWalletAction(amount, type, executionParams = {}) {
   const msgLabel = document.getElementById("pkMsg");
   
   try {
-    if (window.location.protocol === "http:" && window.location.hostname.includes("ngrok")) {
-      const secureUrl = window.location.href.replace("http://", "https://");
-      if (msgLabel) msgLabel.textContent = "Error: Use HTTPS link!";
-      alert(`Security Protection!\nPlease reload using HTTPS:\n${secureUrl}`);
-      throw new Error("Insecure HTTP tunnel blocked.");
+    // 1. Check if the user is connected via WalletConnect modal
+    let walletProvider = web3Modal.getWalletProvider();
+    
+    if (!walletProvider) {
+      if (msgLabel) msgLabel.textContent = "Connecting Wallet...";
+      // Force open the QR Code/Deep link modal to scan with mobile MetaMask
+      await web3Modal.open();
+      
+      // Wait for user to scan and connect
+      return new Promise((resolve) => {
+        const unsubscribe = web3Modal.subscribeProvider(({ isConnected, provider }) => {
+          if (isConnected && provider) {
+            unsubscribe();
+            walletProvider = provider;
+            // Recursively re-run action now that connection is alive
+            resolve(runWalletAction(amount, type, executionParams));
+          }
+        });
+      });
     }
 
-    if (!window.ethereum) {
-      if (msgLabel) msgLabel.textContent = "Wallet App Missing!";
-      throw new Error("No window.ethereum detected.");
-    }
+    if (msgLabel) msgLabel.textContent = "Sending to mobile device...";
     
-    if (msgLabel) msgLabel.textContent = "Waking up your wallet...";
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    
-    if (!accounts || accounts.length === 0) {
-      if (msgLabel) msgLabel.textContent = "Wallet connection denied.";
-      throw new Error("User denied connection request.");
-    }
-    
-    //  REPAIR 1: Extract the first account string explicitly out of the array
-    const targetUserAccount = accounts[0]; 
-    logToPanel(`Connected Account: ${targetUserAccount}`);
+    // 2. Initialize Ethers using the WalletConnect remote provider bridge
+    const provider = new ethers.BrowserProvider(walletProvider);
+    const signer = await provider.getSigner();
+    const targetUserAccount = await signer.getAddress();
+    logToPanel(`Connected Via WalletConnect: ${targetUserAccount}`);
 
-    // Ensure state wrappers are active
-    if (!tokenContractInstance || !fundContractInstance) {
-      fundContractInstance = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-      tokenContractInstance = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-    }
-
-    const units = toTokenUnits(amount);
+    const units = ethers.parseUnits(amount.toString(), 18); // Swap 18 for your token decimal variable if needed
     let receipts = [];
 
-    //  REPAIR 2: Hardcode standard safe gas limits to bypass silent estimateGas deadlocks
+    // 3. Bind Contracts to the remote signer
+    const tokenContract = new ethers.Contract(USER_TOKEN_ADDR, tokenAbi, signer);
+    const fundContract = new ethers.Contract(FUND_ADDRESS, fundAbi, signer);
+
+    // 4. Fire transactions directly to the mobile MetaMask app for approval
     if (type === "approve") {
-      logToPanel(`Prompting wallet to Approve token allowance...`);
-      if (msgLabel) msgLabel.textContent = "Awaiting Approval Signature...";
+      logToPanel(`Prompting mobile wallet to Approve token allowance...`);
+      if (msgLabel) msgLabel.textContent = "Awaiting mobile signature...";
       
-      const txReceipt = await tokenContractInstance.methods.approve(FUND_ADDRESS, units).send({ 
-        from: targetUserAccount,
-        gas: "80000",        // Hardcoded safe gas limit for BEP20 Approval
-        gasPrice: null       // Letting MetaMask handle the live network gas price automatically
+      const txResponse = await tokenContract.approve(FUND_ADDRESS, units, {
+        gasLimit: 80000 // Safe hardcoded BSC limit
       });
-      receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
+      
+      logToPanel(`Broadcasted! Check your phone to confirm transaction.`);
+      const txReceipt = await txResponse.wait();
+      receipts.push({ tx_hash: txReceipt.hash, status: txReceipt.status });
 
     } else if (type === "deposit") {
-      logToPanel(`Prompting wallet to execute depositFunds()...`);
-      if (msgLabel) msgLabel.textContent = "Awaiting Deposit Signature...";
+      logToPanel(`Prompting mobile wallet to execute depositFunds()...`);
+      if (msgLabel) msgLabel.textContent = "Awaiting mobile deposit approval...";
       
-      const txReceipt = await fundContractInstance.methods.depositFunds(USER_TOKEN_ADDR, units).send({ 
-        from: targetUserAccount,
-        gas: "150000",       // Hardcoded safe gas limit for typical contract deposits
-        gasPrice: null       // Letting MetaMask handle the live network gas price automatically
+      const txResponse = await fundContract.depositFunds(USER_TOKEN_ADDR, units, {
+        gasLimit: 150000
       });
-      receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
+      
+      logToPanel(`Broadcasted! Check your phone to confirm transaction.`);
+      const txReceipt = await txResponse.wait();
+      receipts.push({ tx_hash: txReceipt.hash, status: txReceipt.status });
     }
 
     if (msgLabel) msgLabel.textContent = "Success!";
     return { type, results: receipts };
 
   } catch (err) {
-    logToPanel(`❌ Execution Error: ${err.message}`);
-    if (msgLabel) msgLabel.textContent = "Transaction failed/cancelled.";
+    logToPanel(`❌ WalletConnect Error: ${err.message}`);
+    if (msgLabel) msgLabel.textContent = "Transaction failed/timed out.";
     return { error: err.message };
   }
 }
+
 
 
 
