@@ -12,6 +12,12 @@ function logResult(action, data) {
   }
 }
 
+// === Security Guard: enforce prodbot entry ===
+if (!window.location.href.includes("/prodbot")) {
+  console.warn("Unauthorized direct load detected. Redirecting...");
+  window.location.href = "/almanac/prodbot";
+}
+
 // === Secure Backend Calls ===
 async function callSecurity(action, payload) {
   try {
