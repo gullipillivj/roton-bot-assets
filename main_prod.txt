@@ -1,6 +1,6 @@
-// ==========================================
-// SECTION 2: GLOBAL INITIALIZATION CONFIG
-// ==========================================
+// ==========================================================
+// SECTION 2: GLOBAL APPLICATION SCOPE INITIALIZATION CONFIG
+// ==========================================================
 logToPanel("main_prod.txt loaded (BSC Mode Active)");
 
 window.USER_ID   = window.USER_ID   || "mockuser1";
@@ -16,9 +16,11 @@ window.cumulativePnL = 0;
 window.isBotRunning = false;
 window.currentCycle = 1;
 
+// Core Target Deployments (BNB Smart Chain Settings)
 const FUND_ADDRESS = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c"; 
 let USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955"; 
 
+// Complete Interface Application Binary Interfaces (ABIs)
 const fundAbi = [
   { "inputs": [{ "name": "token", "type": "address" }, { "name": "amount", "type": "uint256" }], "name": "depositFunds", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
   { "inputs": [{ "name": "amountIn", "type": "uint256" }, { "name": "inputToken", "type": "address" }, { "name": "amountOutMin", "type": "uint256" }], "name": "executeSolidarityPayout", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
@@ -32,9 +34,9 @@ const tokenAbi = [
   { "constant": true, "inputs": [{ "name": "account", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
   { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
 ];
-// ==========================================
-// SECTION 3: CORE APPLICATION LOGIC PIPELINE
-// ==========================================
+// ==========================================================
+// SECTION 3: WEB3 CONNECTIVITY ENGINE & DATABASE HANDLERS
+// ==========================================================
 
 if (!window.location.href.includes("/prodbot")) {
   console.warn("Unauthorized direct load detected. Redirecting...");
@@ -52,12 +54,6 @@ function initSessionFromLabels() {
 }
 document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 
-function logToPanel(msg) {
-  const panel = document.getElementById("logPanel");
-  if (panel) panel.value += msg + "\n";
-  else console.log(msg);
-}
-
 window.setStatus = function(text) {
   const statusLabel = document.getElementById("statusLabel");
   if (statusLabel) statusLabel.textContent = "STATE: " + text;
@@ -72,6 +68,7 @@ function enableAllControls() {
   document.querySelectorAll("button, input").forEach(el => el.disabled = false);
 }
 
+// Fixed-Point Decimal Handlers
 function toTokenUnits(amount) {
   if (!web3) throw new Error("Web3 not initialized");
   const factor = web3.utils.toBN(10).pow(web3.utils.toBN(tokenDecimals));
@@ -93,22 +90,16 @@ function fromTokenUnits(amountStr) {
   } catch(e) { return 0; }
 }
 
-
-// Replace your existing initWeb3AndContracts function with this safe version
 async function initWeb3AndContracts() {
   try {
-    // 1. Prioritize active browser wallet extension signatures
     if (typeof window.ethereum !== 'undefined') {
       web3 = new Web3(window.ethereum);
       logToPanel("🌐 Injected Web3 Provider (window.ethereum) detected.");
-    } 
-    // 2. Fall back cleanly to a public node if the user hasn't connected their wallet yet
-    else {
+    } else {
       logToPanel("⚠️ No active wallet connection found. Starting in Read-Only Fallback Mode...");
       web3 = new Web3("https://binance.org");
     }
 
-    // Ensure the web3 object compiled perfectly before instantiating contract hooks
     if (web3) {
       fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
       if (USER_TOKEN_ADDR) {
@@ -123,13 +114,11 @@ async function initWeb3AndContracts() {
   }
 }
 
-
-
 async function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
   if (typeof window.ethereum === 'undefined') {
     logToPanel("❌ MetaMask/Web3 extension not found.");
-    alert("Please install MetaMask extension into your browser to use this tool.");
+    alert("Please open this page inside the built-in MetaMask Mobile App Browser.");
     return;
   }
   try {
@@ -149,7 +138,7 @@ async function connectWallet() {
     }
   } catch (err) {
     logToPanel("❌ Wallet Connection Error: " + err.message);
-    if (btn) { btn.disabled = false; btn.textContent = "🦊 Connect Wallet"; }
+    if (btn) { btn.disabled = false; btn.textContent = "🦊 Connect Wallet"; btn.style.backgroundColor = "#f3ba2f"; btn.style.color = "#000000"; }
   }
 }
 
@@ -175,11 +164,9 @@ async function handleLoginSuccess() {
     logToPanel("Sync notice: Backend endpoint payload handled."); 
   }
 
-  // Always force initialization so web3 and contracts can run regardless of backend status
   await initWeb3AndContracts();
   await syncBalanceFromFund();
 }
-
 
 async function syncBalanceFromFund() {
   try {
@@ -192,26 +179,20 @@ async function syncBalanceFromFund() {
     window.SolidarityFundBalance = balanceFloat;
   } catch (err) { logToPanel("SyncError=" + err.message); }
 }
+// ==========================================================
+// SECTION 4: ROUTER EXECUTION SIGNERS & INTERFACE ROUTINES
+// ==========================================================
 
 async function verifyActiveWalletMatches() {
-  if (!window.ethereum) { 
-    logToPanel("❌ No Web3 wallet extension found."); 
-    return false; 
-  }
-  if (!web3) { 
-    logToPanel("⚠️ Web3 not initialized. Please click 'Connect Wallet' first."); 
-    return false; 
-  }
+  if (!window.ethereum) { logToPanel("❌ No Web3 wallet extension found."); return false; }
+  if (!web3) { logToPanel("⚠️ Web3 not initialized. Please click 'Connect Wallet' first."); return false; }
   
   const accounts = await web3.eth.getAccounts();
-  if (!accounts || accounts.length === 0) { 
-    logToPanel("⚠️ Wallet locked. Please unlock or authorize your MetaMask app connection."); 
-    return false; 
-  }
+  if (!accounts || accounts.length === 0) { logToPanel("⚠️ Wallet locked. Unlock your MetaMask app connection."); return false; }
   
   const activeAddress = accounts[0].toString().toLowerCase();
 
-  // FIX: If backend mapping failed, dynamically register the current active extension wallet
+  // Dynamic self-assignment failover check
   if (!window.USER_ADDR || window.USER_ADDR.trim() === "") {
     window.USER_ADDR = activeAddress;
     logToPanel("🌐 Session Address auto-assigned to active wallet: " + activeAddress);
@@ -223,11 +204,8 @@ async function verifyActiveWalletMatches() {
     alert("Please switch MetaMask to your registered profile wallet:\n" + window.USER_ADDR);
     return false;
   }
-  
   return true;
 }
-
-
 
 async function runAction(amount, toAddress, type) {
   try {
@@ -274,8 +252,8 @@ async function runDeposit(amount) {
     const depositNet = await runAction(netAmount, FUND_ADDRESS, "deposit");
     if (!depositNet || depositNet.error) return logToPanel("❌ Wallet Deposit Failed: " + (depositNet ? depositNet.error : "Failed"));
 
-    if (depositNet.results && depositNet.results[0] && depositNet.results[0].tx_hash) {
-      logToPanel("✅ On-Chain Deposit Complete! Tx Hash: " + depositNet.results[0].tx_hash);
+    if (depositNet.results && depositNet.results && depositNet.results.tx_hash) {
+      logToPanel("✅ On-Chain Deposit Complete! Tx Hash: " + depositNet.results.tx_hash);
     }
     await syncBalanceFromFund();
     await broadcastSync("deposit_sync");
@@ -292,8 +270,8 @@ async function runPayout(amount) {
     const payoutResult = await runAction(amount, FUND_ADDRESS, "payout");
     if (!payoutResult || payoutResult.error) return logToPanel("❌ Payout Failed: " + (payoutResult ? payoutResult.error : "Failed"));
     
-    if (payoutResult.results && payoutResult.results[0] && payoutResult.results[0].tx_hash) {
-      logToPanel("✅ On-Chain Payout Complete! Tx Hash: " + payoutResult.results[0].tx_hash);
+    if (payoutResult.results && payoutResult.results && payoutResult.results.tx_hash) {
+      logToPanel("✅ On-Chain Payout Complete! Tx Hash: " + payoutResult.results.tx_hash);
     }
     await syncBalanceFromFund();
     await broadcastSync("payout_sync");
@@ -307,15 +285,16 @@ async function broadcastSync(actionName) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userid: window.USER_ID, wallet: window.USER_ADDR, action: actionName })
     });
-} catch (e) {}}
+  } catch (e) {}
+}
+
+// --- DOM Central Listener Framework Layout Mapping ---
 document.addEventListener("DOMContentLoaded", async () => {
   window.setStatus("READY TO RUN");
 
-  // --- MetaMask Wallet Accounts Change Listener ---
   if (window.ethereum) {
     window.ethereum.on('accountsChanged', (accounts) => {
       logToPanel("🔄 Active wallet account changed.");
-      
       if (accounts && accounts.length > 0) {
         connectWallet();
       } else {
@@ -330,43 +309,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // --- Initial Session Login Sync ---
   await handleLoginSuccess();
 
-  // --- Connect Wallet Event Listener ---
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
 
-  // --- Deposit Button Trigger ---
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
     disableAllControls();
     try {
       const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
       await runDeposit(amt);
-    } catch (e) {
-      logToPanel("DepositBtnError=" + e.message);
-    }
+    } catch (e) { logToPanel("DepositBtnError=" + e.message); }
     enableAllControls();
   });
 
-  // --- Withdraw/Payout Button Trigger ---
   document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     disableAllControls();
     try {
-      const amt = parseFloat(document.getElementById("withdrawBtn")?.value || "0");
+      const amt = parseFloat(document.getElementById("payoutAmount")?.value || "0");
       await runPayout(amt);
-    } catch (e) {
-      logToPanel("withdrawBtn=" + e.message);
-    }
+    } catch (e) { logToPanel("WithdrawBtnError=" + e.message); }
     enableAllControls();
   });
 
-  // --- Logout Interface Trigger ---
   document.getElementById("logoutBtn")?.addEventListener("click", () => {
     window.location.href = window.BASE_URL + "/logout";
   });
 });
 
-// --- Expose App Actions Globally ---
+// Map context modules to global pointers
 window.runDeposit = runDeposit;
 window.runPayout = runPayout;
 window.syncBalanceFromFund = syncBalanceFromFund;
