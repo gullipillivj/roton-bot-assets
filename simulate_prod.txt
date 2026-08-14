@@ -12,6 +12,13 @@ function toTokenUnits(amount, symbol) {
     const factor = 10 ** decimals;
     return web3.utils.toBN(Math.floor(amount * factor)).toString();
 }
+
+// === Security Guard: enforce prodbot entry ===
+if (!window.location.href.includes("/prodbot")) {
+  console.warn("Unauthorized direct load detected. Redirecting...");
+  window.location.href = "/almanac/prodbot";
+}
+
 function fromTokenUnits(raw, symbol = "USDT") {
     const decimals = (symbol === "USDT" ? 6 : 18);
     const bn = web3.utils.toBN(raw);
