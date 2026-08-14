@@ -39,6 +39,10 @@ const tokenAbi = [
 // SECTION 3: WEB3 CONNECTIVITY ENGINE & DATABASE HANDLERS
 // ==========================================================
 
+// ==========================================================
+// SECTION 3: ACCOUNT-SAFE INITIALIZATION ENGINE
+// ==========================================================
+
 if (!window.location.href.includes("/prodbot")) {
   console.warn("Unauthorized direct load detected. Redirecting...");
   window.location.href = "/almanac/prodbot";
@@ -69,24 +73,18 @@ function enableAllControls() {
   document.querySelectorAll("button, input").forEach(el => el.disabled = false);
 }
 
-// Fixed-Point Decimal Handlers
 function toTokenUnits(amount) {
   if (!web3) throw new Error("Web3 not initialized");
-  // Safeguard: Fallback to 6 decimals if processing BSC-USDT mainnet address
   const activeDecimals = (USER_TOKEN_ADDR.toLowerCase() === "0x55d398326f99059ff775485246999027b3197955") ? 18 : tokenDecimals;
-  
   try {
     const amountStr = parseFloat(amount).toFixed(activeDecimals);
     const parts = amountStr.split(".");
     const whole = parts[0];
     const fraction = parts[1] || "";
-    
     const wholeBN = web3.utils.toBN(whole).mul(web3.utils.toBN(10).pow(web3.utils.toBN(activeDecimals)));
     const fractionBN = web3.utils.toBN(fraction.padEnd(activeDecimals, "0").substring(0, activeDecimals));
-    
     return wholeBN.add(fractionBN).toString();
   } catch (e) {
-    // Ultimate fallback handler if standard BN structures reject mobile decimal strings
     return Math.floor(parseFloat(amount) * (10 ** activeDecimals)).toString();
   }
 }
@@ -103,15 +101,14 @@ function fromTokenUnits(amountStr) {
   } catch(e) { return 0; }
 }
 
-
-
+// 1. Safe instance setup — no blocking network calls before connection
 async function initWeb3AndContracts() {
   try {
     if (typeof window.ethereum !== 'undefined') {
       web3 = new Web3(window.ethereum);
-      logToPanel("🌐 Injected Web3 Provider (window.ethereum) detected.");
+      logToPanel("🌐 Injected Web3 Provider (window.ethereum) verified.");
     } else {
-      logToPanel("⚠️ No active wallet connection found. Starting in Read-Only Fallback Mode...");
+      logToPanel("⚠️ No wallet found. Starting in Read-Only Fallback Mode...");
       web3 = new Web3("https://binance.org");
     }
 
@@ -119,21 +116,19 @@ async function initWeb3AndContracts() {
       fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
       if (USER_TOKEN_ADDR) {
         userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-        const d = await userToken.methods.decimals().call();
-        tokenDecimals = parseInt(d.toString(), 10);
-        logToPanel("📊 Active token decimals verified: " + tokenDecimals);
       }
     }
   } catch (err) { 
-    logToPanel("❌ Contract Initialization Error: " + err.message); 
+    logToPanel("❌ Contract Config Error: " + err.message); 
   }
 }
 
+// 2. Manual Connect Button Event Processor
 async function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
   if (typeof window.ethereum === 'undefined') {
-    logToPanel("❌ MetaMask/Web3 extension not found.");
-    alert("Please open this page inside the built-in MetaMask Mobile App Browser.");
+    logToPanel("❌ MetaMask extension not detected.");
+    alert("Please open this layout directly inside the MetaMask Mobile App browser interface.");
     return;
   }
   try {
@@ -143,12 +138,25 @@ async function connectWallet() {
     if (accounts && accounts.length > 0) {
       const activeAccount = accounts[0].toString();
       logToPanel("✅ Wallet Connected: " + activeAccount);
+      
       if (btn) {
         btn.textContent = "Connected: " + activeAccount.substring(0, 6) + "..." + activeAccount.substring(activeAccount.length - 4);
         btn.style.backgroundColor = "#28a745";
         btn.style.color = "#ffffff";
       }
+      window.USER_ADDR = activeAccount;
+      
+      // Now that an authorized wallet is connected, safely query contract properties
       await initWeb3AndContracts();
+      
+      try {
+        const d = await userToken.methods.decimals().call({ from: activeAccount });
+        tokenDecimals = parseInt(d.toString(), 10) || 18;
+        logToPanel("📊 Verified token decimal constraint: " + tokenDecimals);
+      } catch(decErr) {
+        tokenDecimals = 18; // Safe fallback
+      }
+      
       await syncBalanceFromFund();
     }
   } catch (err) {
@@ -157,12 +165,11 @@ async function connectWallet() {
   }
 }
 
+// 3. Isolated load routine — runs smoothly to let event listeners mount instantly
 async function handleLoginSuccess() {
   try {
     const resp = await fetch("/clients");
-    if (!resp.ok) {
-      logToPanel("⚠️ Server session endpoint unavailable.");
-    } else {
+    if (resp.ok) {
       const data = await resp.json();
       const clients = data.clients || [];
       const client = clients.find(c => (c.profile && c.profile.name ? c.profile.name.trim() : "") === window.USER_ID);
@@ -176,24 +183,31 @@ async function handleLoginSuccess() {
       }
     }
   } catch (err) { 
-    logToPanel("Sync notice: Backend endpoint payload handled."); 
+    logToPanel("Sync notice: Database query skipped."); 
   }
 
+  // Pre-load layout instances without calling blocking methods
   await initWeb3AndContracts();
-  await syncBalanceFromFund();
+  logToPanel("🚀 Interface ready. Click 'Connect Wallet' to activate functions.");
 }
 
 async function syncBalanceFromFund() {
   try {
-    if (!userToken || !fund) await initWeb3AndContracts();
-    const raw = await userToken.methods.balanceOf(FUND_ADDRESS).call();
+    if (!web3 || !userToken) return;
+    const accounts = await web3.eth.getAccounts();
+    const caller = accounts.length > 0 ? accounts[0] : FUND_ADDRESS;
+    
+    const raw = await userToken.methods.balanceOf(FUND_ADDRESS).call({ from: caller });
     const balanceFloat = fromTokenUnits(raw);
-    logToPanel("On-chain SolidarityFundBalance=" + balanceFloat.toFixed(6) + " USDT");
+    logToPanel("🔄 Synced SolidarityFundBalance=" + balanceFloat.toFixed(6) + " USDT");
     if (document.getElementById("startBalance")) document.getElementById("startBalance").value = balanceFloat.toFixed(6);
     if (document.getElementById("investBalance")) document.getElementById("investBalance").value = balanceFloat.toFixed(6);
     window.SolidarityFundBalance = balanceFloat;
   } catch (err) { logToPanel("SyncError=" + err.message); }
 }
+
+
+
 // ==========================================================
 // SECTION 4: ROUTER EXECUTION SIGNERS & INTERFACE ROUTINES
 // ==========================================================
