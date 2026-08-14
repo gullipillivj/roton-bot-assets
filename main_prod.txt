@@ -93,24 +93,37 @@ function fromTokenUnits(amountStr) {
   } catch(e) { return 0; }
 }
 
+
+// Replace your existing initWeb3AndContracts function with this safe version
 async function initWeb3AndContracts() {
   try {
+    // 1. Prioritize active browser wallet extension signatures
     if (typeof window.ethereum !== 'undefined') {
       web3 = new Web3(window.ethereum);
-    } else {
-      logToPanel("❌ No Web3 Wallet detected. In Read-Only Mode via Node RPC.");
+      logToPanel("🌐 Injected Web3 Provider (window.ethereum) detected.");
+    } 
+    // 2. Fall back cleanly to a public node if the user hasn't connected their wallet yet
+    else {
+      logToPanel("⚠️ No active wallet connection found. Starting in Read-Only Fallback Mode...");
       web3 = new Web3("https://binance.org");
     }
-    fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-    if (!USER_TOKEN_ADDR) return;
-    userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-    const d = await userToken.methods.decimals().call();
-    tokenDecimals = parseInt(d.toString(), 10);
-    logToPanel("Token decimals detected: " + tokenDecimals);
+
+    // Ensure the web3 object compiled perfectly before instantiating contract hooks
+    if (web3) {
+      fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
+      if (USER_TOKEN_ADDR) {
+        userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+        const d = await userToken.methods.decimals().call();
+        tokenDecimals = parseInt(d.toString(), 10);
+        logToPanel("📊 Active token decimals verified: " + tokenDecimals);
+      }
+    }
   } catch (err) { 
-    logToPanel("Contract init tracking error: " + err.message); 
+    logToPanel("❌ Contract Initialization Error: " + err.message); 
   }
 }
+
+
 
 async function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
