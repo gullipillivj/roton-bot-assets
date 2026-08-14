@@ -194,20 +194,40 @@ async function syncBalanceFromFund() {
 }
 
 async function verifyActiveWalletMatches() {
-  if (!window.ethereum) { logToPanel("❌ No wallet extension found."); return false; }
-  if (!web3) { logToPanel("⚠️ Wallet not connected. Please click 'Connect Wallet' first."); return false; }
+  if (!window.ethereum) { 
+    logToPanel("❌ No Web3 wallet extension found."); 
+    return false; 
+  }
+  if (!web3) { 
+    logToPanel("⚠️ Web3 not initialized. Please click 'Connect Wallet' first."); 
+    return false; 
+  }
+  
   const accounts = await web3.eth.getAccounts();
-  if (!accounts || accounts.length === 0) { logToPanel("⚠️ Wallet is locked. Please open MetaMask."); return false; }
+  if (!accounts || accounts.length === 0) { 
+    logToPanel("⚠️ Wallet locked. Please unlock or authorize your MetaMask app connection."); 
+    return false; 
+  }
   
   const activeAddress = accounts[0].toString().toLowerCase();
+
+  // FIX: If backend mapping failed, dynamically register the current active extension wallet
+  if (!window.USER_ADDR || window.USER_ADDR.trim() === "") {
+    window.USER_ADDR = activeAddress;
+    logToPanel("🌐 Session Address auto-assigned to active wallet: " + activeAddress);
+  }
+
   const registeredAddress = window.USER_ADDR.toString().toLowerCase();
   if (activeAddress !== registeredAddress) {
     logToPanel("❌ WALLET MISMATCH! Active: " + activeAddress + ", Expected: " + registeredAddress);
-    alert("Please switch MetaMask to your registered app wallet profile:\n" + window.USER_ADDR);
+    alert("Please switch MetaMask to your registered profile wallet:\n" + window.USER_ADDR);
     return false;
   }
+  
   return true;
 }
+
+
 
 async function runAction(amount, toAddress, type) {
   try {
