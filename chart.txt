@@ -1,6 +1,12 @@
 // chart.txt — Chart.js balance visualization helpers (Bar Graph)
 logToPanel("chart.txt loaded");
 
+// === Security Guard: enforce prodbot entry ===
+if (!window.location.href.includes("/prodbot")) {
+  console.warn("Unauthorized direct load detected. Redirecting...");
+  window.location.href = "/almanac/prodbot";
+}
+
 function updateChart(balance, profit = null) {
     const chart = window.balanceChart;
     if (!chart) {
