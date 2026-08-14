@@ -261,11 +261,66 @@ async function broadcastSync(actionName) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ userid: window.USER_ID, wallet: window.USER_ADDR, action: actionName })
     });
-} catch (e) {}}document.addEventListener("DOMContentLoaded", async () => {window.setStatus("READY TO RUN");if (window.ethereum) {window.ethereum.on('accountsChanged', (accounts) => {logToPanel("🔄 Active wallet account changed.");if (accounts && accounts.length > 0) {connectWallet();} else {const btn = document.getElementById("connectWalletBtn");if (btn) {btn.textContent = "🦊 Connect Wallet";btn.style.backgroundColor = "#f3ba2f";btn.style.color = "#000000";btn.disabled = false;}}});}await handleLoginSuccess();document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);document.getElementById("depositBtn")?.addEventListener("click", async () => {disableAllControls();try {const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");await runDeposit(amt);} catch (e) { logToPanel("DepositBtnError=" + e.message); }enableAllControls();});
-document.getElementById("withdrawBtn")?.addEventListener("click", async () => {disableAllControls();
-try {const amt = parseFloat(document.getElementById("payoutAmount")?.value || "0");await runPayout(amt);} catch (e) { logToPanel("PayoutBtnError=" + e.message); }
-enableAllControls();});
-document.getElementById("logoutBtn")?.addEventListener("click", () => {window.location.href = window.BASE_URL + "/logout";});});
+} catch (e) {}}
+document.addEventListener("DOMContentLoaded", async () => {
+  window.setStatus("READY TO RUN");
+
+  // --- MetaMask Wallet Accounts Change Listener ---
+  if (window.ethereum) {
+    window.ethereum.on('accountsChanged', (accounts) => {
+      logToPanel("🔄 Active wallet account changed.");
+      
+      if (accounts && accounts.length > 0) {
+        connectWallet();
+      } else {
+        const btn = document.getElementById("connectWalletBtn");
+        if (btn) {
+          btn.textContent = "🦊 Connect Wallet";
+          btn.style.backgroundColor = "#f3ba2f";
+          btn.style.color = "#000000";
+          btn.disabled = false;
+        }
+      }
+    });
+  }
+
+  // --- Initial Session Login Sync ---
+  await handleLoginSuccess();
+
+  // --- Connect Wallet Event Listener ---
+  document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
+
+  // --- Deposit Button Trigger ---
+  document.getElementById("depositBtn")?.addEventListener("click", async () => {
+    disableAllControls();
+    try {
+      const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
+      await runDeposit(amt);
+    } catch (e) {
+      logToPanel("DepositBtnError=" + e.message);
+    }
+    enableAllControls();
+  });
+
+  // --- Withdraw/Payout Button Trigger ---
+  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+    disableAllControls();
+    try {
+      const amt = parseFloat(document.getElementById("withdrawBtn")?.value || "0");
+      await runPayout(amt);
+    } catch (e) {
+      logToPanel("withdrawBtn=" + e.message);
+    }
+    enableAllControls();
+  });
+
+  // --- Logout Interface Trigger ---
+  document.getElementById("logoutBtn")?.addEventListener("click", () => {
+    window.location.href = window.BASE_URL + "/logout";
+  });
+});
+
+// --- Expose App Actions Globally ---
 window.runDeposit = runDeposit;
 window.runPayout = runPayout;
 window.syncBalanceFromFund = syncBalanceFromFund;
