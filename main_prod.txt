@@ -9,7 +9,7 @@ window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
 // Verified, working BNB Smart Chain Mainnet RPC
 const web3 = new Web3("https://bsc-dataseed1.binance.org:443");
 
-
+let firsttime = true;
 
 // === Session Validation via Labels ===
 function initSessionFromLabels() {
