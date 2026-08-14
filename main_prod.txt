@@ -271,25 +271,23 @@ async function verifyActiveWalletMatches() {
 
 // === Injected Extension Transaction Router (Fixed & Restored) ===
 // === Injected Extension Transaction Router (With URL & Extension Guards) ===
-// === Modern Web3.js + MetaMask Transaction Approval Router ===
+// === Modern Web3.js + MetaMask Transaction Approval Router (Deadlock Repaired) ===
 async function runWalletAction(amount, type, executionParams = {}) {
   const msgLabel = document.getElementById("pkMsg");
   
   try {
-    // 1. Guard against Insecure HTTP connections over Tunnels
     if (window.location.protocol === "http:" && window.location.hostname.includes("ngrok")) {
       const secureUrl = window.location.href.replace("http://", "https://");
       if (msgLabel) msgLabel.textContent = "Error: Use HTTPS link!";
-      alert(`Security Protection!\nPlease reload your window using HTTPS to let MetaMask run:\n${secureUrl}`);
+      alert(`Security Protection!\nPlease reload using HTTPS:\n${secureUrl}`);
       throw new Error("Insecure HTTP tunnel blocked.");
     }
 
     if (!window.ethereum) {
       if (msgLabel) msgLabel.textContent = "Wallet App Missing!";
-      throw new Error("No window.ethereum detected. Install or unlock MetaMask.");
+      throw new Error("No window.ethereum detected.");
     }
     
-    // 2. Wake up and read the active wallet accounts array
     if (msgLabel) msgLabel.textContent = "Waking up your wallet...";
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
     
@@ -298,39 +296,11 @@ async function runWalletAction(amount, type, executionParams = {}) {
       throw new Error("User denied connection request.");
     }
     
-    // CRUCIAL REPAIR: Extract the raw string address out of the accounts array!
+    //  REPAIR 1: Extract the first account string explicitly out of the array
     const targetUserAccount = accounts[0]; 
     logToPanel(`Connected Account: ${targetUserAccount}`);
 
-    // 3. Automated Chain Check: Force MetaMask to use BNB Smart Chain (0x38 = 56 Mainnet)
-    const activeChainId = await window.ethereum.request({ method: 'eth_chainId' });
-    if (activeChainId !== "0x38" && activeChainId !== 56) {
-      logToPanel("🔄 Wallet on wrong network. Requesting change to BNB Smart Chain...");
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0x38' }],
-        });
-      } catch (switchError) {
-        // If the network isn't configured in their wallet, add it automatically
-        if (switchError.code === 4902) {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: '0x38',
-              chainName: 'BNB Smart Chain Mainnet',
-              nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
-              rpcUrls: ['https://binance.org'],
-              blockExplorerUrls: ['https://bscscan.com']
-            }]
-          });
-        } else {
-          throw switchError;
-        }
-      }
-    }
-
-    // 4. Initialize Core Web3 Contract Objects
+    // Ensure state wrappers are active
     if (!tokenContractInstance || !fundContractInstance) {
       fundContractInstance = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
       tokenContractInstance = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
@@ -338,24 +308,16 @@ async function runWalletAction(amount, type, executionParams = {}) {
 
     const units = toTokenUnits(amount);
     let receipts = [];
-    
-    // 5. Dynamic Fee Appraisals
-    logToPanel("⚡ Calculating real-time gas metrics...");
-    const rawGasPrice = await web3.eth.getGasPrice();
-    const cleanGasPrice = web3.utils.toBN(rawGasPrice).toString();
 
-    // 6. Send Signed Approval Invocations
+    //  REPAIR 2: Hardcode standard safe gas limits to bypass silent estimateGas deadlocks
     if (type === "approve") {
       logToPanel(`Prompting wallet to Approve token allowance...`);
       if (msgLabel) msgLabel.textContent = "Awaiting Approval Signature...";
       
-      const txObject = tokenContractInstance.methods.approve(FUND_ADDRESS, units);
-      const estimatedGas = await txObject.estimateGas({ from: targetUserAccount });
-      
-      const txReceipt = await txObject.send({ 
-        from: targetUserAccount, // Must be string, not array!
-        gas: Math.floor(estimatedGas * 1.2).toString(), // Add 20% safety margin buffer
-        gasPrice: cleanGasPrice
+      const txReceipt = await tokenContractInstance.methods.approve(FUND_ADDRESS, units).send({ 
+        from: targetUserAccount,
+        gas: "80000",        // Hardcoded safe gas limit for BEP20 Approval
+        gasPrice: null       // Letting MetaMask handle the live network gas price automatically
       });
       receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
 
@@ -363,13 +325,10 @@ async function runWalletAction(amount, type, executionParams = {}) {
       logToPanel(`Prompting wallet to execute depositFunds()...`);
       if (msgLabel) msgLabel.textContent = "Awaiting Deposit Signature...";
       
-      const txObject = fundContractInstance.methods.depositFunds(USER_TOKEN_ADDR, units);
-      const estimatedGas = await txObject.estimateGas({ from: targetUserAccount });
-      
-      const txReceipt = await txObject.send({ 
+      const txReceipt = await fundContractInstance.methods.depositFunds(USER_TOKEN_ADDR, units).send({ 
         from: targetUserAccount,
-        gas: Math.floor(estimatedGas * 1.2).toString(), // Add 20% safety margin buffer
-        gasPrice: cleanGasPrice
+        gas: "150000",       // Hardcoded safe gas limit for typical contract deposits
+        gasPrice: null       // Letting MetaMask handle the live network gas price automatically
       });
       receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
     }
@@ -378,15 +337,12 @@ async function runWalletAction(amount, type, executionParams = {}) {
     return { type, results: receipts };
 
   } catch (err) {
-    logToPanel(`❌ Execution Interrupted: ${err.message}`);
-    if (msgLabel) {
-      msgLabel.textContent = err.message.includes("User denied") 
-        ? "Signature Rejected by User" 
-        : "Transaction execution failed.";
-    }
+    logToPanel(`❌ Execution Error: ${err.message}`);
+    if (msgLabel) msgLabel.textContent = "Transaction failed/cancelled.";
     return { error: err.message };
   }
 }
+
 
 
 
