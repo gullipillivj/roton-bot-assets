@@ -278,6 +278,27 @@ async function syncBalanceFromFund() {
   } catch (err) { logToPanel(`SyncError=${err.message}`); }
 }
 
+async function verifyActiveWalletMatches() {
+  if (!window.ethereum) {
+    logToPanel("❌ No wallet extension found. Please open your Web3 wallet app.");
+    return false;
+  }
+  const accounts = await web3.eth.getAccounts();
+  if (accounts.length === 0) {
+    logToPanel("⚠️ Wallet is locked. Please log into your wallet app first.");
+    return false;
+  }
+  const activeAddress = accounts[0].toLowerCase();
+  const registeredAddress = window.USER_ADDR.toLowerCase();
+  if (activeAddress !== registeredAddress) {
+    logToPanel(`❌ WALLET MISMATCH! Active: ${activeAddress}, Expected: ${registeredAddress}`);
+    alert(`Switch to your registered wallet:\n${window.USER_ADDR}`);
+    return false;
+  }
+  return true;
+}
+
+
 // === Transaction Router ===
 async function runAction(amount, fromAddress, toAddress, type) {
   try {
