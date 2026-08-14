@@ -119,49 +119,31 @@ async function initWeb3AndContracts() {
 function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
   
-  // 1. Rigorous checks to verify if a valid, active wallet signer provider is attached
-  // If window.ethereum exists but lacks wallet identifying tags, it is a false positive shell.
-  const hasValidWeb3Extension = (typeof window.ethereum !== 'undefined' && 
-                                 (window.ethereum.isMetaMask || window.ethereum.isTrust || window.ethereum.providers));
-  
-  const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
-  // --- TRIGGER REMIX FALLBACK INTENT PATH ---
-  // Fires if user is on mobile Firefox with NO real active browser extension backend
-  if (!hasValidWeb3Extension && isMobileDevice) {
-    logToPanel("📡 Mobile context (No live extension signer). Executing cross-app native intent...");
-    if (btn) { 
-      btn.textContent = "Launching MetaMask..."; 
-      btn.style.backgroundColor = "#ff8c00"; 
-    }
-    
-    // Format current link parameters safely
-    let cleanUrl = window.location.href.replace(/^https?:\/\//, '');
-    
-    // Official cryptographic universal cross-app redirection bridge path
-    const crossAppIntentPath = "https://app.link" + cleanUrl;
-    
-    // Instantly launch system intent redirect thread to boot the native app
-    window.location.href = crossAppIntentPath;
+  if (typeof window.ethereum === 'undefined') {
+    logToPanel("❌ No Web3 wallet injection interface found.");
+    alert("Please open this layout directly inside your MetaMask Mobile App Browser.");
     return;
   }
 
-  // --- TRIGGER STANDARD RUNTIME EXTENSION PATH ---
-  // Fires if on desktop, inside MetaMask App browser, or using a full extension build
-  if (!hasValidWeb3Extension) {
-    logToPanel("❌ Web3 wallet signer missing. Please install MetaMask or a compatible extension.");
-    alert("No active wallet provider found. Please add an extension or open inside your wallet app.");
-    return;
+  // 1. Visually lock the layout thread right away
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Connecting...";
   }
 
-  if (btn) { btn.disabled = true; btn.textContent = "Connecting..."; }
   logToPanel("📡 Requesting account bridge authorization records...");
 
-  window.ethereum.request({ method: 'eth_requestAccounts', params: [] })
+  // 2. CRITICAL SYNC FIX: Fire the intent bridge instantly inside the click layer.
+  // Bypassing async/await headers preserves user context to show the popup immediately.
+  window.ethereum.request({ 
+    method: 'eth_requestAccounts',
+    params: [] 
+  })
   .then(async (accounts) => {
     if (accounts && accounts.length > 0) {
       const activeAccount = String(accounts[0]); 
       logToPanel("✅ Wallet Authorized: " + activeAccount);
+      
       window.USER_ADDR = activeAccount;
 
       if (btn) {
@@ -171,15 +153,21 @@ function connectWallet() {
         btn.disabled = true;
       }
 
+      // Safe secondary initialization engine wrapping
       web3 = new Web3(window.ethereum);
       fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-      if (USER_TOKEN_ADDR) { userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR); }
+      
+      if (USER_TOKEN_ADDR) {
+        userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+      }
       
       try {
         const d = await userToken.methods.decimals().call({ from: activeAccount });
         tokenDecimals = parseInt(d.toString(), 10) || 18;
         logToPanel("📊 Active Token Decimals: " + tokenDecimals);
-      } catch(decErr) { tokenDecimals = 18; }
+      } catch(decErr) {
+        tokenDecimals = 18; 
+      }
       
       await syncBalanceFromFund();
     }
@@ -194,6 +182,10 @@ function connectWallet() {
     }
   });
 }
+
+
+
+
 
 
 async function handleLoginSuccess() {
