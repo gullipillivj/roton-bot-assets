@@ -128,6 +128,7 @@ async function initWeb3AndContracts() {
 }
 
 // === Dedicated Manual Connection Handler (Mobile Webview Optimized) ===
+// === Dedicated Manual Connection Handler (Pure JSON-RPC Bridge) ===
 async function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
   
@@ -143,29 +144,36 @@ async function connectWallet() {
       btn.textContent = "Connecting...";
     }
 
-    // FIX STEP 1: Request account authorization straight from the native bridge FIRST.
-    // Do NOT instantiate the heavy Web3 network instance before this finishes.
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    logToPanel("📡 Dispatching clean JSON-RPC account query link...");
+
+    // FIX: Completely sidestep the Web3 object engine during authorization handshake
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts',
+      params: [] 
+    });
     
     if (accounts && accounts.length > 0) {
-      const activeAccount = accounts[0];
+      // Safely grab the first confirmed string explicitly from the array
+      const activeAccount = String(accounts[0]); 
       logToPanel("✅ Native Wallet Authorized: " + activeAccount);
       
-      // FIX STEP 2: Safe initialization now that a valid authorized account is available
-      web3 = new Web3(window.ethereum);
-      
-      // Assign session state properties safely
+      // Save data values directly to session framework tracking hooks
       window.USER_ADDR = activeAccount;
 
-      // Update structural visual feedback button texts
       if (btn) {
         btn.textContent = "Connected: " + activeAccount.substring(0, 6) + "..." + activeAccount.substring(activeAccount.length - 4);
         btn.style.backgroundColor = "#28a745"; 
         btn.style.color = "#ffffff";
       }
 
-      // Re-trigger contract configurations and fetch properties smoothly
-      await initWeb3AndContracts();
+      // Initialize Web3 wrapper safely now that permissions have been unlocked
+      web3 = new Web3(window.ethereum);
+      
+      // Set up global parameters sequentially
+      fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
+      if (USER_TOKEN_ADDR) {
+        userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
+      }
       
       try {
         const d = await userToken.methods.decimals().call({ from: activeAccount });
@@ -187,6 +195,8 @@ async function connectWallet() {
     }
   }
 }
+
+
 
 
 async function handleLoginSuccess() {
