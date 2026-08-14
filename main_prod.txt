@@ -33,14 +33,8 @@ const tokenAbi = [
   { "constant": true, "inputs": [{ "name": "account", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
   { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
 ];
-
-
 // ==========================================================
-// SECTION 3: WEB3 CONNECTIVITY ENGINE & DATABASE HANDLERS
-// ==========================================================
-
-// ==========================================================
-// SECTION 3: ACCOUNT-SAFE INITIALIZATION ENGINE
+// SECTION 3: REMIX-STYLE MOBILE HYBRID CONNECTION ENGINE
 // ==========================================================
 
 if (!window.location.href.includes("/prodbot")) {
@@ -101,15 +95,6 @@ function fromTokenUnits(amountStr) {
   } catch(e) { return 0; }
 }
 
-// 1. Safe instance setup — no blocking network calls before connection
-// ==========================================================
-// SECTION 3: FIXED ACCOUNT-SAFE INITIALIZATION ENGINE
-// ==========================================================
-
-// ==========================================================
-// SECTION 3: REMIX-STYLE MOBILE HYBRID CONNECTION ENGINE
-// ==========================================================
-
 async function initWeb3AndContracts() {
   try {
     if (typeof window.ethereum !== 'undefined') {
@@ -135,26 +120,23 @@ function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
   const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // --- REMIX FALLBACK BRIDGE: Triggered if user is on mobile Firefox with NO active extension ---
+  // --- REMIX MOBILE FIREFOX FALLBACK intent bridge ---
   if (typeof window.ethereum === 'undefined' && isMobileDevice) {
-    logToPanel("📡 No extension found. Activating cross-app system handshake intents...");
+    logToPanel("📡 Mobile context without extension. Executing cross-app system handshake...");
     if (btn) { btn.textContent = "Launching MetaMask..."; btn.style.backgroundColor = "#ff8c00"; }
     
-    // Clean up current page address headers safely
     let cleanUrl = window.location.href.replace(/^https?:\/\//, '');
     
-    // Official cryptographic app interaction link path
+    // Fixed official MetaMask deep link scheme wrapper
     const crossAppIntentPath = "https://app.link" + cleanUrl;
     
-    // Execute a synchronous system intent thread. This wakes up MetaMask exactly how Remix does on mobile Firefox!
     window.location.href = crossAppIntentPath;
     return;
   }
 
-  // --- STANDARD EXTENSION BRIDGE: Triggered if user is on Desktop or a Web3 environment ---
   if (typeof window.ethereum === 'undefined') {
     logToPanel("❌ Web3 provider missing. Please install a compatible browser wallet extension.");
-    alert("MetaMask provider instance not found. Please verify your browser profile setup.");
+    alert("MetaMask provider instance not found. Please verify your browser setup.");
     return;
   }
 
@@ -231,11 +213,8 @@ async function syncBalanceFromFund() {
     window.SolidarityFundBalance = balanceFloat;
   } catch (err) { logToPanel("SyncError=" + err.message); }
 }
-
-
-
 // ==========================================================
-// SECTION 4: ROUTER EXECUTION SIGNERS & INTERFACE ROUTINES
+// SECTION 4: ROUTER EXECUTION CONTROLLER & WRAPPERS
 // ==========================================================
 
 async function verifyActiveWalletMatches() {
@@ -247,7 +226,6 @@ async function verifyActiveWalletMatches() {
   
   const activeAddress = accounts[0].toString().toLowerCase();
 
-  // Dynamic self-assignment failover check
   if (!window.USER_ADDR || window.USER_ADDR.trim() === "") {
     window.USER_ADDR = activeAddress;
     logToPanel("🌐 Session Address auto-assigned to active wallet: " + activeAddress);
@@ -280,8 +258,9 @@ async function runAction(amount, toAddress, type) {
       const depositReceipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, units).send({ from: userWalletAddress });
       receipts.push({ tx_hash: depositReceipt.transactionHash.toString(), status: depositReceipt.status });
     } else if (type === "payout") {
-      logToPanel("Prompting Contract executeSolidarityPayout() via MetaMask...");
-      const payoutReceipt = await fund.methods.executeSolidarityPayout(units, USER_TOKEN_ADDR, "0").send({ from: userWalletAddress });
+      logToPanel("Prompting Contract swapToDonation() via MetaMask...");
+      // Maps directly to your Solidity swapToDonation interface function call name
+      const payoutReceipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, units, "0").send({ from: userWalletAddress });
       receipts.push({ tx_hash: payoutReceipt.transactionHash.toString(), status: payoutReceipt.status });
     }
     return { type: type, results: receipts };
@@ -307,7 +286,7 @@ async function runDeposit(amount) {
     const depositNet = await runAction(netAmount, FUND_ADDRESS, "deposit");
     if (!depositNet || depositNet.error) return logToPanel("❌ Wallet Deposit Failed: " + (depositNet ? depositNet.error : "Failed"));
 
-    if (depositNet.results && depositNet.results && depositNet.results.tx_hash) {
+    if (depositNet.results && depositNet.results.tx_hash) {
       logToPanel("✅ On-Chain Deposit Complete! Tx Hash: " + depositNet.results.tx_hash);
     }
     await syncBalanceFromFund();
@@ -321,12 +300,12 @@ async function runPayout(amount) {
   if (!matches) return;
   
   try {
-    logToPanel("Initiating Payout Transaction request...");
+    logToPanel("Initiating Swap Transaction request...");
     const payoutResult = await runAction(amount, FUND_ADDRESS, "payout");
-    if (!payoutResult || payoutResult.error) return logToPanel("❌ Payout Failed: " + (payoutResult ? payoutResult.error : "Failed"));
+    if (!payoutResult || payoutResult.error) return logToPanel("❌ Swap Failed: " + (payoutResult ? payoutResult.error : "Failed"));
     
-    if (payoutResult.results && payoutResult.results && payoutResult.results.tx_hash) {
-      logToPanel("✅ On-Chain Payout Complete! Tx Hash: " + payoutResult.results.tx_hash);
+    if (payoutResult.results && payoutResult.results.tx_hash) {
+      logToPanel("✅ On-Chain Swap Complete! Tx Hash: " + payoutResult.results.tx_hash);
     }
     await syncBalanceFromFund();
     await broadcastSync("payout_sync");
@@ -343,19 +322,9 @@ async function broadcastSync(actionName) {
   } catch (e) {}
 }
 
-// --- DOM Central Listener Framework Layout Mapping ---
-// ==========================================================
-// SECTION 4: ROUTER EXECUTION & EVENT WRAPPERS
-// ==========================================================
-
-d// ==========================================================
-// SECTION 4: ROUTER EXECUTION CONTROLLER & WRAPPERS
-// ==========================================================
-
 document.addEventListener("DOMContentLoaded", async () => {
   window.setStatus("READY TO RUN");
 
-  // Automatically process account links if window.ethereum becomes active on reload
   if (window.ethereum) {
     window.ethereum.on('accountsChanged', (accounts) => {
       logToPanel("🔄 Active wallet account switched via extension.");
@@ -404,3 +373,4 @@ window.runDeposit = runDeposit;
 window.runPayout = runPayout;
 window.syncBalanceFromFund = syncBalanceFromFund;
 window.handleLoginSuccess = handleLoginSuccess;
+
