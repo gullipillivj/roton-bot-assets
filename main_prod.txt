@@ -116,6 +116,8 @@ async function initWeb3AndContracts() {
   }
 }
 
+
+
 function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
   
@@ -125,7 +127,6 @@ function connectWallet() {
     return;
   }
 
-  // 1. Visually lock the layout thread right away
   if (btn) {
     btn.disabled = true;
     btn.textContent = "Connecting...";
@@ -133,15 +134,15 @@ function connectWallet() {
 
   logToPanel("📡 Requesting account bridge authorization records...");
 
-  // 2. CRITICAL SYNC FIX: Fire the intent bridge instantly inside the click layer.
-  // Bypassing async/await headers preserves user context to show the popup immediately.
+  // Fire intent bridge synchronously to preserve click gesture context
   window.ethereum.request({ 
     method: 'eth_requestAccounts',
     params: [] 
   })
   .then(async (accounts) => {
-    if (accounts && accounts.length > 0) {
-      const activeAccount = String(accounts[0]); 
+    // FIX: Rigorously verify the array exists and explicitly read the first index [0]
+    if (accounts && accounts.length > 0 && accounts[0]) {
+      const activeAccount = String(accounts[0]).toLowerCase().trim(); 
       logToPanel("✅ Wallet Authorized: " + activeAccount);
       
       window.USER_ADDR = activeAccount;
@@ -153,7 +154,7 @@ function connectWallet() {
         btn.disabled = true;
       }
 
-      // Safe secondary initialization engine wrapping
+      // Safe secondary initialization wrapping
       web3 = new Web3(window.ethereum);
       fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
       
@@ -170,6 +171,8 @@ function connectWallet() {
       }
       
       await syncBalanceFromFund();
+    } else {
+      throw new Error("Empty accounts array returned from provider interface hook.");
     }
   })
   .catch((err) => {
@@ -182,8 +185,6 @@ function connectWallet() {
     }
   });
 }
-
-
 
 
 
