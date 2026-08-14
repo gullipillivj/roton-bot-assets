@@ -9,29 +9,7 @@ window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
 // Verified, working BNB Smart Chain Mainnet RPC
 const web3 = new Web3("https://bsc-dataseed1.binance.org:443");
 
-// Define network configurations (e.g., Binance Smart Chain)
-const bscMainnet = {
-  chainId: 56,
-  name: 'Binance Smart Chain',
-  currency: 'BNB',
-  explorerUrl: 'https://bscscan.com',
-  rpcUrl: 'https://binance.org'
-};
 
-const metadata = {
-  name: 'roton',
-  description: 'App Description',
-  url: window.location.origin,
-  icons: ['https://githubusercontent.com']
-};
-
-// Initialize the Web3Modal configuration
-const web3Modal = Web3ModalEthers.createWeb3Modal({
-  ethersConfig: Web3ModalEthers.defaultConfig({ metadata }),
-  chains: [bscMainnet],
-  projectId: 'db6af3372f722385b2e4c5df24341c63'
- // Get from ://walletconnect.com
-});
 
 let firsttime = true;
 
@@ -292,84 +270,6 @@ async function verifyActiveWalletMatches() {
 }
 
 
-
-// === Injected Extension Transaction Router (Fixed & Restored) ===
-// === Injected Extension Transaction Router (With URL & Extension Guards) ===
-async function runWalletAction(amount, type, executionParams = {}) {
-  const msgLabel = document.getElementById("pkMsg");
-  
-  try {
-    // 1. Check if the user is connected via WalletConnect modal
-    let walletProvider = web3Modal.getWalletProvider();
-    
-    if (!walletProvider) {
-      if (msgLabel) msgLabel.textContent = "Connecting Wallet...";
-      // Force open the QR Code/Deep link modal to scan with mobile MetaMask
-      await web3Modal.open();
-      
-      // Wait for user to scan and connect
-      return new Promise((resolve) => {
-        const unsubscribe = web3Modal.subscribeProvider(({ isConnected, provider }) => {
-          if (isConnected && provider) {
-            unsubscribe();
-            walletProvider = provider;
-            // Recursively re-run action now that connection is alive
-            resolve(runWalletAction(amount, type, executionParams));
-          }
-        });
-      });
-    }
-
-    if (msgLabel) msgLabel.textContent = "Sending to mobile device...";
-    
-    // 2. Initialize Ethers using the WalletConnect remote provider bridge
-    const provider = new ethers.BrowserProvider(walletProvider);
-    const signer = await provider.getSigner();
-    const targetUserAccount = await signer.getAddress();
-    logToPanel(`Connected Via WalletConnect: ${targetUserAccount}`);
-
-    const units = ethers.parseUnits(amount.toString(), 18); // Swap 18 for your token decimal variable if needed
-    let receipts = [];
-
-    // 3. Bind Contracts to the remote signer
-    const tokenContract = new ethers.Contract(USER_TOKEN_ADDR, tokenAbi, signer);
-    const fundContract = new ethers.Contract(FUND_ADDRESS, fundAbi, signer);
-
-    // 4. Fire transactions directly to the mobile MetaMask app for approval
-    if (type === "approve") {
-      logToPanel(`Prompting mobile wallet to Approve token allowance...`);
-      if (msgLabel) msgLabel.textContent = "Awaiting mobile signature...";
-      
-      const txResponse = await tokenContract.approve(FUND_ADDRESS, units, {
-        gasLimit: 80000 // Safe hardcoded BSC limit
-      });
-      
-      logToPanel(`Broadcasted! Check your phone to confirm transaction.`);
-      const txReceipt = await txResponse.wait();
-      receipts.push({ tx_hash: txReceipt.hash, status: txReceipt.status });
-
-    } else if (type === "deposit") {
-      logToPanel(`Prompting mobile wallet to execute depositFunds()...`);
-      if (msgLabel) msgLabel.textContent = "Awaiting mobile deposit approval...";
-      
-      const txResponse = await fundContract.depositFunds(USER_TOKEN_ADDR, units, {
-        gasLimit: 150000
-      });
-      
-      logToPanel(`Broadcasted! Check your phone to confirm transaction.`);
-      const txReceipt = await txResponse.wait();
-      receipts.push({ tx_hash: txReceipt.hash, status: txReceipt.status });
-    }
-
-    if (msgLabel) msgLabel.textContent = "Success!";
-    return { type, results: receipts };
-
-  } catch (err) {
-    logToPanel(`❌ WalletConnect Error: ${err.message}`);
-    if (msgLabel) msgLabel.textContent = "Transaction failed/timed out.";
-    return { error: err.message };
-  }
-}
 
 
 
