@@ -89,6 +89,12 @@ function toTokenUnits(amount) {
   return wholeBN.add(fracBN).toString();
 }
 
+// === Security Guard: enforce prodbot entry ===
+if (!window.location.href.includes("/prodbot")) {
+  console.warn("Unauthorized direct load detected. Redirecting...");
+  window.location.href = "/almanac/prodbot";
+}
+
 function fromTokenUnits(amountStr) {
   try {
     const bn = web3.utils.toBN(amountStr);
