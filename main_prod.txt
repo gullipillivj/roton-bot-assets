@@ -29,7 +29,7 @@ function initSessionFromLabels() {
 
 document.addEventListener("DOMContentLoaded", initSessionFromLabels);
 
-let firsttime = false;
+
 let tokenDecimals = 18; 
 
 window.cumulativePnL = 0;
