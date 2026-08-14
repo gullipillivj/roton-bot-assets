@@ -269,6 +269,28 @@ async function commitFinalBalanceFromFund() {
     }
 }
 
+
+// === FUNCTION 3 & 4: Live Swap / Withdrawal Routine ===
+async function runSwap(amount, amountOutMin = "0") {
+  if (!amount || amount <= 0) return logToPanel("❌ Invalid swap amount");
+  
+  try {
+    logToPanel(`Initiating contract Swap/Payout sequence for ${amount} units...`);
+    const swapResult = await runWalletAction(amount, "swap", { amountOutMin });
+    
+    if (!swapResult || swapResult.error) {
+      return logToPanel(`❌ Wallet Swap Signature Rejected/Failed: ${swapResult?.error}`);
+    }
+
+    if (swapResult.results && swapResult.results[0] && swapResult.results[0].tx_hash) {
+      logToPanel(`🎉 Swap Transaction Successfully Confirmed! Hash: ${swapResult.results[0].tx_hash}`);
+    }
+
+    await syncBalanceFromFund();
+    await broadcastSync("swap_sync");
+  } catch (err) { logToPanel(`❌ SwapExecutionError = ${err.message}`); }
+}
+
 // === Simulation Engine ===
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
