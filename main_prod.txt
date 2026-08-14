@@ -118,25 +118,39 @@ async function initWeb3AndContracts() {
 
 function connectWallet() {
   const btn = document.getElementById("connectWalletBtn");
+  
+  // 1. Rigorous checks to verify if a valid, active wallet signer provider is attached
+  // If window.ethereum exists but lacks wallet identifying tags, it is a false positive shell.
+  const hasValidWeb3Extension = (typeof window.ethereum !== 'undefined' && 
+                                 (window.ethereum.isMetaMask || window.ethereum.isTrust || window.ethereum.providers));
+  
   const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
-  // --- REMIX MOBILE FIREFOX FALLBACK intent bridge ---
-  if (typeof window.ethereum === 'undefined' && isMobileDevice) {
-    logToPanel("📡 Mobile context without extension. Executing cross-app system handshake...");
-    if (btn) { btn.textContent = "Launching MetaMask..."; btn.style.backgroundColor = "#ff8c00"; }
+  // --- TRIGGER REMIX FALLBACK INTENT PATH ---
+  // Fires if user is on mobile Firefox with NO real active browser extension backend
+  if (!hasValidWeb3Extension && isMobileDevice) {
+    logToPanel("📡 Mobile context (No live extension signer). Executing cross-app native intent...");
+    if (btn) { 
+      btn.textContent = "Launching MetaMask..."; 
+      btn.style.backgroundColor = "#ff8c00"; 
+    }
     
+    // Format current link parameters safely
     let cleanUrl = window.location.href.replace(/^https?:\/\//, '');
     
-    // Fixed official MetaMask deep link scheme wrapper
+    // Official cryptographic universal cross-app redirection bridge path
     const crossAppIntentPath = "https://app.link" + cleanUrl;
     
+    // Instantly launch system intent redirect thread to boot the native app
     window.location.href = crossAppIntentPath;
     return;
   }
 
-  if (typeof window.ethereum === 'undefined') {
-    logToPanel("❌ Web3 provider missing. Please install a compatible browser wallet extension.");
-    alert("MetaMask provider instance not found. Please verify your browser setup.");
+  // --- TRIGGER STANDARD RUNTIME EXTENSION PATH ---
+  // Fires if on desktop, inside MetaMask App browser, or using a full extension build
+  if (!hasValidWeb3Extension) {
+    logToPanel("❌ Web3 wallet signer missing. Please install MetaMask or a compatible extension.");
+    alert("No active wallet provider found. Please add an extension or open inside your wallet app.");
     return;
   }
 
@@ -180,6 +194,7 @@ function connectWallet() {
     }
   });
 }
+
 
 async function handleLoginSuccess() {
   try {
