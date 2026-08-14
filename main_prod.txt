@@ -267,33 +267,52 @@ async function verifyActiveWalletMatches() {
   return true;
 }
 
+
+
 // === Injected Extension Transaction Router (Fixed & Restored) ===
+// === Injected Extension Transaction Router (With URL & Extension Guards) ===
 async function runWalletAction(amount, type, executionParams = {}) {
+  // Target your on-screen message label if it exists
+  const msgLabel = document.getElementById("pkMsg");
+  
   try {
+    // 1. Check if the user is on an unencrypted connection
+    if (window.location.protocol === "http:" && window.location.hostname.includes("ngrok")) {
+      const secureUrl = window.location.href.replace("http://", "https://");
+      const urlWarning = "⚠️ CONNECTION INSECURE: MetaMask is hidden. Please refresh using HTTPS.";
+      
+      if (msgLabel) msgLabel.textContent = "Error: Use HTTPS link!";
+      logToPanel(urlWarning);
+      alert(`Security Rule!\nWeb3 wallets require an HTTPS connection to trigger popups over tunnels.\n\nPlease change your URL bar to:\n${secureUrl}`);
+      throw new Error("Insecure HTTP connection over Ngrok tunnel detected.");
+    }
+
     if (!window.ethereum) {
+      if (msgLabel) msgLabel.textContent = "Wallet Extension Missing!";
       throw new Error("No browser wallet extension detected. Please install or unlock MetaMask.");
     }
     
-    // 1. Verify if account alignment is active
-    const accounts = await web3.eth.getAccounts();
-    if (accounts.length === 0) {
-      // Explicitly request user account binding if it dropped out
-      const structureAccounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (structureAccounts.length === 0) throw new Error("Wallet is locked or unauthorized.");
-      accounts[0] = structureAccounts[0];
+    // 2. Clear any lingering error messages if wallet is found
+    if (msgLabel) msgLabel.textContent = "Connecting to wallet app...";
+    
+    // 3. Request account access explicitly
+    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    if (!accounts || accounts.length === 0) {
+      if (msgLabel) msgLabel.textContent = "Wallet access denied.";
+      throw new Error("Wallet is locked or unauthorized.");
     }
+    
+    if (msgLabel) msgLabel.textContent = "Transaction prompted. Check extension!";
     
     const currentAccount = accounts[0];
     const units = toTokenUnits(amount);
     let receipts = [];
 
-    // Initialize instances if they haven't been bound yet
     if (!tokenContractInstance || !fundContractInstance) {
       fundContractInstance = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
       tokenContractInstance = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
     }
 
-    // 2. Route Operations to window.ethereum Intercepts
     if (type === "approve") {
       logToPanel(`Prompting wallet to Approve token allowance...`);
       const txReceipt = await tokenContractInstance.methods.approve(FUND_ADDRESS, units)
@@ -305,21 +324,19 @@ async function runWalletAction(amount, type, executionParams = {}) {
       const txReceipt = await fundContractInstance.methods.depositFunds(USER_TOKEN_ADDR, units)
         .send({ from: currentAccount });
       receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
-
-    } else if (type === "swap" || type === "withdraw") {
-      logToPanel(`Prompting wallet to execute executeSolidarityPayout()...`);
-      const minOut = executionParams.amountOutMin || "0";
-      const txReceipt = await fundContractInstance.methods.executeSolidarityPayout(units, USER_TOKEN_ADDR, minOut)
-        .send({ from: currentAccount });
-      receipts.push({ tx_hash: txReceipt.transactionHash, status: txReceipt.status });
     }
 
+    if (msgLabel) msgLabel.textContent = "Transaction Successful!";
     return { type, results: receipts };
-  } catch (err) {
-    return { error: err.message };
 
+  } catch (err) {
+    if (msgLabel && !msgLabel.textContent.includes("Error")) {
+      msgLabel.textContent = "Transaction cancelled/failed.";
+    }
+    return { error: err.message };
+  }
 }
-}
+
 
 
 
