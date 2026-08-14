@@ -156,17 +156,37 @@ async function connectWallet() {
 async function handleLoginSuccess() {
   try {
     const resp = await fetch("/clients");
+    if (!resp.ok) {
+      logToPanel("⚠️ Backend session missing. Please re-login at /login");
+      return;
+    }
+    
     const data = await resp.json();
+    // Catch cases where data is malformed or returns an error block
+    if (data.error) {
+      logToPanel("⚠️ Session verification failed: " + JSON.stringify(data.error));
+      return;
+    }
+
     const clients = data.clients || [];
     const client = clients.find(c => (c.profile && c.profile.name ? c.profile.name.trim() : "") === window.USER_ID);
+    
     if (client && client.wallet) {
       window.USER_ADDR = client.wallet.address || window.USER_ADDR;
       USER_TOKEN_ADDR = client.wallet.token_address || "0x55d398326f99059ff775485246999027b3197955";
+      logToPanel("✅ Profile synced for user: " + window.USER_ID);
+    } else {
+      logToPanel("⚠️ Wallet profile not found in client database mapping.");
     }
+
     await initWeb3AndContracts();
     await syncBalanceFromFund();
-  } catch (err) { logToPanel("LoginSuccess Sync Error: " + err.message); }
+  } catch (err) { 
+    logToPanel("LoginSuccess Sync Error: " + err.message); 
+  }
 }
+
+
 
 async function syncBalanceFromFund() {
   try {
