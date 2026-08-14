@@ -97,7 +97,9 @@ function fromTokenUnits(amountStr) {
     const rem = bn.mod(factor).toString().padStart(tokenDecimals, "0");
     return parseFloat(`${whole}.${rem}`);
   } catch { return 0; }
-}// === Sync Engines ===
+}
+
+// === Sync Engines ===
 async function initWeb3AndContracts() {
   try {
     fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
@@ -139,14 +141,6 @@ async function syncBalanceFromFund() {
 // === Transaction Router ===
 // main_prod.txt — Consolidated Frontend (BNB Smart Chain Optimized)
 logToPanel("main_prod.txt loaded (BSC Mode Active)");
-
-// === Global Defaults ===
-window.USER_ID   = window.USER_ID   || "mockuser1";
-window.USER_ADDR = window.USER_ADDR || "";   
-window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
-
-// Verified, working BNB Smart Chain Mainnet RPC
-const web3 = new Web3("https://bsc-dataseed1.binance.org:443");
 
 
 
