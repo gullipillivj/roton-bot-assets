@@ -1,7 +1,29 @@
 // ==========================================================
 // SECTION 2: GLOBAL APPLICATION SCOPE INITIALIZATION CONFIG
 // ==========================================================
-logToPanel("main_prod.txt loaded (BSC Mode Active)");
+logToPanel("✅ main_prod.txt started");
+if (typeof appKit === "undefined") {
+  logToPanel("❌ appKit is undefined at load");
+} else {
+  logToPanel("✅ appKit object detected");
+}
+
+if (typeof window.WalletConnectAppKit !== "undefined") {
+  window.appKit = new window.WalletConnectAppKit.AppKit({
+    projectId: "db6af3372f722385b2e4c5df24341c63",
+    metadata: {
+      name: "Roton Systems",
+      description: "AI-powered trading bot",
+      url: "https://roton.store",
+      icons: ["https://roton.store/static/roton.png"]
+    }
+  });
+  logToPanel("✅ appKit initialized");
+} else {
+  logToPanel("❌ WalletConnectAppKit not loaded yet");
+}
+
+
 
 window.USER_ID   = window.USER_ID   || "mockuser1";
 window.USER_ADDR = window.USER_ADDR || "";   
@@ -161,6 +183,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("withdrawBtn")?.addEventListener("click", async () => { /* call runPayout */ });
   document.getElementById("logoutBtn")?.addEventListener("click", () => { window.location.href = window.BASE_URL + "/logout"; });
 });
+
+
+
 
 window.connectWallet = connectWallet;
 window.runDeposit = runDeposit;
