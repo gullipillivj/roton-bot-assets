@@ -169,6 +169,24 @@ async function runAction(amount, toAddress, type) {
 async function runDeposit(amount) { /* same as before, calls runAction("approve"/"deposit") */ }
 async function runPayout(amount) { /* same as before, calls runAction("payout") */ }
 
+//load app kit before 
+window.addEventListener("load", () => {
+  if (typeof window.WalletConnectAppKit !== "undefined") {
+    window.appKit = new window.WalletConnectAppKit.AppKit({
+      projectId: "db6af3372f722385b2e4c5df24341c63",
+      metadata: {
+        name: "Roton Systems",
+        description: "AI-powered trading bot",
+        url: "https://roton.store",
+        icons: ["https://roton.store/static/roton.png"]
+      }
+    });
+    logToPanel("✅ appKit initialized after load");
+  } else {
+    logToPanel("❌ WalletConnectAppKit not loaded yet");
+  }
+});
+
 // ==========================================================
 // SECTION 5: DOM EVENT BINDINGS
 // ==========================================================
