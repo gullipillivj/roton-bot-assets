@@ -178,12 +178,28 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.setStatus("READY TO RUN");
   await handleLoginSuccess();
 
-  document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
-  document.getElementById("depositBtn")?.addEventListener("click", async () => { /* call runDeposit */ });
-  document.getElementById("withdrawBtn")?.addEventListener("click", async () => { /* call runPayout */ });
-  document.getElementById("logoutBtn")?.addEventListener("click", () => { window.location.href = window.BASE_URL + "/logout"; });
-});
+  const btn = document.getElementById("connectWalletBtn");
+  if (btn) {
+    logToPanel("✅ connectWalletBtn found, binding click");
+    btn.addEventListener("click", connectWallet);
+  } else {
+    logToPanel("❌ connectWalletBtn not found in DOM");
+  }
 
+  document.getElementById("depositBtn")?.addEventListener("click", async () => {
+    const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
+    await runDeposit(amt);
+  });
+
+  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+    const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
+    await runPayout(amt);
+  });
+
+  document.getElementById("logoutBtn")?.addEventListener("click", () => {
+    window.location.href = window.BASE_URL + "/logout";
+  });
+});
 
 
 
