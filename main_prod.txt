@@ -95,95 +95,63 @@ function fromTokenUnits(amountStr) {
   } catch(e) { return 0; }
 }
 
+
+
+// === WalletConnect AppKit Integration ===
+import { AppKit } from "@walletconnect/appkit";
+
+const appKit = new AppKit({
+  projectId: "db6af3372f722385b2e4c5df24341c63",  // Roton Systems project ID
+  metadata: {
+    name: "Roton Systems",
+    description: "AI-powered trading bot with secure wallet integration",
+    url: "https://roton.store",
+    icons: ["https://roton.store/static/roton.png"]
+  }
+});
+
+let provider = null;
+let web3 = null;
+
+// Initialize Web3 + Contracts using AppKit provider
 async function initWeb3AndContracts() {
   try {
-    if (typeof window.ethereum !== 'undefined') {
-      web3 = new Web3(window.ethereum);
-      logToPanel("🌐 Injected Web3 Provider verified.");
-    } else {
-      logToPanel("⚠️ External browser environment. Initializing fallback node RPC...");
-      web3 = new Web3("https://binance.org");
-    }
+    provider = appKit.getProvider();
+    web3 = new Web3(provider);
+    logToPanel("🌐 WalletConnect AppKit provider initialized.");
 
-    if (web3) {
-      fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-      if (USER_TOKEN_ADDR) {
-        userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-      }
+    fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
+    if (USER_TOKEN_ADDR) {
+      userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
     }
-  } catch (err) { 
-    logToPanel("❌ Contract Config Error: " + err.message); 
+  } catch (err) {
+    logToPanel("❌ Contract Config Error: " + err.message);
   }
 }
 
-
-
-function connectWallet() {
-  const btn = document.getElementById("connectWalletBtn");
-  
-  if (typeof window.ethereum === 'undefined') {
-    logToPanel("❌ No Web3 wallet injection interface found.");
-    alert("Please open this layout directly inside your MetaMask Mobile App Browser.");
-    return;
-  }
-
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = "Connecting...";
-  }
-
-  logToPanel("📡 Requesting account bridge authorization records...");
-
-  // Fire intent bridge synchronously to preserve click gesture context
-  window.ethereum.request({ 
-    method: 'eth_requestAccounts',
-    params: [] 
-  })
-  .then(async (accounts) => {
-    // FIX: Rigorously verify the array exists and explicitly read the first index [0]
-    if (accounts && accounts.length > 0 && accounts[0]) {
-      const activeAccount = String(accounts[0]).toLowerCase().trim(); 
-      logToPanel("✅ Wallet Authorized: " + activeAccount);
-      
+// Universal wallet connection (works for MetaMask, Trust, Coinbase, etc.)
+async function connectWallet() {
+  try {
+    const session = await appKit.connect();
+    if (session && session.accounts && session.accounts.length > 0) {
+      const activeAccount = session.accounts[0];
       window.USER_ADDR = activeAccount;
+      logToPanel("✅ Wallet Connected: " + activeAccount);
 
+      const btn = document.getElementById("connectWalletBtn");
       if (btn) {
-        btn.textContent = "Connected: " + activeAccount.substring(0, 6) + "..." + activeAccount.substring(activeAccount.length - 4);
-        btn.style.backgroundColor = "#28a745"; 
+        btn.textContent = "Connected: " + activeAccount.substring(0, 6) + "..." + activeAccount.slice(-4);
+        btn.style.backgroundColor = "#28a745";
         btn.style.color = "#ffffff";
         btn.disabled = true;
       }
 
-      // Safe secondary initialization wrapping
-      web3 = new Web3(window.ethereum);
-      fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-      
-      if (USER_TOKEN_ADDR) {
-        userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-      }
-      
-      try {
-        const d = await userToken.methods.decimals().call({ from: activeAccount });
-        tokenDecimals = parseInt(d.toString(), 10) || 18;
-        logToPanel("📊 Active Token Decimals: " + tokenDecimals);
-      } catch(decErr) {
-        tokenDecimals = 18; 
-      }
-      
+      await initWeb3AndContracts();
       await syncBalanceFromFund();
-    } else {
-      throw new Error("Empty accounts array returned from provider interface hook.");
     }
-  })
-  .catch((err) => {
-    logToPanel("❌ Wallet Connection Error: " + err.message);
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = "🔗 Connect Wallet";
-      btn.style.backgroundColor = "#f3ba2f";
-      btn.style.color = "#000000";
-    }
-  });
+  } catch (err) {
+    logToPanel("❌ WalletConnect Error: " + err.message);
+  }
 }
 
 
