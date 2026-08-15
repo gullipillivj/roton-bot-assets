@@ -98,25 +98,14 @@ function fromTokenUnits(amountStr) {
 
 
 // === WalletConnect AppKit Integration ===
-import { AppKit } from "@walletconnect/appkit";
+// === WalletConnect AppKit Integration ===
+// (AppKit is already loaded via CDN in your HTML)
 
-const appKit = new AppKit({
-  projectId: "db6af3372f722385b2e4c5df24341c63",  // Roton Systems project ID
-  metadata: {
-    name: "Roton Systems",
-    description: "AI-powered trading bot with secure wallet integration",
-    url: "https://roton.store",
-    icons: ["https://roton.store/static/roton.png"]
-  }
-});
+let web3, fund, userToken;
 
-let provider = null;
-let web3 = null;
-
-// Initialize Web3 + Contracts using AppKit provider
 async function initWeb3AndContracts() {
   try {
-    provider = appKit.getProvider();
+    const provider = appKit.getProvider();
     web3 = new Web3(provider);
     logToPanel("🌐 WalletConnect AppKit provider initialized.");
 
@@ -129,11 +118,11 @@ async function initWeb3AndContracts() {
   }
 }
 
-// Universal wallet connection (works for MetaMask, Trust, Coinbase, etc.)
 async function connectWallet() {
+  logToPanel("🔗 connectWallet() triggered");
   try {
     const session = await appKit.connect();
-    if (session && session.accounts && session.accounts.length > 0) {
+    if (session && session.accounts.length > 0) {
       const activeAccount = session.accounts[0];
       window.USER_ADDR = activeAccount;
       logToPanel("✅ Wallet Connected: " + activeAccount);
