@@ -27,7 +27,7 @@ if (typeof window.WalletConnectAppKit !== "undefined") {
 
 window.USER_ID   = window.USER_ID   || "mockuser1";
 window.USER_ADDR = window.USER_ADDR || "";   
-window.BASE_URL  = window.BASE_URL  || "https://ngrok-free.dev";
+window.BASE_URL  = window.BASE_URL  || "https://roton.store";
 
 
 let tokenDecimals = 18; 
