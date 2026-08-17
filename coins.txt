@@ -25,11 +25,7 @@ async function getBinancePairs() {
   }
 }
 
-// === Security Guard: enforce prodbot entry ===
-if (!window.location.href.includes("/prodbot")) {
-  console.warn("Unauthorized direct load detected. Redirecting...");
-  window.location.href = "/almanac/prodbot";
-}
+
 
 async function getBinanceStats(symbol) {
   try {
