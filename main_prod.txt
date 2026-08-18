@@ -14,6 +14,11 @@ window.isBotRunning = false;
 const FUND_ADDRESS    = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
 const USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955";
 
+// --- Redirect if not logged in ---
+if (!window.USER_ID || window.USER_ID === "mockuser1") {
+  window.location.href = window.BASE_URL + "/login";
+}
+
 // --- ABI Definitions ---
 const fundAbi = [
   { "inputs":[{"name":"token","type":"address"},{"name":"amount","type":"uint256"}],
@@ -58,25 +63,20 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     return;
   }
 
-  // Get user wallet
   const accounts = await web3.eth.getAccounts();
   const userWallet = accounts[0];
 
-  // Balance before deposit
   const beforeBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
   logToPanel(`📊 Contract balance before deposit: ${beforeBal}`);
 
   try {
-    // Approve + Deposit
     await userToken.methods.approve(FUND_ADDRESS, toTokenUnits(amt)).send({ from: userWallet });
     const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(amt)).send({ from: userWallet });
     logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
 
-    // Balance after deposit
     const afterBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
     logToPanel(`📊 Contract balance after deposit: ${afterBal}`);
 
-    // Delta check
     const delta = afterBal - beforeBal;
     if (delta > 0) {
       logToPanel(`🎉 Deposit confirmed! Amount credited: ${delta}`);
@@ -88,24 +88,22 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   }
 });
 
+document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+  const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
   const accounts = await web3.eth.getAccounts();
   const userWallet = accounts[0];
 
-  // Balance before withdrawal
   const beforeBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
   logToPanel(`📊 Contract balance before withdrawal: ${beforeBal}`);
 
   try {
-    // Execute payout
     const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, toTokenUnits(amt), "0")
       .send({ from: userWallet });
     logToPanel(`✅ Withdrawal Tx: ${receipt.transactionHash}`);
 
-    // Balance after withdrawal
     const afterBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
     logToPanel(`📊 Contract balance after withdrawal: ${afterBal}`);
 
-    // Delta check
     const delta = beforeBal - afterBal;
     if (delta > 0) {
       logToPanel(`🎉 Withdrawal confirmed! Amount debited: ${delta}`);
@@ -117,36 +115,62 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   }
 });
 
-// --- Bot Controls ---
-<div id="depisitmsg" class="status-label" 
-     style="color:yellow; background-color:#1a1f2e; padding:12px; border-radius:8px; 
-            box-shadow:0 0 10px rgba(243,186,47,0.7); margin-top:15px; font-size:16px;">
-</div>
-
-
+// --- Deposit Message + Copy ---
 document.addEventListener("DOMContentLoaded", () => {
+  const walletname = new URLSearchParams(window.location.search).get("walletname") || "Wallet";
+  const wallet = new URLSearchParams(window.location.search).get("wallet") || "";
+  const contractAddr = FUND_ADDRESS;
+  const depositMsg = document.getElementById("depisitmsg");
+
+  if (depositMsg) {
+    depositMsg.innerHTML = `
+      Deposit from your wallet — <b>${walletname}</b> (${wallet}) —
+      into contract address 
+      <span style="color:#f3ba2f; font-weight:bold;">${contractAddr}</span>
+      <button id="copyContractBtn" class="copy-icon" title="Copy address">📋</button>
+      and enter your transaction ID.
+    `;
+  }
+
+  document.getElementById("copyContractBtn")?.addEventListener("click", () => {
+    navigator.clipboard.writeText(contractAddr);
+    alert("✅ Contract address copied!");
+  });
+
+  // Bot controls
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
-
-  document.getElementById("depositBtn")?.addEventListener("click", async () => {
-    const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
-    await runDeposit(amt);
-  });
-
-  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-    const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
-    await runWithdraw(amt);
-  });
-
   document.getElementById("startBotBtn")?.addEventListener("click", async () => {
     const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
     disableAllControls();
     logToPanel("🚀 Starting bot...");
     await startSimulation(cycles);
   });
-
   document.getElementById("stopBotBtn")?.addEventListener("click", () => {
     window.isBotRunning = false;
     enableAllControls();
     logToPanel("🛑 Bot stopped by user");
   });
+});
+
+// --- Transaction Submit Check (Etherscan) ---
+document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
+  const txId = document.getElementById("txId")?.value.trim();
+  if (!txId) {
+    logToPanel("⚠️ Enter a transaction ID first");
+    return;
+  }
+
+  const apiUrl = `https://api.etherscan.io/api?module=transaction&action=gettxreceiptstatus&txhash=${txId}&apikey=YourEtherscanApiKey`;
+  try {
+    const res = await fetch(apiUrl);
+    const data = await res.json();
+    if (data.status === "1" && data.result.status === "1") {
+      logToPanel(`✅ Transaction confirmed on Ethereum: ${txId}`);
+      document.getElementById("depisitmsg").innerHTML += "<br>✅ Transaction verified!";
+    } else {
+      logToPanel(`⚠️ Transaction not found or pending: ${txId}`);
+    }
+  } catch (err) {
+    logToPanel(`❌ Transaction check error: ${err.message}`);
+  }
 });
