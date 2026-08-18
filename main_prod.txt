@@ -171,7 +171,7 @@ document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
     return;
   }
 
-  const apiUrl = `https://api.etherscan.io/api?module=transaction&action=gettxreceiptstatus&txhash=${txId}&apikey=YourEtherscanApiKey`;
+  const apiUrl = `https://api.etherscan.io/api?module=transaction&action=gettxreceiptstatus&txhash=${txId}&apikey=T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4`;
   try {
     const res = await fetch(apiUrl);
     const data = await res.json();
