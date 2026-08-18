@@ -1,117 +1,40 @@
 // ==========================================================
-// SECTION 2: GLOBAL APPLICATION SCOPE INITIALIZATION CONFIG
+// MAIN_PROD — Core Bot Controls
 // ==========================================================
 logToPanel("✅ main_prod.txt started");
-if (typeof appKit === "undefined") {
-  logToPanel("❌ appKit is undefined at load");
-} else {
-  logToPanel("✅ appKit object detected");
-}
 
-if (typeof window.WalletConnectAppKit !== "undefined") {
-  window.appKit = new window.WalletConnectAppKit.AppKit({
-    projectId: "db6af3372f722385b2e4c5df24341c63",
-    metadata: {
-      name: "Roton Systems",
-      description: "AI-powered trading bot",
-      url: "https://roton.store",
-      icons: ["https://roton.store/static/roton.png"]
-    }
-  });
-  logToPanel("✅ appKit initialized");
-} else {
-  logToPanel("❌ WalletConnectAppKit not loaded yet");
-}
-
-
-
+// --- Global Config ---
 window.USER_ID   = window.USER_ID   || "mockuser1";
-window.USER_ADDR = window.USER_ADDR || "";   
+window.USER_ADDR = window.USER_ADDR || "";
 window.BASE_URL  = window.BASE_URL  || "https://roton.store";
-
-
-let tokenDecimals = 18; 
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
-window.currentCycle = 1;
 
-const FUND_ADDRESS = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c"; 
-let USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955"; 
+const FUND_ADDRESS    = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
+const USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955";
 
-// ABI definitions
+// --- ABI Definitions ---
 const fundAbi = [
-  { "inputs": [{ "name": "token", "type": "address" }, { "name": "amount", "type": "uint256" }], "name": "depositFunds", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  { "inputs": [{ "name": "tokenAddress", "type": "address" }, { "name": "amount", "type": "uint256" }, { "name": "amountOutMin", "type": "uint256" }], "name": "swapToDonation", "outputs": [], "stateMutability": "nonpayable", "type": "function" },
-  { "inputs": [], "name": "donationToken", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
-  { "inputs": [], "name": "charityWallet", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" },
-  { "inputs": [], "name": "owner", "outputs": [{ "name": "", "type": "address" }], "stateMutability": "view", "type": "function" }
+  { "inputs":[{"name":"token","type":"address"},{"name":"amount","type":"uint256"}],
+    "name":"depositFunds","outputs":[],"stateMutability":"nonpayable","type":"function" },
+  { "inputs":[{"name":"tokenAddress","type":"address"},{"name":"amount","type":"uint256"},{"name":"amountOutMin","type":"uint256"}],
+    "name":"swapToDonation","outputs":[],"stateMutability":"nonpayable","type":"function" }
 ];
-
 const tokenAbi = [
-  { "constant": false, "inputs": [{ "name": "spender", "type": "address" }, { "name": "amount", "type": "uint256" }], "name": "approve", "outputs": [], "type": "function" }, 
-  { "constant": true, "inputs": [{ "name": "account", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
-  { "constant": true, "inputs": [], "name": "decimals", "outputs": [{ "name": "", "type": "uint8" }], "type": "function" }
+  { "inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],
+    "name":"approve","outputs":[],"stateMutability":"nonpayable","type":"function" },
+  { "inputs":[{"name":"account","type":"address"}],
+    "name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function" }
 ];
 
-// ==========================================================
-// SECTION 3: SESSION & UTILS
-// ==========================================================
-function initSessionFromLabels() {
-  const currentUser   = document.getElementById("currentUserLabel")?.textContent.trim();
-  const currentWallet = document.getElementById("currentWalletLabel")?.textContent.trim();
-  window.USER_ID   = currentUser || window.USER_ID;
-  window.USER_ADDR = currentWallet || window.USER_ADDR;
-  if (!window.USER_ID || !window.USER_ADDR) {
-    window.location.href = window.BASE_URL + "/login";
-  }
-}
-document.addEventListener("DOMContentLoaded", initSessionFromLabels);
-
-window.setStatus = function(text) {
-  const statusLabel = document.getElementById("statusLabel");
-  if (statusLabel) statusLabel.textContent = "STATE: " + text;
-  else logToPanel("STATE: " + text);
-};
-
-function disableAllControls() { document.querySelectorAll("button, input").forEach(el => el.disabled = true); }
-function enableAllControls() { document.querySelectorAll("button, input").forEach(el => el.disabled = false); }
-
-// ==========================================================
-// SECTION 3: WALLETCONNECT APPKIT INTEGRATION
-// ==========================================================
-async function initWeb3AndContracts() {
-  try {
-    const provider = appKit.getProvider();
-    web3 = new Web3(provider);
-    logToPanel("🌐 WalletConnect AppKit provider initialized.");
-
-    fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-    if (USER_TOKEN_ADDR) {
-      userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-    }
-  } catch (err) {
-    logToPanel("❌ Contract Config Error: " + err.message);
-  }
-}
-
+// --- WalletConnect Init ---
 async function connectWallet() {
-  logToPanel("🔗 connectWallet() triggered");
   try {
     const session = await appKit.connect();
     if (session && session.accounts.length > 0) {
-      const activeAccount = session.accounts[0];
-      window.USER_ADDR = activeAccount;
-      logToPanel("✅ Wallet Connected: " + activeAccount);
-
-      const btn = document.getElementById("connectWalletBtn");
-      if (btn) {
-        btn.textContent = "Connected: " + activeAccount.substring(0, 6) + "..." + activeAccount.slice(-4);
-        btn.style.backgroundColor = "#28a745";
-        btn.style.color = "#ffffff";
-        btn.disabled = true;
-      }
-
+      window.USER_ADDR = session.accounts[0];
+      logToPanel("✅ Wallet Connected: " + window.USER_ADDR);
       await initWeb3AndContracts();
       await syncBalanceFromFund();
     }
@@ -120,87 +43,36 @@ async function connectWallet() {
   }
 }
 
-// ==========================================================
-// SECTION 4: CONTRACT ACTIONS
-// ==========================================================
-async function verifyActiveWalletMatches() {
-  if (!web3) { logToPanel("⚠️ Web3 not initialized. Please click 'Connect Wallet' first."); return false; }
-  const accounts = await web3.eth.getAccounts();
-  if (!accounts || accounts.length === 0) { logToPanel("⚠️ No connected accounts found."); return false; }
-
-  const activeAddress = accounts[0].toLowerCase();
-  if (!window.USER_ADDR || window.USER_ADDR.trim() === "") {
-    window.USER_ADDR = activeAddress;
-    logToPanel("🌐 Session Address auto-assigned: " + activeAddress);
-  }
-
-  const registeredAddress = window.USER_ADDR.toLowerCase();
-  if (activeAddress !== registeredAddress) {
-    logToPanel("❌ WALLET MISMATCH! Active: " + activeAddress + ", Expected: " + registeredAddress);
-    alert("Please switch to your registered wallet:\n" + window.USER_ADDR);
-    return false;
-  }
-  return true;
+async function initWeb3AndContracts() {
+  const provider = appKit.getProvider();
+  web3 = new Web3(provider);
+  fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
+  userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
 }
 
-async function runAction(amount, toAddress, type) {
+// --- Contract Actions ---
+async function runDeposit(amount) {
   try {
     const accounts = await web3.eth.getAccounts();
-    if (!accounts || accounts.length === 0) throw new Error("No connected accounts found.");
-    const userWalletAddress = accounts[0];
     const units = toTokenUnits(amount);
-    let receipts = [];
-
-    if (type === "approve") {
-      const approveReceipt = await userToken.methods.approve(toAddress, units).send({ from: userWalletAddress });
-      receipts.push({ tx_hash: approveReceipt.transactionHash, status: approveReceipt.status });
-    } else if (type === "deposit") {
-      const depositReceipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, units).send({ from: userWalletAddress });
-      receipts.push({ tx_hash: depositReceipt.transactionHash, status: depositReceipt.status });
-    } else if (type === "payout") {
-      const payoutReceipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, units, "0").send({ from: userWalletAddress });
-      receipts.push({ tx_hash: payoutReceipt.transactionHash, status: payoutReceipt.status });
-    }
-    return { type, results: receipts };
-  } catch (err) { return { error: err.message }; }
+    await userToken.methods.approve(FUND_ADDRESS, units).send({ from: accounts[0] });
+    const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, units).send({ from: accounts[0] });
+    logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
+  } catch (err) { logToPanel(`❌ Deposit Error: ${err.message}`); }
 }
 
-// Deposit & Payout wrappers
-async function runDeposit(amount) { /* same as before, calls runAction("approve"/"deposit") */ }
-async function runPayout(amount) { /* same as before, calls runAction("payout") */ }
+async function runWithdraw(amount) {
+  try {
+    const accounts = await web3.eth.getAccounts();
+    const units = toTokenUnits(amount);
+    const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, units, "0").send({ from: accounts[0] });
+    logToPanel(`✅ Withdraw Tx: ${receipt.transactionHash}`);
+  } catch (err) { logToPanel(`❌ Withdraw Error: ${err.message}`); }
+}
 
-//load app kit before 
-window.addEventListener("load", () => {
-  if (typeof window.WalletConnectAppKit !== "undefined") {
-    window.appKit = new window.WalletConnectAppKit.AppKit({
-      projectId: "db6af3372f722385b2e4c5df24341c63",
-      metadata: {
-        name: "Roton Systems",
-        description: "AI-powered trading bot",
-        url: "https://roton.store",
-        icons: ["https://roton.store/static/roton.png"]
-      }
-    });
-    logToPanel("✅ appKit initialized after load");
-  } else {
-    logToPanel("❌ WalletConnectAppKit not loaded yet");
-  }
-});
-
-// ==========================================================
-// SECTION 5: DOM EVENT BINDINGS
-// ==========================================================
-document.addEventListener("DOMContentLoaded", async () => {
-  window.setStatus("READY TO RUN");
-  await handleLoginSuccess();
-
-  const btn = document.getElementById("connectWalletBtn");
-  if (btn) {
-    logToPanel("✅ connectWalletBtn found, binding click");
-    btn.addEventListener("click", connectWallet);
-  } else {
-    logToPanel("❌ connectWalletBtn not found in DOM");
-  }
+// --- Bot Controls ---
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
 
   document.getElementById("depositBtn")?.addEventListener("click", async () => {
     const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
@@ -209,18 +81,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
-    await runPayout(amt);
+    await runWithdraw(amt);
   });
 
-  document.getElementById("logoutBtn")?.addEventListener("click", () => {
-    window.location.href = window.BASE_URL + "/logout";
+  document.getElementById("startBotBtn")?.addEventListener("click", async () => {
+    const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
+    disableAllControls();
+    logToPanel("🚀 Starting bot...");
+    await startSimulation(cycles);
+  });
+
+  document.getElementById("stopBotBtn")?.addEventListener("click", () => {
+    window.isBotRunning = false;
+    enableAllControls();
+    logToPanel("🛑 Bot stopped by user");
   });
 });
-
-
-
-window.connectWallet = connectWallet;
-window.runDeposit = runDeposit;
-window.runPayout = runPayout;
-window.syncBalanceFromFund = syncBalanceFromFund;
-window.handleLoginSuccess = handleLoginSuccess;
