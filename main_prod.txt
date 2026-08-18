@@ -123,35 +123,6 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
             box-shadow:0 0 10px rgba(243,186,47,0.7); margin-top:15px; font-size:16px;">
 </div>
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const params = new URLSearchParams(window.location.search);
-  const wallet = params.get("wallet");
-  const walletname = params.get("walletname");
-
-  const contractAddr = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
-  const depositMsg = document.getElementById("depisitmsg");
-
-  if (depositMsg) {
-    depositMsg.innerHTML = `
-      Deposit from your wallet — <b>${walletname}</b> (${wallet}) —
-      into contract address 
-      <span style="color:#f3ba2f; font-weight:bold;">${contractAddr}</span>
-      <button onclick="copyContract()" 
-              style="margin-left:8px; background:none; border:none; cursor:pointer; color:#00ffcc; font-size:16px;">
-        📋
-      </button>
-      and enter your transaction ID.
-    `;
-  }
-
-  window.copyContract = function() {
-    navigator.clipboard.writeText(contractAddr).then(() => {
-      alert("✅ Contract address copied to clipboard!");
-    });
-  };
-});
-</script>
 
 document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
