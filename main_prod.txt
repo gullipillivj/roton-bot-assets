@@ -22,7 +22,7 @@ const walletname = urlParams.get("walletname");
 
 window.USER_ID        = userid;
 window.USER_ADDR      = wallet || "";
-window.USER_WALLETNAME = walletname || "Wallet";   // ✅ FIXED
+window.USER_WALLETNAME = walletname || "Wallet";
 
 if (!userid || userid === "" || userid === "mockuser1") {
   window.location.href = window.BASE_URL + "/login";
@@ -76,8 +76,7 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     await userToken.methods.approve(FUND_ADDRESS, toTokenUnits(amt)).send({ from: userWallet });
     const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(amt)).send({ from: userWallet });
     logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
-    // Optional: auto-verify deposit
-    await verifyTransaction(receipt.transactionHash);
+    await verifyTransaction(receipt.transactionHash); // auto verify
   } catch (err) {
     logToPanel(`❌ Deposit Error: ${err.message}`);
   }
@@ -92,8 +91,7 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, toTokenUnits(amt), "0")
       .send({ from: userWallet });
     logToPanel(`✅ Withdrawal Tx: ${receipt.transactionHash}`);
-    // Optional: auto-verify withdrawal
-    await verifyTransaction(receipt.transactionHash);
+    await verifyTransaction(receipt.transactionHash); // auto verify
   } catch (err) {
     logToPanel(`❌ Withdrawal Error: ${err.message}`);
   }
