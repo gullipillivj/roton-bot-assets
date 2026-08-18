@@ -121,8 +121,11 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 
 // --- Deposit Message + Copy ---
 document.addEventListener("DOMContentLoaded", () => {
+  // Use the same urlParams defined at the top
   const wallet     = urlParams.get("wallet")     || "";
   const walletname = urlParams.get("walletname") || "Wallet";
+
+  window.USER_ADDR = wallet;
 
   const contractAddr = FUND_ADDRESS;
   const depositMsg   = document.getElementById("depisitmsg");
@@ -142,6 +145,20 @@ document.addEventListener("DOMContentLoaded", () => {
     alert("✅ Contract address copied!");
   });
 
+  // Bot controls
+  document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
+  document.getElementById("startBotBtn")?.addEventListener("click", async () => {
+    const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
+    disableAllControls();
+    logToPanel("🚀 Starting bot...");
+    await startSimulation(cycles);
+  });
+  document.getElementById("stopBotBtn")?.addEventListener("click", () => {
+    window.isBotRunning = false;
+    enableAllControls();
+    logToPanel("🛑 Bot stopped by user");
+  });
+});
   // Bot controls
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
   document.getElementById("startBotBtn")?.addEventListener("click", async () => {
