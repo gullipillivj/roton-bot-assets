@@ -129,16 +129,16 @@ document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
   const txId = document.getElementById("txId")?.value.trim();
   if (!txId) return logToPanel("⚠️ Enter a transaction ID first");
 
-  const apiUrl = `https://api.etherscan.io/api?module=transaction&action=gettxreceiptstatus&txhash=${txId}&apikey=T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4`;
+  const apiUrl = `https://api.etherscan.io/api?module=proxy&action=eth_getTransactionByHash&txhash=${txId}&apikey=T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4`;
   try {
     const res = await fetch(apiUrl);
     const data = await res.json();
-    if (data.status === "1" && data.result.status === "1") {
-      logToPanel(`✅ Transaction confirmed on Ethereum: ${txId}`);
+    if (data.result && data.result.blockNumber) {
+      logToPanel(`✅ Transaction confirmed in block ${parseInt(data.result.blockNumber, 16)}: ${txId}`);
       const msg = document.getElementById("depisitmsg");
       if (msg) msg.innerHTML += "<br>✅ Transaction verified!";
     } else {
-      logToPanel(`⚠️ Transaction not found or pending: ${txId}`);
+      logToPanel(`⚠️ Transaction not yet mined or invalid: ${txId}`);
     }
   } catch (err) {
     logToPanel(`❌ Transaction check error: ${err.message}`);
