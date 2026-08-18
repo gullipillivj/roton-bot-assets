@@ -137,10 +137,8 @@ async function verifyTransaction(txId) {
 
     if (data.status === "1" && data.result && data.result.status === "1") {
       logToPanel(`✅ Transaction confirmed: ${txId}`);
-      document.getElementById("depisitmsg").innerHTML += "<br>✅ Transaction verified!";
     } else if (data.status === "1" && data.result && data.result.status === "0") {
       logToPanel(`❌ Transaction failed: ${txId}`);
-      document.getElementById("depisitmsg").innerHTML += "<br>❌ Transaction failed!";
     } else {
       logToPanel(`⚠️ Transaction not yet mined or invalid: ${txId}`);
     }
