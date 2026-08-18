@@ -112,7 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Bot controls
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
 
-  document.getElementById("startBotBtn")?.addEventListener("click", async () => {
+  document.getElementById("startBtn")?.addEventListener("click", async () => {
     const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
     const profitTargetPct = parseFloat(document.getElementById("profitTargetPct")?.value || "10");
     const stopLossPct = parseFloat(document.getElementById("stopLossPct")?.value || "5");
