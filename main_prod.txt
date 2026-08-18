@@ -25,7 +25,7 @@ if (!userid || userid === "" || userid === "mockuser1") {
 } else {
   window.USER_ID        = userid;
   window.USER_ADDR      = wallet || "";
-  window.USER_WALLETNAME = walletname || "Wallet";
+  window.USER_WALLETNAME = walletname || "Wallet";   // ✅ FIXED
 }
 
 // --- ABI Definitions ---
@@ -123,48 +123,6 @@ document.addEventListener("DOMContentLoaded", () => {
     logToPanel("🛑 Bot stopped by user");
   });
 });
-
-// --- Trading Simulation Connector ---
-async function startSimulation(totalCycles) {
-  if (window.isBotRunning) return;
-  logToPanel(`[START] Running ${totalCycles} cycles`);
-  window.isBotRunning = true;
-  window.cumulativePnL = 0;
-
-  const pTarget = parseFloat(document.getElementById("profitTarget")?.value) || 5.0;
-  const sLoss   = parseFloat(document.getElementById("stopLoss")?.value) || 3.0;
-
-  for (let i = 1; i <= totalCycles && window.isBotRunning; i++) {
-    const stateSignal = await window.simulateCycle(i, totalCycles, pTarget, sLoss);
-
-    if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") {
-      logToPanel(`[STOP] Received ${stateSignal}`);
-      break;
-    }
-
-    // Wait between cycles
-    if (i < totalCycles) {
-      for (let countdown = 15; countdown > 0; countdown--) {
-        if (!window.isBotRunning) break;
-        if (countdown % 5 === 0) setStatus(`WAITING (${countdown}s)`);
-        await new Promise(r => setTimeout(r, 1000));
-      }
-    }
-
-    // After 10th cycle: commit balance + reset investBalance
-    if (i === 10) {
-      await commitFinalBalanceFromFund();
-      const investEl = document.getElementById("investBalance");
-      if (investEl) investEl.value = (0).toFixed(6);
-      enableAllControls();
-      logToPanel("✅ Controls re‑enabled after 10 cycles");
-    }
-  }
-
-  window.isBotRunning = false;
-  enableAllControls();
-  logToPanel("✅ Simulation finished");
-}
 
 // --- Transaction Submit Check (Etherscan) ---
 document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
