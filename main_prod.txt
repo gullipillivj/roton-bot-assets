@@ -17,13 +17,11 @@ const USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955";
 // --- Redirect if no userid in URL ---
 const urlParams = new URLSearchParams(window.location.search);
 const userid = urlParams.get("userid");
-
 if (!userid || userid === "" || userid === "mockuser1") {
   window.location.href = window.BASE_URL + "/login";
 } else {
   window.USER_ID = userid;
 }
-
 
 // --- ABI Definitions ---
 const fundAbi = [
@@ -123,19 +121,11 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 
 // --- Deposit Message + Copy ---
 document.addEventListener("DOMContentLoaded", () => {
-  // --- Get parameters from URL ---
-  const urlParams = new URLSearchParams(window.location.search);
-  const userid = urlParams.get("userid") || "mockuser1";
-  const wallet = urlParams.get("wallet") || "";
-  const walletname = urlParams.get("walletname") || "Unknown";
+  const wallet     = urlParams.get("wallet")     || "";
+  const walletname = urlParams.get("walletname") || "Wallet";
 
-  // --- Assign globally for later use ---
-  window.USER_ID = userid;
-  window.USER_ADDR = wallet;
-
-  // --- Deposit message ---
   const contractAddr = FUND_ADDRESS;
-  const depositMsg = document.getElementById("depisitmsg");
+  const depositMsg   = document.getElementById("depisitmsg");
 
   if (depositMsg) {
     depositMsg.innerHTML = `
@@ -147,28 +137,10 @@ document.addEventListener("DOMContentLoaded", () => {
     `;
   }
 
-  // --- Copy button ---
   document.getElementById("copyContractBtn")?.addEventListener("click", () => {
     navigator.clipboard.writeText(contractAddr);
     alert("✅ Contract address copied!");
   });
-
-  // --- Bot controls ---
-  document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
-  document.getElementById("startBotBtn")?.addEventListener("click", async () => {
-    const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
-    disableAllControls();
-    logToPanel("🚀 Starting bot...");
-    await startSimulation(cycles);
-  });
-  document.getElementById("stopBotBtn")?.addEventListener("click", () => {
-    window.isBotRunning = false;
-    enableAllControls();
-    logToPanel("🛑 Bot stopped by user");
-  });
-});
-
-
 
   // Bot controls
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
