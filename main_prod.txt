@@ -14,10 +14,16 @@ window.isBotRunning = false;
 const FUND_ADDRESS    = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
 const USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955";
 
-// --- Redirect if not logged in ---
-if (!window.USER_ID || window.USER_ID === "mockuser1") {
+// --- Redirect if no userid in URL ---
+const urlParams = new URLSearchParams(window.location.search);
+const userid = urlParams.get("userid");
+
+if (!userid || userid === "" || userid === "mockuser1") {
   window.location.href = window.BASE_URL + "/login";
+} else {
+  window.USER_ID = userid;
 }
+
 
 // --- ABI Definitions ---
 const fundAbi = [
