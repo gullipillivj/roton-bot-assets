@@ -121,29 +121,19 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 
 // --- Deposit Message + Copy ---
 document.addEventListener("DOMContentLoaded", () => {
-  // Use the same urlParams defined at the top
-  const wallet     = urlParams.get("wallet")     || "";
-  const walletname = urlParams.get("walletname") || "Wallet";
+  const msg = document.getElementById("depisitmsg");
+  if (!msg) return;
 
-  window.USER_ADDR = wallet;
+  msg.innerHTML = `Deposit from your wallet — <b>${window.USER_WALLETNAME || walletname}</b> (${window.USER_ADDR}) —
+  into contract address <span style="color:#f3ba2f;font-weight:bold;">${FUND_ADDRESS}</span>
+  <button id="copyContractBtn">📋</button> and enter your transaction ID.`;
 
-  const contractAddr = FUND_ADDRESS;
-  const depositMsg   = document.getElementById("depisitmsg");
-
-  if (depositMsg) {
-    depositMsg.innerHTML = `
-      Deposit from your wallet — <b>${walletname}</b> (${wallet}) —
-      into contract address 
-      <span style="color:#f3ba2f; font-weight:bold;">${contractAddr}</span>
-      <button id="copyContractBtn" class="copy-icon" title="Copy address">📋</button>
-      and enter your transaction ID.
-    `;
-  }
-
-  document.getElementById("copyContractBtn")?.addEventListener("click", () => {
-    navigator.clipboard.writeText(contractAddr);
+  document.getElementById("copyContractBtn").onclick = () => {
+    navigator.clipboard.writeText(FUND_ADDRESS);
     alert("✅ Contract address copied!");
-  });
+  };
+});
+
 
   // Bot controls
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
