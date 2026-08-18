@@ -51,24 +51,71 @@ async function initWeb3AndContracts() {
 }
 
 // --- Contract Actions ---
-async function runDeposit(amount) {
-  try {
-    const accounts = await web3.eth.getAccounts();
-    const units = toTokenUnits(amount);
-    await userToken.methods.approve(FUND_ADDRESS, units).send({ from: accounts[0] });
-    const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, units).send({ from: accounts[0] });
-    logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
-  } catch (err) { logToPanel(`❌ Deposit Error: ${err.message}`); }
-}
+document.getElementById("depositBtn")?.addEventListener("click", async () => {
+  const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
+  if (amt <= 0) {
+    logToPanel("⚠️ Invalid deposit amount");
+    return;
+  }
 
-async function runWithdraw(amount) {
+  // Get user wallet
+  const accounts = await web3.eth.getAccounts();
+  const userWallet = accounts[0];
+
+  // Balance before deposit
+  const beforeBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
+  logToPanel(`📊 Contract balance before deposit: ${beforeBal}`);
+
   try {
-    const accounts = await web3.eth.getAccounts();
-    const units = toTokenUnits(amount);
-    const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, units, "0").send({ from: accounts[0] });
-    logToPanel(`✅ Withdraw Tx: ${receipt.transactionHash}`);
-  } catch (err) { logToPanel(`❌ Withdraw Error: ${err.message}`); }
-}
+    // Approve + Deposit
+    await userToken.methods.approve(FUND_ADDRESS, toTokenUnits(amt)).send({ from: userWallet });
+    const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(amt)).send({ from: userWallet });
+    logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
+
+    // Balance after deposit
+    const afterBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
+    logToPanel(`📊 Contract balance after deposit: ${afterBal}`);
+
+    // Delta check
+    const delta = afterBal - beforeBal;
+    if (delta > 0) {
+      logToPanel(`🎉 Deposit confirmed! Amount credited: ${delta}`);
+    } else {
+      logToPanel("⚠️ No balance change detected — deposit may have failed");
+    }
+  } catch (err) {
+    logToPanel(`❌ Deposit Error: ${err.message}`);
+  }
+});
+
+  const accounts = await web3.eth.getAccounts();
+  const userWallet = accounts[0];
+
+  // Balance before withdrawal
+  const beforeBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
+  logToPanel(`📊 Contract balance before withdrawal: ${beforeBal}`);
+
+  try {
+    // Execute payout
+    const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, toTokenUnits(amt), "0")
+      .send({ from: userWallet });
+    logToPanel(`✅ Withdrawal Tx: ${receipt.transactionHash}`);
+
+    // Balance after withdrawal
+    const afterBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
+    logToPanel(`📊 Contract balance after withdrawal: ${afterBal}`);
+
+    // Delta check
+    const delta = beforeBal - afterBal;
+    if (delta > 0) {
+      logToPanel(`🎉 Withdrawal confirmed! Amount debited: ${delta}`);
+    } else {
+      logToPanel("⚠️ No balance change detected — withdrawal may have failed");
+    }
+  } catch (err) {
+    logToPanel(`❌ Withdrawal Error: ${err.message}`);
+  }
+});
 
 // --- Bot Controls ---
 document.addEventListener("DOMContentLoaded", () => {
