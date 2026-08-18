@@ -4,9 +4,9 @@
 logToPanel("✅ main_prod.txt started");
 
 // --- Global Config ---
-window.USER_ID   = window.USER_ID   || "mockuser1";
-window.USER_ADDR = window.USER_ADDR || "";
-window.BASE_URL  = window.BASE_URL  || "https://roton.store";
+window.USER_ID   = "mockuser1";
+window.USER_ADDR = "";
+window.BASE_URL  = "https://roton.store";
 
 window.cumulativePnL = 0;
 window.isBotRunning = false;
@@ -15,12 +15,17 @@ const FUND_ADDRESS    = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
 const USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955";
 
 // --- Redirect if no userid in URL ---
-const urlParams = new URLSearchParams(window.location.search);
-const userid = urlParams.get("userid");
+const urlParams  = new URLSearchParams(window.location.search);
+const userid     = urlParams.get("userid");
+const wallet     = urlParams.get("wallet");
+const walletname = urlParams.get("walletname");
+
 if (!userid || userid === "" || userid === "mockuser1") {
   window.location.href = window.BASE_URL + "/login";
 } else {
-  window.USER_ID = userid;
+  window.USER_ID        = userid;
+  window.USER_ADDR      = wallet || "";
+  window.USER_WALLETNAME = walletname || "Wallet";
 }
 
 // --- ABI Definitions ---
@@ -62,31 +67,15 @@ async function initWeb3AndContracts() {
 // --- Contract Actions ---
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
-  if (amt <= 0) {
-    logToPanel("⚠️ Invalid deposit amount");
-    return;
-  }
+  if (amt <= 0) return logToPanel("⚠️ Invalid deposit amount");
 
   const accounts = await web3.eth.getAccounts();
   const userWallet = accounts[0];
-
-  const beforeBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
-  logToPanel(`📊 Contract balance before deposit: ${beforeBal}`);
 
   try {
     await userToken.methods.approve(FUND_ADDRESS, toTokenUnits(amt)).send({ from: userWallet });
     const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(amt)).send({ from: userWallet });
     logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
-
-    const afterBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
-    logToPanel(`📊 Contract balance after deposit: ${afterBal}`);
-
-    const delta = afterBal - beforeBal;
-    if (delta > 0) {
-      logToPanel(`🎉 Deposit confirmed! Amount credited: ${delta}`);
-    } else {
-      logToPanel("⚠️ No balance change detected — deposit may have failed");
-    }
   } catch (err) {
     logToPanel(`❌ Deposit Error: ${err.message}`);
   }
@@ -97,23 +86,10 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   const accounts = await web3.eth.getAccounts();
   const userWallet = accounts[0];
 
-  const beforeBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
-  logToPanel(`📊 Contract balance before withdrawal: ${beforeBal}`);
-
   try {
     const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, toTokenUnits(amt), "0")
       .send({ from: userWallet });
     logToPanel(`✅ Withdrawal Tx: ${receipt.transactionHash}`);
-
-    const afterBal = await userToken.methods.balanceOf(FUND_ADDRESS).call();
-    logToPanel(`📊 Contract balance after withdrawal: ${afterBal}`);
-
-    const delta = beforeBal - afterBal;
-    if (delta > 0) {
-      logToPanel(`🎉 Withdrawal confirmed! Amount debited: ${delta}`);
-    } else {
-      logToPanel("⚠️ No balance change detected — withdrawal may have failed");
-    }
   } catch (err) {
     logToPanel(`❌ Withdrawal Error: ${err.message}`);
   }
@@ -124,7 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const msg = document.getElementById("depisitmsg");
   if (!msg) return;
 
-  msg.innerHTML = `Deposit from your wallet — <b>${window.USER_WALLETNAME || walletname}</b> (${window.USER_ADDR}) —
+  msg.innerHTML = `Deposit from your wallet — <b>${window.USER_WALLETNAME}</b> (${window.USER_ADDR}) —
   into contract address <span style="color:#f3ba2f;font-weight:bold;">${FUND_ADDRESS}</span>
   <button id="copyContractBtn">📋</button> and enter your transaction ID.`;
 
@@ -132,8 +108,6 @@ document.addEventListener("DOMContentLoaded", () => {
     navigator.clipboard.writeText(FUND_ADDRESS);
     alert("✅ Contract address copied!");
   };
-});
-
 
   // Bot controls
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
@@ -149,28 +123,53 @@ document.addEventListener("DOMContentLoaded", () => {
     logToPanel("🛑 Bot stopped by user");
   });
 });
-  // Bot controls
-  document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
-  document.getElementById("startBotBtn")?.addEventListener("click", async () => {
-    const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
-    disableAllControls();
-    logToPanel("🚀 Starting bot...");
-    await startSimulation(cycles);
-  });
-  document.getElementById("stopBotBtn")?.addEventListener("click", () => {
-    window.isBotRunning = false;
-    enableAllControls();
-    logToPanel("🛑 Bot stopped by user");
-  });
-});
+
+// --- Trading Simulation Connector ---
+async function startSimulation(totalCycles) {
+  if (window.isBotRunning) return;
+  logToPanel(`[START] Running ${totalCycles} cycles`);
+  window.isBotRunning = true;
+  window.cumulativePnL = 0;
+
+  const pTarget = parseFloat(document.getElementById("profitTarget")?.value) || 5.0;
+  const sLoss   = parseFloat(document.getElementById("stopLoss")?.value) || 3.0;
+
+  for (let i = 1; i <= totalCycles && window.isBotRunning; i++) {
+    const stateSignal = await window.simulateCycle(i, totalCycles, pTarget, sLoss);
+
+    if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS") {
+      logToPanel(`[STOP] Received ${stateSignal}`);
+      break;
+    }
+
+    // Wait between cycles
+    if (i < totalCycles) {
+      for (let countdown = 15; countdown > 0; countdown--) {
+        if (!window.isBotRunning) break;
+        if (countdown % 5 === 0) setStatus(`WAITING (${countdown}s)`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    // After 10th cycle: commit balance + reset investBalance
+    if (i === 10) {
+      await commitFinalBalanceFromFund();
+      const investEl = document.getElementById("investBalance");
+      if (investEl) investEl.value = (0).toFixed(6);
+      enableAllControls();
+      logToPanel("✅ Controls re‑enabled after 10 cycles");
+    }
+  }
+
+  window.isBotRunning = false;
+  enableAllControls();
+  logToPanel("✅ Simulation finished");
+}
 
 // --- Transaction Submit Check (Etherscan) ---
 document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
   const txId = document.getElementById("txId")?.value.trim();
-  if (!txId) {
-    logToPanel("⚠️ Enter a transaction ID first");
-    return;
-  }
+  if (!txId) return logToPanel("⚠️ Enter a transaction ID first");
 
   const apiUrl = `https://api.etherscan.io/api?module=transaction&action=gettxreceiptstatus&txhash=${txId}&apikey=T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4`;
   try {
@@ -178,7 +177,8 @@ document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
     const data = await res.json();
     if (data.status === "1" && data.result.status === "1") {
       logToPanel(`✅ Transaction confirmed on Ethereum: ${txId}`);
-      document.getElementById("depisitmsg").innerHTML += "<br>✅ Transaction verified!";
+      const msg = document.getElementById("depisitmsg");
+      if (msg) msg.innerHTML += "<br>✅ Transaction verified!";
     } else {
       logToPanel(`⚠️ Transaction not found or pending: ${txId}`);
     }
