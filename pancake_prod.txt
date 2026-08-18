@@ -48,19 +48,32 @@ async function runDeposit(amount, tokenAddress) {
   return parsed;
 }
 
-// Withdraw / Swap to donation token (calls SolidarityFundV2.swapToDonation)
+// Swap to donation token (calls SolidarityFundV2.swapToDonation)
+// Swap to donation token via backend /prodbot/swap
 async function runSwap(amount, tokenAddress, amountOutMin = "0") {
-  // include gas calculation
-  const gas = await window.getGasFees("bsc");
-  const parsed = await callSecurity("swapToDonation", {
-    amount,
-    tokenAddress,
-    amountOutMin,
-    gasPrice: gas.gasPrice,
-    gasCostUSD: gas.usdCost
-  });
-  logResult("SwapToDonation", parsed);
-  return parsed;
+  try {
+    const res = await fetch("/prodbot/swap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        token_out: tokenAddress,
+        amount_in: amount,
+        amountOutMin: amountOutMin
+      })
+    });
+
+    const parsed = await res.json();
+    if (parsed && parsed.tx_hash) {
+      logToPanel(`🎉 Swap submitted — TxHash=${parsed.tx_hash}`);
+    } else {
+      logToPanel(`❌ Swap failed — ${JSON.stringify(parsed)}`);
+    }
+    return parsed;
+  } catch (err) {
+    logToPanel(`❌ Swap error: ${err.message}`);
+    return null;
+  }
 }
 
 // Convenience alias for payout
