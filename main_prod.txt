@@ -76,7 +76,6 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     await userToken.methods.approve(FUND_ADDRESS, toTokenUnits(amt)).send({ from: userWallet });
     const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(amt)).send({ from: userWallet });
     logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
-    
   } catch (err) {
     logToPanel(`❌ Deposit Error: ${err.message}`);
   }
@@ -91,7 +90,6 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, toTokenUnits(amt), "0")
       .send({ from: userWallet });
     logToPanel(`✅ Withdrawal Tx: ${receipt.transactionHash}`);
-    
   } catch (err) {
     logToPanel(`❌ Withdrawal Error: ${err.message}`);
   }
@@ -142,42 +140,13 @@ document.addEventListener("DOMContentLoaded", () => {
     logToPanel("✅ Trading loop finished");
   });
 
-  document.getElementById("startBotBtn")?.addEventListener("click", async () => {
-  const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
-  const profitTargetPct = parseFloat(document.getElementById("profitTargetPct")?.value || "10");
-  const stopLossPct = parseFloat(document.getElementById("stopLossPct")?.value || "5");
-
-  disableAllControls();
-  logToPanel("🚀 Starting bot...");
-
-  window.isBotRunning = true;
-  for (let i = 1; i <= cycles && window.isBotRunning; i++) {
-    const result = await window.simulateCycle(i, cycles, profitTargetPct, stopLossPct);
-
-    if (result === "STOP_PROFIT") {
-      logToPanel("🎉 Profit target reached — stopping bot");
-      break;
-    }
-    if (result === "STOP_LOSS") {
-      logToPanel("🛑 Stop‑loss triggered — stopping bot");
-      break;
-    }
-
-    await new Promise(res => setTimeout(res, 2000));
-  }
-
-  enableAllControls();
-  logToPanel("✅ Trading loop finished");
-});
-
-
   document.getElementById("stopBotBtn")?.addEventListener("click", () => {
     window.isBotRunning = false;
     enableAllControls();
     logToPanel("🛑 Bot stopped by user");
   });
 
-  // ✅ Transaction verification listener
+  // Transaction verification listener
   document.getElementById("submitBtn")?.addEventListener("click", async () => {
     const txId = document.getElementById("transactionId")?.value.trim();
     if (!txId) {
@@ -187,18 +156,6 @@ document.addEventListener("DOMContentLoaded", () => {
     await verifyTransaction(txId);
   });
 });
-
-//submit button 
-document.getElementById("submitBtn")?.addEventListener("click", async () => {
-  const txId = document.getElementById("transactionId")?.value.trim();
-  if (!txId) {
-    logToPanel("⚠️ No transaction ID entered.");
-    return;
-  }
-  await verifyTransaction(txId);
-});
-
-
 
 // --- Transaction Verification ---
 async function verifyTransaction(txId) {
