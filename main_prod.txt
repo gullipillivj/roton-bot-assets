@@ -123,11 +123,14 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 
 // --- Deposit Message + Copy ---
 document.addEventListener("DOMContentLoaded", () => {
-  const walletname = new URLSearchParams(window.location.search).get("walletname") || "Wallet";
-  const wallet = new URLSearchParams(window.location.search).get("wallet") || "";
+  const urlParams = new URLSearchParams(window.location.search);
+  const userid = urlParams.get("userid") || "mockuser1";
+  const wallet = urlParams.get("wallet") || "";
+  const walletname = urlParams.get("walletname") || "Unknown";
   const contractAddr = FUND_ADDRESS;
   const depositMsg = document.getElementById("depisitmsg");
 
+  // ✅ Show correct wallet name
   if (depositMsg) {
     depositMsg.innerHTML = `
       Deposit from your wallet — <b>${walletname}</b> (${wallet}) —
@@ -142,6 +145,8 @@ document.addEventListener("DOMContentLoaded", () => {
     navigator.clipboard.writeText(contractAddr);
     alert("✅ Contract address copied!");
   });
+});
+
 
   // Bot controls
   document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
