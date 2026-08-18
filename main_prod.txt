@@ -20,13 +20,17 @@ const userid     = urlParams.get("userid");
 const wallet     = urlParams.get("wallet");
 const walletname = urlParams.get("walletname");
 
-if (!userid || userid === "" || userid === "mockuser1") {
-  window.location.href = window.BASE_URL + "/login";
-} else {
-  window.USER_ID        = userid;
+window.USER_ID        = userid;
   window.USER_ADDR      = wallet || "";
   window.USER_WALLETNAME = walletname || "Wallet";   // ✅ FIXED
-}
+
+
+
+
+if (!userid || userid === "" || userid === "mockuser1") {
+  window.location.href = window.BASE_URL + "/login";
+} 
+  
 
 // --- ABI Definitions ---
 const fundAbi = [
