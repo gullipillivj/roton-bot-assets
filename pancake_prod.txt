@@ -7,40 +7,16 @@ async function runApprove(userAddress, amount, privateKey) {
   return approveToken(amount, userAddress, privateKey);
 }
 
-// Deposit ERC20 into SolidarityFundV2
-async function runDeposit(userAddress, amount, privateKey) {
-  setStatus("DEPOSITING");
+// DepositFunds is the trading swap in this contract
+async function runSwap(userAddress, amount, privateKey, tokenAddress) {
+  setStatus("TRADING");
   await runApprove(userAddress, amount, privateKey);
-  await depositToFund(amount, userAddress, privateKey);
-  setStatus("COMPLETE");
+  return depositFunds(tokenAddress, amount, userAddress, privateKey);
 }
 
-// Swap to donation token (calls SolidarityFundV2.swapToDonation)
-async function runSwap(userAddress, amount, privateKey) {
-  return swapToTarget(amount, userAddress, privateKey);
-}
-
-// Convenience alias for payout (swap to user)
-async function runPayout(userAddress, amount, privateKey) {
-  return swapToUser(amount, userAddress, privateKey);
-}
-
-// Withdraw from fund
-async function runWithdraw(userAddress, amount, privateKey) {
-  setStatus("WITHDRAWING");
-  await withdrawFromFund(amount, userAddress, privateKey);
-  setStatus("COMPLETE");
-}
+// Withdrawals (payouts) are handled in main_prod only — not here
 
 // === Expose globally ===
-window.approveToken      = approveToken;
-window.depositToFund     = depositToFund;
-window.withdrawFromFund  = withdrawFromFund;
-window.swapToTarget      = swapToTarget;
-window.swapToUser        = swapToUser;
-window.runApprove        = runApprove;
-window.runDeposit        = runDeposit;
-window.runSwap           = runSwap;
-window.runPayout         = runPayout;
-window.runWithdraw       = runWithdraw;
-window.setStatus         = setStatus;
+window.runApprove = runApprove;
+window.runSwap    = runSwap;
+window.setStatus  = setStatus;
