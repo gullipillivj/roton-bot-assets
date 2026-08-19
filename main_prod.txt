@@ -100,8 +100,6 @@ async function syncBalanceFromFund() {
     }
 }
 
-
-
 // --- Chart Initialization ---
 const ctx = document.getElementById("balanceChart")?.getContext("2d");
 if (ctx) {
