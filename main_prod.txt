@@ -101,7 +101,42 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
- 
+    //etherscan tx check 
+    document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
+  const txIdInput = document.getElementById("txId");
+  const txHash = txIdInput ? txIdInput.value.trim() : "";
+
+  if (!txHash) {
+    logToPanel("[ERROR] Please enter a valid Transaction Hash before submitting.");
+    return;
+  }
+
+  try {
+    const response = await fetch("/prodbot/verify_tx", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tx_hash: txHash })
+    });
+    const data = await response.json();
+
+    if (data.status === "success") {
+      logToPanel("[SUCCESS] Transaction confirmed successfully!");
+      document.getElementById("statusLabel").textContent = "STATE: TX_CONFIRMED";
+    } else if (data.status === "fail") {
+      logToPanel("[ALERT] Transaction execution failed or reverted on-chain.");
+      document.getElementById("statusLabel").textContent = "STATE: TX_REVERTED";
+    } else if (data.status === "pending") {
+      logToPanel("[PENDING] Transaction not mined yet.");
+    } else {
+      logToPanel(`[ERROR] ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[API ERROR] Unable to reach backend: ${err.message}`);
+  }
+});
+
+
+
     //deposit button 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
