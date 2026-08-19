@@ -101,6 +101,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+    //deposit button 
+    document.getElementById("depositBtn")?.addEventListener("click", () => {
+        const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
+        runDeposit(amt);
+    });
+
+
     // Stop execution capture hook
     document.getElementById("stopBtn")?.addEventListener("click", () => {
         window.isBotRunning = false;
