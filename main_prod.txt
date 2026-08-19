@@ -20,6 +20,7 @@ const userid     = urlParams.get("userid");
 const wallet     = urlParams.get("wallet");
 const walletname = urlParams.get("walletname");
 
+//redirection
 window.USER_ID        = userid;
 window.USER_ADDR      = wallet || "";
 window.USER_WALLETNAME = walletname || "Wallet";
@@ -94,6 +95,7 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     logToPanel(`❌ Withdrawal Error: ${err.message}`);
   }
 });
+
 
 // --- Deposit Message + Copy ---
 document.addEventListener("DOMContentLoaded", () => {
