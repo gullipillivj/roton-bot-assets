@@ -1,90 +1,46 @@
-// pancake_prod.txt — connector layer (approve/deposit/withdraw/swap via secure backend)
 logToPanel("pancake_prod.txt loaded");
 
-function safeParse(text) {
-  try { return JSON.parse(text); } catch { return null; }
-}
-function logResult(action, data) {
-  if (data && data.tx_hash) {
-    logToPanel(`[RESULT] ${action} — TxHash=${data.tx_hash}`);
-  } else {
-    logToPanel(`[RESULT] ${action} — Raw=${JSON.stringify(data)}`);
-  }
-}
+// === Contract Interaction Wrappers ===
 
-
-// === Secure Backend Calls ===
-async function callSecurity(action, payload) {
-  try {
-    const res = await fetch("/prodbot/security", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        wallet: window.USER_ADDR,
-        ...payload,
-        action
-      })
-    });
-    return await res.json();
-  } catch (err) {
-    logToPanel(`[ERROR] ${action} failed: ${err.message}`);
-    return null;
-  }
-}
-
-// === Wrappers ===
 // Approve ERC20 token for spending by SolidarityFundV2
-async function runApprove(amount, tokenAddress) {
-  const parsed = await callSecurity("approve", { amount, tokenAddress });
-  logResult("Approve", parsed);
-  return parsed;
+async function runApprove(userAddress, amount, privateKey) {
+  return approveToken(amount, userAddress, privateKey);
 }
 
 // Deposit ERC20 into SolidarityFundV2
-async function runDeposit(amount, tokenAddress) {
-  const parsed = await callSecurity("deposit", { amount, tokenAddress });
-  logResult("Deposit", parsed);
-  return parsed;
+async function runDeposit(userAddress, amount, privateKey) {
+  setStatus("DEPOSITING");
+  await runApprove(userAddress, amount, privateKey);
+  await depositToFund(amount, userAddress, privateKey);
+  setStatus("COMPLETE");
 }
 
 // Swap to donation token (calls SolidarityFundV2.swapToDonation)
-// Swap to donation token via backend /prodbot/swap
-async function runSwap(amount, tokenAddress, amountOutMin = "0") {
-  try {
-    const res = await fetch("/prodbot/swap", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        token_out: tokenAddress,
-        amount_in: amount,
-        amountOutMin: amountOutMin
-      })
-    });
-
-    const parsed = await res.json();
-    if (parsed && parsed.tx_hash) {
-      logToPanel(`🎉 Swap submitted — TxHash=${parsed.tx_hash}`);
-    } else {
-      logToPanel(`❌ Swap failed — ${JSON.stringify(parsed)}`);
-    }
-    return parsed;
-  } catch (err) {
-    logToPanel(`❌ Swap error: ${err.message}`);
-    return null;
-  }
+async function runSwap(userAddress, amount, privateKey) {
+  return swapToTarget(amount, userAddress, privateKey);
 }
 
-// Convenience alias for payout
-async function runPayout(amount, tokenAddress) {
-  return await runSwap(amount, tokenAddress, "0");
+// Convenience alias for payout (swap to user)
+async function runPayout(userAddress, amount, privateKey) {
+  return swapToUser(amount, userAddress, privateKey);
+}
+
+// Withdraw from fund
+async function runWithdraw(userAddress, amount, privateKey) {
+  setStatus("WITHDRAWING");
+  await withdrawFromFund(amount, userAddress, privateKey);
+  setStatus("COMPLETE");
 }
 
 // === Expose globally ===
-window.runApprove = runApprove;
-window.runDeposit = runDeposit;
-window.runWithdraw = runSwap;   // withdraw is swapToDonation
-window.runSwap = runSwap;
-window.runPayout = runPayout;
-window.logResult = logResult;
+window.approveToken      = approveToken;
+window.depositToFund     = depositToFund;
+window.withdrawFromFund  = withdrawFromFund;
+window.swapToTarget      = swapToTarget;
+window.swapToUser        = swapToUser;
+window.runApprove        = runApprove;
+window.runDeposit        = runDeposit;
+window.runSwap           = runSwap;
+window.runPayout         = runPayout;
+window.runWithdraw       = runWithdraw;
+window.setStatus         = setStatus;
