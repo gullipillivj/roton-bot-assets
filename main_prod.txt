@@ -2,96 +2,55 @@
 logToPanel("main_prod.txt loaded (Production Event Wiring)");
 
 // === Contract Initialization (USDT + Fund) ===
-
-// Set your deployed SolidarityFundV2 contract address
 window.FUND_ADDRESS = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
-
-// USDT token contract address on BSC mainnet (adjust if using testnet or another stablecoin)
 const USDT_TOKEN_ADDRESS = "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
 
-// Minimal ERC20 ABI for balanceOf + approve + transferFrom
 const ERC20_ABI = [
-  {
-    "constant": true,
-    "inputs": [{ "name": "account", "type": "address" }],
-    "name": "balanceOf",
-    "outputs": [{ "name": "", "type": "uint256" }],
-    "type": "function"
-  },
-  {
-    "constant": false,
-    "inputs": [
-      { "name": "spender", "type": "address" },
-      { "name": "amount", "type": "uint256" }
-    ],
-    "name": "approve",
-    "outputs": [{ "name": "", "type": "bool" }],
-    "type": "function"
-  },
-  {
-    "constant": false,
-    "inputs": [
-      { "name": "sender", "type": "address" },
-      { "name": "recipient", "type": "address" },
-      { "name": "amount", "type": "uint256" }
-    ],
-    "name": "transferFrom",
-    "outputs": [{ "name": "", "type": "bool" }],
-    "type": "function"
-  }
+  { "constant": true, "inputs": [{ "name": "account", "type": "address" }],
+    "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
+  { "constant": false, "inputs": [{ "name": "spender", "type": "address" },{ "name": "amount", "type": "uint256" }],
+    "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "type": "function" },
+  { "constant": false, "inputs": [{ "name": "sender", "type": "address" },{ "name": "recipient", "type": "address" },{ "name": "amount", "type": "uint256" }],
+    "name": "transferFrom", "outputs": [{ "name": "", "type": "bool" }], "type": "function" }
 ];
 
-// Initialize Web3 contract instance for USDT
 window.USDT_CONTRACT = new web3.eth.Contract(ERC20_ABI, USDT_TOKEN_ADDRESS);
-
 logToPanel("✅ Contract initialization complete — Fund + USDT wired");
 
-// === Global State Synchronization ===
+// === Global State ===
 window.cumulativePnL = 0;
 window.isBotRunning = false;
 
-// === Global Helper Utilities ===
-function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
-
+// === Utilities ===
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) {
         panel.value += msg + "\n";
-        panel.scrollTop = panel.scrollHeight; // Auto-scroll logs
-    } else {
-        console.log(msg);
-    }
+        panel.scrollTop = panel.scrollHeight;
+    } else { console.log(msg); }
 }
-
 window.setStatus = function(text) {
     const statusLabel = document.getElementById("statusLabel");
     if (statusLabel) statusLabel.textContent = "STATE: " + text;
     else logToPanel(`STATE: ${text}`);
 };
 
-// === Production Ledger Synchronizer ===
-// === Production Ledger Synchronizer ===
+// === Balance Synchronizer (fixed BN parsing) ===
 async function syncBalanceFromFund() {
     try {
         if (!window.USDT_CONTRACT || !window.FUND_ADDRESS) {
             logToPanel("[SYNC] Missing contract or fund address; skipping sync");
             return null;
         }
-
-        // Query on-chain USDT balance of the SolidarityFund contract
         const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
-
-        // ✅ Corrected: USDT uses 6 decimals, not 18
-        const balanceFloat = Number(web3.utils.toBN(raw).toString()) / 1e6;
+        const balanceFloat = Number(web3.utils.toBN(raw).toString()) / 1e6; // ✅ USDT decimals
 
         logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
 
-        if (document.getElementById("startBalance")) {
-            document.getElementById("startBalance").value = balanceFloat.toFixed(2);
-        }
-        if (document.getElementById("investBalance")) {
-            document.getElementById("investBalance").value = balanceFloat.toFixed(2);
-        }
+        const startBox = document.getElementById("startBalance");
+        const investBox = document.getElementById("investBalance");
+        if (startBox) startBox.value = balanceFloat.toFixed(2);
+        if (investBox) investBox.value = balanceFloat.toFixed(2);
 
         window.SolidarityFundBalance = balanceFloat;
         return balanceFloat;
@@ -101,106 +60,45 @@ async function syncBalanceFromFund() {
     }
 }
 
-
-// --- Chart Initialization ---
-const ctx = document.getElementById("balanceChart")?.getContext("2d");
-if (ctx) {
-  window.balanceChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        { label: "Investment Balance", borderColor: "#f3ba2f", data: [] },
-        { label: "Profit/Loss", borderColor: "#00FF00", data: [] }
-      ]
-    },
-    options: { responsive: true, scales: { y: { beginAtZero: true } } }
-  });
-  logToPanel("✅ Chart initialized successfully");
-} else {
-  logToPanel("⚠️ Chart canvas not found — skipping chart setup");
-}
-
-// === Main UI Event Binding Interface ===
+// === UI Event Bindings ===
 document.addEventListener("DOMContentLoaded", async () => {
     window.setStatus("READY TO TRADE");
     await syncBalanceFromFund();
 
-    // Hook up real Start Button loop execution
+    // Start Trading button
     document.getElementById("startBtn")?.addEventListener("click", async () => {
         if (window.isBotRunning) {
-            logToPanel("[WARN] Trading execution loop is already actively processing.");
+            logToPanel("[WARN] Trading loop already running.");
             return;
         }
-
-        // Dynamically parse cycles from the layout form input
         const cycleInput = document.getElementById("cycleCount");
         const executionCycles = cycleInput ? parseInt(cycleInput.value) || 10 : 10;
-
         const launchEngine = window.startSimulation;
         if (typeof launchEngine === "function") {
             window.setStatus("RUNNING");
-            try {
-                await launchEngine(executionCycles);
-            } catch (err) {
-                logToPanel(`[CRITICAL SIMULATION ERROR] ${err.message}`);
-            } finally {
-                window.setStatus("COMPLETED");
-            }
+            try { await launchEngine(executionCycles); }
+            catch (err) { logToPanel(`[CRITICAL SIM ERROR] ${err.message}`); }
+            finally { window.setStatus("COMPLETED"); }
         } else {
-            logToPanel("[ERROR] The simulate_prod.txt launch engine core function was not detected.");
+            logToPanel("[ERROR] simulate_prod.txt launch engine not detected.");
         }
     });
 
-    //etherscan tx check 
-    document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
-  const txIdInput = document.getElementById("txId");
-  const txHash = txIdInput ? txIdInput.value.trim() : "";
-
-  if (!txHash) {
-    logToPanel("[ERROR] Please enter a valid Transaction Hash before submitting.");
-    return;
-  }
-
-  try {
-    const response = await fetch("/prodbot/verify_tx", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tx_hash: txHash })
-    });
-    const data = await response.json();
-
-    if (data.status === "success") {
-      logToPanel("[SUCCESS] Transaction confirmed successfully!");
-      document.getElementById("statusLabel").textContent = "STATE: TX_CONFIRMED";
-    } else if (data.status === "fail") {
-      logToPanel("[ALERT] Transaction execution failed or reverted on-chain.");
-      document.getElementById("statusLabel").textContent = "STATE: TX_REVERTED";
-    } else if (data.status === "pending") {
-      logToPanel("[PENDING] Transaction not mined yet.");
-    } else {
-      logToPanel(`[ERROR] ${data.message}`);
-    }
-  } catch (err) {
-    logToPanel(`[API ERROR] Unable to reach backend: ${err.message}`);
-  }
-});
-
-
-
-    //deposit button 
+    // ✅ Keep contracts redirection for deposits
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
         if (!window.isBotRunning) {
-        window.open("https://roton.store/contracts", "_blank", "width=800,height=600,resizable=yes");;
-      }
+            window.open("https://roton.store/contracts", "_blank", "width=800,height=600,resizable=yes");
+        }
     });
 
-
-    // Stop execution capture hook
+    // Stop Trading button
     document.getElementById("stopBtn")?.addEventListener("click", () => {
         window.isBotRunning = false;
         window.setStatus("STOPPED");
-        logToPanel("[COMMAND] Immediate halt instruction received. Halting cycle updates...");
+        logToPanel("[COMMAND] Halt instruction received.");
     });
 });
+
+// Expose globals
+window.syncBalanceFromFund = syncBalanceFromFund;
