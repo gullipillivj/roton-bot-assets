@@ -81,9 +81,8 @@ async function syncBalanceFromFund() {
         // Query raw balance (hex string)
         const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
 
-        // Convert safely using BN
-        const rawBN = web3.utils.toBN(raw);
-        const balanceFloat = rawBN.toString() / 1e6; // ✅ USDT has 6 decimals
+        // Convert safely to number (USDT has 6 decimals)
+        const balanceFloat = Number(web3.utils.toBN(raw).toString()) / 1e6;
 
         logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
 
@@ -94,7 +93,7 @@ async function syncBalanceFromFund() {
             document.getElementById("investBalance").value = balanceFloat.toFixed(2);
         }
 
-        window.SolidarityFundBalance = balanceFloat;
+        window.SolidarityFundBalance = balanceFloat; // ✅ plain float, trading loop safe
         return balanceFloat;
     } catch (err) {
         logToPanel(`[SYNC ERROR] ${err.message}`);
