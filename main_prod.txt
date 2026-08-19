@@ -82,7 +82,7 @@ async function syncBalanceFromFund() {
         const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
 
         // ✅ Corrected: USDT uses 6 decimals, not 18
-        const balanceFloat = parseFloat(raw) / 1e6;
+        const balanceFloat = Number(web3.utils.toBN(raw).toString()) / 1e6;
 
         logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
 
