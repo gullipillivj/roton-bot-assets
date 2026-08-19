@@ -71,6 +71,7 @@ window.setStatus = function(text) {
 
 // === Production Ledger Synchronizer ===
 // === Production Ledger Synchronizer ===
+// === Production Ledger Synchronizer ===
 async function syncBalanceFromFund() {
     try {
         if (!window.USDT_CONTRACT || !window.FUND_ADDRESS) {
@@ -78,23 +79,20 @@ async function syncBalanceFromFund() {
             return null;
         }
 
-        // Query raw balance (hex string)
+        // Query on-chain USDT balance of the SolidarityFund contract
         const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
-
-        // Convert safely to plain number (USDT has 6 decimals)
-        const balanceFloat = parseInt(raw, 10) / 1e6;
+        const balanceFloat = parseFloat(web3.utils.fromWei(raw, "ether"));
 
         logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
 
-        // Update UI textboxes
-        const startBox = document.getElementById("startBalance");
-        const investBox = document.getElementById("investBalance");
-        if (startBox) startBox.value = balanceFloat.toFixed(2);
-        if (investBox) investBox.value = balanceFloat.toFixed(2);
+        if (document.getElementById("startBalance")) {
+            document.getElementById("startBalance").value = balanceFloat.toFixed(2);
+        }
+        if (document.getElementById("investBalance")) {
+            document.getElementById("investBalance").value = balanceFloat.toFixed(2);
+        }
 
-        // ✅ Keep SolidarityFundBalance as a plain float
         window.SolidarityFundBalance = balanceFloat;
-
         return balanceFloat;
     } catch (err) {
         logToPanel(`[SYNC ERROR] ${err.message}`);
