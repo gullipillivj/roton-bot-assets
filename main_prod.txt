@@ -1,180 +1,91 @@
-// ==========================================================
-// MAIN_PROD — Core Bot Controls
-// ==========================================================
-logToPanel("✅ main_prod.txt started");
+// main_prod.txt — Production Web3 Control & UI Wiring
+logToPanel("main_prod.txt loaded (Production Event Wiring)");
 
-// --- Global Config ---
-window.USER_ID   = "mockuser1";
-window.USER_ADDR = "";
-window.BASE_URL  = "https://roton.store";
-
+// === Global State Synchronization ===
 window.cumulativePnL = 0;
 window.isBotRunning = false;
 
-const FUND_ADDRESS    = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
-const USER_TOKEN_ADDR = "0x55d398326f99059ff775485246999027b3197955";
+// === Global Helper Utilities ===
+function safeParse(text) { try { return JSON.parse(text); } catch { return null; } }
 
-// --- Redirect if no userid in URL ---
-const urlParams  = new URLSearchParams(window.location.search);
-const userid     = urlParams.get("userid");
-const wallet     = urlParams.get("wallet");
-const walletname = urlParams.get("walletname");
-
-//redirection
-window.USER_ID        = userid;
-window.USER_ADDR      = wallet || "";
-window.USER_WALLETNAME = walletname || "Wallet";
-
-if (!userid || userid === "" || userid === "mockuser1") {
-  window.location.href = window.BASE_URL + "/login";
-} 
-
-// --- ABI Definitions ---
-const fundAbi = [
-  { "inputs":[{"name":"token","type":"address"},{"name":"amount","type":"uint256"}],
-    "name":"depositFunds","outputs":[],"stateMutability":"nonpayable","type":"function" },
-  { "inputs":[{"name":"tokenAddress","type":"address"},{"name":"amount","type":"uint256"},{"name":"amountOutMin","type":"uint256"}],
-    "name":"swapToDonation","outputs":[],"stateMutability":"nonpayable","type":"function" }
-];
-const tokenAbi = [
-  { "inputs":[{"name":"spender","type":"address"},{"name":"amount","type":"uint256"}],
-    "name":"approve","outputs":[],"stateMutability":"nonpayable","type":"function" },
-  { "inputs":[{"name":"account","type":"address"}],
-    "name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"stateMutability":"view","type":"function" }
-];
-
-// --- WalletConnect Init ---
-async function connectWallet() {
-  try {
-    const session = await appKit.connect();
-    if (session && session.accounts.length > 0) {
-      window.USER_ADDR = session.accounts[0];
-      logToPanel("✅ Wallet Connected: " + window.USER_ADDR);
-      await initWeb3AndContracts();
-      await syncBalanceFromFund();
-    }
-  } catch (err) {
-    logToPanel("❌ WalletConnect Error: " + err.message);
-  }
-}
-
-async function initWeb3AndContracts() {
-  const provider = appKit.getProvider();
-  web3 = new Web3(provider);
-  fund = new web3.eth.Contract(fundAbi, FUND_ADDRESS);
-  userToken = new web3.eth.Contract(tokenAbi, USER_TOKEN_ADDR);
-}
-
-// --- Contract Actions ---
-document.getElementById("depositBtn")?.addEventListener("click", async () => {
-  const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
-  if (amt <= 0) return logToPanel("⚠️ Invalid deposit amount");
-
-  const accounts = await web3.eth.getAccounts();
-  const userWallet = accounts[0];
-
-  try {
-    await userToken.methods.approve(FUND_ADDRESS, toTokenUnits(amt)).send({ from: userWallet });
-    const receipt = await fund.methods.depositFunds(USER_TOKEN_ADDR, toTokenUnits(amt)).send({ from: userWallet });
-    logToPanel(`✅ Deposit Tx: ${receipt.transactionHash}`);
-  } catch (err) {
-    logToPanel(`❌ Deposit Error: ${err.message}`);
-  }
-});
-
-document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-  const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
-  const accounts = await web3.eth.getAccounts();
-  const userWallet = accounts[0];
-
-  try {
-    const receipt = await fund.methods.swapToDonation(USER_TOKEN_ADDR, toTokenUnits(amt), "0")
-      .send({ from: userWallet });
-    logToPanel(`✅ Withdrawal Tx: ${receipt.transactionHash}`);
-  } catch (err) {
-    logToPanel(`❌ Withdrawal Error: ${err.message}`);
-  }
-});
-
-
-// --- Deposit Message + Copy ---
-document.addEventListener("DOMContentLoaded", () => {
-  const msg = document.getElementById("depisitmsg");
-  if (!msg) return;
-
-  msg.innerHTML = `Deposit from your wallet — <b>${window.USER_WALLETNAME}</b> (${window.USER_ADDR}) —
-  into contract address <span style="color:#f3ba2f;font-weight:bold;">${FUND_ADDRESS}</span>
-  <button id="copyContractBtn">📋</button> and enter your transaction ID.`;
-
-  document.getElementById("copyContractBtn").onclick = () => {
-    navigator.clipboard.writeText(FUND_ADDRESS);
-    alert("✅ Contract address copied!");
-  };
-
-  // Bot controls
-  document.getElementById("connectWalletBtn")?.addEventListener("click", connectWallet);
-
-  document.getElementById("startBtn")?.addEventListener("click", async () => {
-    const cycles = parseInt(document.getElementById("cycleCount")?.value || "10");
-    const profitTargetPct = parseFloat(document.getElementById("profitTargetPct")?.value || "10");
-    const stopLossPct = parseFloat(document.getElementById("stopLossPct")?.value || "5");
-
-    disableAllControls();
-    logToPanel("🚀 Starting bot...");
-
-    window.isBotRunning = true;
-    for (let i = 1; i <= cycles && window.isBotRunning; i++) {
-      const result = await window.simulateCycle(i, cycles, profitTargetPct, stopLossPct);
-
-      if (result === "STOP_PROFIT") {
-        logToPanel("🎉 Profit target reached — stopping bot");
-        break;
-      }
-      if (result === "STOP_LOSS") {
-        logToPanel("🛑 Stop‑loss triggered — stopping bot");
-        break;
-      }
-
-      await new Promise(res => setTimeout(res, 2000));
-    }
-
-    enableAllControls();
-    logToPanel("✅ Trading loop finished");
-  });
-
-  document.getElementById("stopBotBtn")?.addEventListener("click", () => {
-    window.isBotRunning = false;
-    enableAllControls();
-    logToPanel("🛑 Bot stopped by user");
-  });
-
-  // Transaction verification listener
-  document.getElementById("submitBtn")?.addEventListener("click", async () => {
-    const txId = document.getElementById("transactionId")?.value.trim();
-    if (!txId) {
-      logToPanel("⚠️ No transaction ID entered.");
-      return;
-    }
-    await verifyTransaction(txId);
-  });
-});
-
-// --- Transaction Verification ---
-async function verifyTransaction(txId) {
-  const apiUrl = `https://api.etherscan.io/v2/api?chainid=1&module=transaction&action=gettxreceiptstatus&txhash=${txId}&apikey=T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4`;
-
-  try {
-    const res = await fetch(apiUrl);
-    const data = await res.json();
-
-    if (data.status === "1" && data.result && data.result.status === "1") {
-      logToPanel(`✅ Transaction confirmed: ${txId}`);
-    } else if (data.status === "1" && data.result && data.result.status === "0") {
-      logToPanel(`❌ Transaction failed: ${txId}`);
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    if (panel) {
+        panel.value += msg + "\n";
+        panel.scrollTop = panel.scrollHeight; // Auto-scroll logs
     } else {
-      logToPanel(`⚠️ Transaction not yet mined or invalid: ${txId}`);
+        console.log(msg);
     }
-  } catch (err) {
-    logToPanel(`❌ Verification error: ${err.message}`);
-  }
 }
+
+window.setStatus = function(text) {
+    const statusLabel = document.getElementById("statusLabel");
+    if (statusLabel) statusLabel.textContent = "STATE: " + text;
+    else logToPanel(`STATE: ${text}`);
+};
+
+// === Production Ledger Synchronizer ===
+async function syncBalanceFromFund() {
+    try {
+        const uLabel = document.getElementById("currentUserLabel");
+        const wLabel = document.getElementById("currentWalletLabel");
+        const userid = uLabel ? uLabel.textContent.trim() : "unknown";
+        const wallet = wLabel ? wLabel.textContent.trim() : "";
+
+        const resp = await fetch("/runbot/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: userid, wallet_address: wallet })
+        });
+        const fundData = await resp.json();
+
+        if (fundData && fundData.balance !== undefined) {
+            const balance = parseFloat(fundData.balance);
+            logToPanel(`[BALANCE SYNC] Current Fund Balance: ${balance.toFixed(2)} USDT`);
+
+            if(document.getElementById("startBalance")) document.getElementById("startBalance").value = balance.toFixed(2);
+            if(document.getElementById("investBalance")) document.getElementById("investBalance").value = balance.toFixed(2);
+        }
+    } catch (err) {
+        logToPanel(`[SYNC ERROR] ${err.message}`);
+    }
+}
+
+// === Main UI Event Binding Interface ===
+document.addEventListener("DOMContentLoaded", async () => {
+    window.setStatus("READY TO TRADE");
+    await syncBalanceFromFund();
+
+    // Hook up real Start Button loop execution
+    document.getElementById("startBtn")?.addEventListener("click", async () => {
+        if (window.isBotRunning) {
+            logToPanel("[WARN] Trading execution loop is already actively processing.");
+            return;
+        }
+
+        // Dynamically parse cycles from the layout form input
+        const cycleInput = document.getElementById("cycleCount");
+        const executionCycles = cycleInput ? parseInt(cycleInput.value) || 10 : 10;
+
+        const launchEngine = window.startSimulation;
+        if (typeof launchEngine === "function") {
+            window.setStatus("RUNNING");
+            try {
+                await launchEngine(executionCycles);
+            } catch (err) {
+                logToPanel(`[CRITICAL SIMULATION ERROR] ${err.message}`);
+            } finally {
+                window.setStatus("COMPLETED");
+            }
+        } else {
+            logToPanel("[ERROR] The simulate_prod.txt launch engine core function was not detected.");
+        }
+    });
+
+    // Stop execution capture hook
+    document.getElementById("stopBtn")?.addEventListener("click", () => {
+        window.isBotRunning = false;
+        window.setStatus("STOPPED");
+        logToPanel("[COMMAND] Immediate halt instruction received. Halting cycle updates...");
+    });
+});
