@@ -81,9 +81,8 @@ async function syncBalanceFromFund() {
         // Query on-chain USDT balance of the SolidarityFund contract
         const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
 
-        // ✅ Corrected: USDT uses 6 decimals, not 18
-        // USDT uses 6 decimals, not 18
-            const balanceFloat = parseFloat(raw) / 1e6;
+        // ✅ USDT uses 6 decimals, so divide by 1e6
+        const balanceFloat = parseFloat(raw) / 1e6;
 
         logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
 
