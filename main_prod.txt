@@ -51,6 +51,25 @@ async function syncBalanceFromFund() {
     }
 }
 
+// --- Chart Initialization ---
+const ctx = document.getElementById("balanceChart")?.getContext("2d");
+if (ctx) {
+  window.balanceChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: [],
+      datasets: [
+        { label: "Investment Balance", borderColor: "#f3ba2f", data: [] },
+        { label: "Profit/Loss", borderColor: "#00FF00", data: [] }
+      ]
+    },
+    options: { responsive: true, scales: { y: { beginAtZero: true } } }
+  });
+  logToPanel("✅ Chart initialized successfully");
+} else {
+  logToPanel("⚠️ Chart canvas not found — skipping chart setup");
+}
+
 // === Main UI Event Binding Interface ===
 document.addEventListener("DOMContentLoaded", async () => {
     window.setStatus("READY TO TRADE");
