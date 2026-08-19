@@ -27,29 +27,32 @@ window.setStatus = function(text) {
 // === Production Ledger Synchronizer ===
 async function syncBalanceFromFund() {
     try {
-        const uLabel = document.getElementById("currentUserLabel");
-        const wLabel = document.getElementById("currentWalletLabel");
-        const userid = uLabel ? uLabel.textContent.trim() : "unknown";
-        const wallet = wLabel ? wLabel.textContent.trim() : "";
-
-        const resp = await fetch("/runbot/balances", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userid: userid, wallet_address: wallet })
-        });
-        const fundData = await resp.json();
-
-        if (fundData && fundData.balance !== undefined) {
-            const balance = parseFloat(fundData.balance);
-            logToPanel(`[BALANCE SYNC] Current Fund Balance: ${balance.toFixed(2)} USDT`);
-
-            if(document.getElementById("startBalance")) document.getElementById("startBalance").value = balance.toFixed(2);
-            if(document.getElementById("investBalance")) document.getElementById("investBalance").value = balance.toFixed(2);
+        if (!window.USDT_CONTRACT || !window.FUND_ADDRESS) {
+            logToPanel("[SYNC] Missing contract or fund address; skipping sync");
+            return null;
         }
+
+        // Query on-chain USDT balance of the SolidarityFund contract
+        const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
+        const balanceFloat = parseFloat(web3.utils.fromWei(raw, "ether"));
+
+        logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
+
+        if (document.getElementById("startBalance")) {
+            document.getElementById("startBalance").value = balanceFloat.toFixed(2);
+        }
+        if (document.getElementById("investBalance")) {
+            document.getElementById("investBalance").value = balanceFloat.toFixed(2);
+        }
+
+        window.SolidarityFundBalance = balanceFloat;
+        return balanceFloat;
     } catch (err) {
         logToPanel(`[SYNC ERROR] ${err.message}`);
+        return null;
     }
 }
+
 
 // --- Chart Initialization ---
 const ctx = document.getElementById("balanceChart")?.getContext("2d");
