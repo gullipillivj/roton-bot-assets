@@ -101,10 +101,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
+ 
     //deposit button 
     document.getElementById("depositBtn")?.addEventListener("click", () => {
         const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
-        runDeposit(amt);
+        if (!window.isBotRunning) {
+        window.open("https://roton.store/contracts", "_blank", "width=800,height=600,resizable=yes");;
+      }
     });
 
 
