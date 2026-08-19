@@ -70,6 +70,7 @@ window.setStatus = function(text) {
 };
 
 // === Production Ledger Synchronizer ===
+// === Production Ledger Synchronizer ===
 async function syncBalanceFromFund() {
     try {
         if (!window.USDT_CONTRACT || !window.FUND_ADDRESS) {
@@ -79,7 +80,9 @@ async function syncBalanceFromFund() {
 
         // Query on-chain USDT balance of the SolidarityFund contract
         const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
-        const balanceFloat = parseFloat(web3.utils.fromWei(raw, "ether"));
+
+        // ✅ Corrected: USDT uses 6 decimals, not 18
+        const balanceFloat = parseFloat(raw) / 1e6;
 
         logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
 
