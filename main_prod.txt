@@ -72,6 +72,7 @@ window.setStatus = function(text) {
 // === Production Ledger Synchronizer ===
 // === Production Ledger Synchronizer ===
 // === Production Ledger Synchronizer ===
+// === Production Ledger Synchronizer ===
 async function syncBalanceFromFund() {
     try {
         if (!window.USDT_CONTRACT || !window.FUND_ADDRESS) {
@@ -99,6 +100,8 @@ async function syncBalanceFromFund() {
         return null;
     }
 }
+
+
 
 // --- Chart Initialization ---
 const ctx = document.getElementById("balanceChart")?.getContext("2d");
