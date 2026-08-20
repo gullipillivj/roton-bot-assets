@@ -1,37 +1,29 @@
-// main_prod.txt — Production Web3 Control & UI Wiring
 logToPanel("main_prod.txt loaded (Production Event Wiring)");
 
-// Add at the very top of main_prod.txt
 if (typeof window.ethereum !== 'undefined') {
     window.web3 = new Web3(window.ethereum);
 } else {
-    // Fallback directly to your local RPC node configuration
-    window.web3 = new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:8545"));
-    logToPanel("[WARN] No Web3 provider detected; falling back to local RPC endpoint.");
+    window.web3 = new Web3(new Web3.providers.HttpProvider("https://binance.org"));
+    logToPanel("[WARN] No Web3 provider detected; falling back to public BSC endpoint.");
 }
 
-window.FUND_ADDRESS = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
-const USDT_TOKEN_ADDRESS = "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
+// Authoritative Master Contract References
+window.FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
+window.BOT_WALLET_ADDRESS = "0x07076BD62abB189ed37aC1f4ca7CD6a155B3F4a0"; // Account 2 (Bot Wallet) Derived from your verified tx records
+window.WBNB_TOKEN_ADDRESS = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // BSC Mainnet WBNB
 
-// ... continue into your existing ERC20_ABI assignment
-
-const ERC20_ABI = [
-  { "constant": true, "inputs": [{ "name": "account", "type": "address" }],
-    "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" },
-  { "constant": false, "inputs": [{ "name": "spender", "type": "address" },{ "name": "amount", "type": "uint256" }],
-    "name": "approve", "outputs": [{ "name": "", "type": "bool" }], "type": "function" },
-  { "constant": false, "inputs": [{ "name": "sender", "type": "address" },{ "name": "recipient", "type": "address" },{ "name": "amount", "type": "uint256" }],
-    "name": "transferFrom", "outputs": [{ "name": "", "type": "bool" }], "type": "function" }
+const MASTER_POOL_ABI = [
+  { "inputs": [{"internalType": "address", "name": "user", "type": "address"}], "name": "checkUserBalance", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function" },
+  { "inputs": [], "name": "depositBNB", "outputs": [], "stateMutability": "payable", "type": "function" },
+  { "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}], "name": "withdrawUserCapital", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
 ];
 
-window.USDT_CONTRACT = new web3.eth.Contract(ERC20_ABI, USDT_TOKEN_ADDRESS);
-logToPanel("✅ Contract initialization complete — Fund + USDT wired");
+window.MASTER_CONTRACT = new web3.eth.Contract(MASTER_POOL_ABI, window.FUND_ADDRESS);
+logToPanel("✅ Contract initialization complete — Master Pool wired");
 
-// === Global State ===
 window.cumulativePnL = 0;
 window.isBotRunning = false;
 
-// === Utilities ===
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) {
@@ -39,28 +31,29 @@ function logToPanel(msg) {
         panel.scrollTop = panel.scrollHeight;
     } else { console.log(msg); }
 }
+
 window.setStatus = function(text) {
     const statusLabel = document.getElementById("statusLabel");
     if (statusLabel) statusLabel.textContent = "STATE: " + text;
     else logToPanel(`STATE: ${text}`);
 };
 
-// === Balance Synchronizer (fixed BN parsing) ===
 async function syncBalanceFromFund() {
     try {
-        if (!window.USDT_CONTRACT || !window.FUND_ADDRESS) {
-            logToPanel("[SYNC] Missing contract or fund address; skipping sync");
+        if (!window.MASTER_CONTRACT || !window.USER_ADDR) {
+            logToPanel("[SYNC] Connection components missing; skipping synchronization check.");
             return null;
         }
-        const raw = await window.USDT_CONTRACT.methods.balanceOf(window.FUND_ADDRESS).call();
-        const balanceFloat = Number(web3.utils.toBN(raw).toString()) / 1e6; // ✅ USDT decimals
+        // Authoritative ledger fetch from your custom contract mapping matrix
+        const raw = await window.MASTER_CONTRACT.methods.checkUserBalance(window.USER_ADDR).call();
+        const balanceFloat = parseFloat(web3.utils.fromWei(raw, "ether"));
 
-        logToPanel(`[BALANCE SYNC] On-chain Fund Balance: ${balanceFloat.toFixed(2)} USDT`);
+        logToPanel(`[BALANCE SYNC] Internal Contract Ledger Balance: ${balanceFloat.toFixed(6)} BNB`);
 
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
-        if (startBox) startBox.value = balanceFloat.toFixed(2);
-        if (investBox) investBox.value = balanceFloat.toFixed(2);
+        if (startBox) startBox.value = balanceFloat.toFixed(6);
+        if (investBox) investBox.value = balanceFloat.toFixed(6);
 
         window.SolidarityFundBalance = balanceFloat;
         return balanceFloat;
@@ -70,45 +63,90 @@ async function syncBalanceFromFund() {
     }
 }
 
-// === UI Event Bindings ===
+async function handleLoginSuccess() {
+    initSessionFromLabels();
+    if (window.USER_ADDR) {
+        logToPanel(`[SESSION] User authenticated via wallet address: ${window.USER_ADDR}`);
+        await syncBalanceFromFund();
+    }
+}
+
+function initSessionFromLabels() {
+    const currentUser = document.getElementById("currentUserLabel")?.textContent.trim();
+    const currentWallet = document.getElementById("currentWalletLabel")?.textContent.trim();
+    window.USER_ID = currentUser || window.USER_ID;
+    window.USER_ADDR = currentWallet || window.USER_ADDR;
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
     window.setStatus("READY TO TRADE");
-    await syncBalanceFromFund();
+    await handleLoginSuccess();
 
-    // Start Trading button
     document.getElementById("startBtn")?.addEventListener("click", async () => {
         if (window.isBotRunning) {
-            logToPanel("[WARN] Trading loop already running.");
+            logToPanel("[WARN] Trading engine loop is already active.");
             return;
         }
         const cycleInput = document.getElementById("cycleCount");
         const executionCycles = cycleInput ? parseInt(cycleInput.value) || 10 : 10;
-        const launchEngine = window.startSimulation;
-        if (typeof launchEngine === "function") {
+        
+        if (typeof window.startSimulation === "function") {
             window.setStatus("RUNNING");
-            try { await launchEngine(executionCycles); }
-            catch (err) { logToPanel(`[CRITICAL SIM ERROR] ${err.message}`); }
-            finally { window.setStatus("COMPLETED"); }
+            try { 
+                await window.startSimulation(executionCycles); 
+            } catch (err) { 
+                logToPanel(`[CRITICAL SIM ERROR] ${err.message}`); 
+            } finally { 
+                window.setStatus("COMPLETED"); 
+            }
         } else {
-            logToPanel("[ERROR] simulate_prod.txt launch engine not detected.");
+            logToPanel("[ERROR] Loop simulation engine script files not located.");
         }
     });
 
-    // ✅ Keep contracts redirection for deposits
-    document.getElementById("depositBtn")?.addEventListener("click", () => {
+    document.getElementById("depositBtn")?.addEventListener("click", async () => {
         const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
-        if (!window.isBotRunning) {
-            window.open("https://roton.store/contracts", "_blank", "width=800,height=600,resizable=yes");
+        if (amt <= 0) return logToPanel("❌ Please provide a valid deposit allocation size.");
+        
+        try {
+            logToPanel(`[METAMASK] Requesting authorization to deposit ${amt} BNB into your isolated ledger...`);
+            const amtWei = web3.utils.toWei(amt.toString(), "ether");
+            
+            await window.MASTER_CONTRACT.methods.depositBNB().send({
+                from: window.USER_ADDR,
+                value: amtWei
+            });
+            logToPanel("✅ On-Chain Deposit Processed Successfully!");
+            await syncBalanceFromFund();
+        } catch (e) {
+            logToPanel(`[DEPOSIT ERROR] ${e.message}`);
         }
     });
 
-    // Stop Trading button
+    document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+        const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
+        if (amt <= 0) return logToPanel("❌ Please provide a valid withdrawal payout amount.");
+        
+        try {
+            logToPanel(`[METAMASK] Requesting withdrawal execution for ${amt} BNB...`);
+            const amtWei = web3.utils.toWei(amt.toString(), "ether");
+            
+            await window.MASTER_CONTRACT.methods.withdrawUserCapital(amtWei).send({
+                from: window.USER_ADDR
+            });
+            logToPanel("✅ Payout Extraction Completed successfully!");
+            await syncBalanceFromFund();
+        } catch (e) {
+            logToPanel(`[WITHDRAWAL ERROR] ${e.message}`);
+        }
+    });
+
     document.getElementById("stopBtn")?.addEventListener("click", () => {
         window.isBotRunning = false;
         window.setStatus("STOPPED");
-        logToPanel("[COMMAND] Halt instruction received.");
+        logToPanel("[COMMAND] Immediate halt directive processed.");
     });
 });
 
-// Expose globals
 window.syncBalanceFromFund = syncBalanceFromFund;
+window.handleLoginSuccess = handleLoginSuccess;
