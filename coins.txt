@@ -1,31 +1,19 @@
-// coins.txt — Coin scanner in JS (client-side)
 logToPanel("coins.txt loaded");
 
-// === API endpoints ===
-const BINANCE_INFO   = "https://api.binance.com/api/v3/exchangeInfo";
-const BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/24hr";
-const BINANCE_KLINES = "https://api.binance.com/api/v3/klines";
-const COINGECKO_API  = "https://api.coingecko.com/api/v3/simple/price";
-const CHANGENOW_API  = "https://api.changenow.io/v1/currencies";
-const KRAKEN_API     = "https://api.kraken.com/0/public/Ticker";
+const BINANCE_INFO   = "https://binance.com";
+const BINANCE_TICKER = "https://binance.com";
+const BINANCE_KLINES = "https://binance.com";
+const CHANGENOW_API  = "https://changenow.io";
 
-// === New Gas Fee APIs ===
-const ETHERSCAN_GAS  = "https://api.etherscan.io/api?module=gastracker&action=gasoracle";
-const BSC_GAS        = "https://api.bscscan.com/api?module=gastracker&action=gasoracle";
-
-// === Helpers ===
 async function getBinancePairs() {
   try {
     const res = await fetch(BINANCE_INFO);
     const data = await res.json();
     return data.symbols.filter(s => s.quoteAsset === "USDT").map(s => s.symbol);
   } catch (e) {
-    console.warn("[WARN] Binance pairs fetch failed:", e);
     return ["BTCUSDT","ETHUSDT","BNBUSDT"];
   }
 }
-
-
 
 async function getBinanceStats(symbol) {
   try {
@@ -37,133 +25,17 @@ async function getBinanceStats(symbol) {
       priceChangePercent: parseFloat(d.priceChangePercent),
       volume: parseFloat(d.volume)
     };
-  } catch (e) {
-    console.warn("[WARN] Binance stats failed:", e);
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
 async function getBinanceHistory(symbol, interval="1h", limit=200) {
   try {
     const res = await fetch(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
     const klines = await res.json();
-    return klines.map(k => parseFloat(k[4])); // closing prices
-  } catch (e) {
-    console.warn("[WARN] Binance history failed:", e);
-    return [];
-  }
+    return klines.map(k => parseFloat(k[4]));
+  } catch (e) { return []; }
 }
 
-function movingAverage(closes, window) {
-  if (closes.length < window) return null;
-  const slice = closes.slice(-window);
-  return slice.reduce((a,b) => a+b, 0) / window;
-}
-
-async function evaluateCoin(symbol) {
-  const stats = await getBinanceStats(symbol);
-  const closes = await getBinanceHistory(symbol, "1h", 200);
-
-  const ma20  = movingAverage(closes, 20);
-  const ma50  = movingAverage(closes, 50);
-  const ma100 = movingAverage(closes, 100);
-
-  const upward = ma20 && ma50 && ma20 > ma50;
-
-  // Resolve token address dynamically
-  const tokenAddress = await getTokenAddress(symbol);
-
-  return {
-    symbol,
-    lastPrice: stats ? stats.lastPrice : null,
-    "24hr%": stats ? stats.priceChangePercent : null,
-    volume: stats ? stats.volume : null,
-    ma20, ma50, ma100,
-    upward_trend: upward,
-    tokenAddress
-  };
-}
-
-async function categorizeCoins() {
-  const symbols = await getBinancePairs();
-  const results = await Promise.all(symbols.map(s => evaluateCoin(s)));
-
-  const long_term  = results.sort((a,b) => (b.ma100||0) - (a.ma100||0)).slice(0,10);
-  const mid_term   = results.sort((a,b) => (b.ma50||0) - (a.ma50||0)).slice(0,10);
-  const short_term = results.sort((a,b) => (b.ma20||0) - (a.ma20||0)).slice(0,10);
-
-  return { long_term, mid_term, short_term };
-}
-
-// === Other APIs for redundancy ===
-async function getCoingecko(ids="bitcoin", vs="usd") {
-  try {
-    const res = await fetch(`${COINGECKO_API}?ids=${ids}&vs_currencies=${vs}`);
-    const d = await res.json();
-    return { symbol: ids, lastPrice: d[ids][vs] };
-  } catch (e) {
-    console.warn("[WARN] CoinGecko failed:", e);
-    return null;
-  }
-}
-
-async function getChangenow() {
-  try {
-    const res = await fetch(CHANGENOW_API);
-    return await res.json();
-  } catch (e) {
-    console.warn("[WARN] ChangeNOW failed:", e);
-    return [];
-  }
-}
-
-async function getKraken(pair="XBTUSD") {
-  try {
-    const res = await fetch(`${KRAKEN_API}?pair=${pair}`);
-    const d = await res.json();
-    const ticker = d.result[pair];
-    return { symbol: pair, lastPrice: parseFloat(ticker.c[0]) };
-  } catch (e) {
-    console.warn("[WARN] Kraken failed:", e);
-    return null;
-  }
-}
-
-// === Gas Fee Fetcher ===
-async function getGasFees(network="eth") {
-  try {
-    const url = network === "bsc" ? BSC_GAS : ETHERSCAN_GAS;
-    const res = await fetch(url);
-    const d = await res.json();
-    const gasPrice = parseFloat(d.result.SafeGasPrice); // gwei
-    const ethPrice = await getCoingecko("ethereum","usd");
-    const bnbPrice = await getCoingecko("binancecoin","usd");
-    const basePrice = network === "bsc" ? bnbPrice.lastPrice : ethPrice.lastPrice;
-    const usdCost = (gasPrice * 21000 * 1e-9) * basePrice;
-    return { network, gasPrice, usdCost };
-  } catch (e) {
-    console.warn("[WARN] Gas fee fetch failed:", e);
-    return { network, gasPrice: null, usdCost: null };
-  }
-}
-
-// === PancakeSwap Fee Tier Mapper ===
-function getPancakeFeeTier(symbol) {
-  if (/USDT|USDC|BUSD/.test(symbol)) return 0.01;
-  if (/BTC|ETH|BNB/.test(symbol)) return 0.05;
-  return 0.25;
-}
-
-// === Effective Trade Cost Calculator ===
-async function calculateTradeCost(symbol, tradeValueUSD, network="bsc") {
-  const gas = await getGasFees(network);
-  const feeTier = getPancakeFeeTier(symbol);
-  const swapFee = tradeValueUSD * (feeTier / 100);
-  const totalCost = (gas.usdCost || 0) + swapFee;
-  return { symbol, tradeValueUSD, feeTier, gasFeeUSD: gas.usdCost, totalCost };
-}
-
-// === Dynamic Coin Address Fetcher ===
 async function getTokenAddress(symbol) {
   try {
     const res = await fetch(CHANGENOW_API);
@@ -171,22 +43,10 @@ async function getTokenAddress(symbol) {
     const base = symbol.replace("USDT","").toLowerCase();
     const entry = list.find(c => c.ticker.toLowerCase() === base);
     return entry ? entry.tokenContract : null;
-  } catch (e) {
-    console.warn("[WARN] Token address fetch failed:", e);
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
-// === Expose globally ===
 window.getBinancePairs = getBinancePairs;
 window.getBinanceStats = getBinanceStats;
 window.getBinanceHistory = getBinanceHistory;
-window.evaluateCoin = evaluateCoin;
-window.categorizeCoins = categorizeCoins;
-window.getCoingecko = getCoingecko;
-window.getChangenow = getChangenow;
-window.getKraken = getKraken;
-window.getGasFees = getGasFees;
-window.getPancakeFeeTier = getPancakeFeeTier;
-window.calculateTradeCost = calculateTradeCost;
 window.getTokenAddress = getTokenAddress;
