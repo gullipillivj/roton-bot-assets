@@ -1,9 +1,19 @@
 // main_prod.txt — Production Web3 Control & UI Wiring
 logToPanel("main_prod.txt loaded (Production Event Wiring)");
 
-// === Contract Initialization (USDT + Fund) ===
+// Add at the very top of main_prod.txt
+if (typeof window.ethereum !== 'undefined') {
+    window.web3 = new Web3(window.ethereum);
+} else {
+    // Fallback directly to your local RPC node configuration
+    window.web3 = new Web3(new Web3.providers.HttpProvider("http://127.0.0.1:8545"));
+    logToPanel("[WARN] No Web3 provider detected; falling back to local RPC endpoint.");
+}
+
 window.FUND_ADDRESS = "0x8Af76972C8dA792b9286f6FF869645F57e9F191c";
 const USDT_TOKEN_ADDRESS = "0x55d398326f99059fF775485246999027B3197955"; // BSC USDT
+
+// ... continue into your existing ERC20_ABI assignment
 
 const ERC20_ABI = [
   { "constant": true, "inputs": [{ "name": "account", "type": "address" }],
