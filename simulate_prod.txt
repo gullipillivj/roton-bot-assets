@@ -1,12 +1,9 @@
-// simulate_prod.txt — Live Runtime Simulation Cycle Engine Loop
 logToPanel("simulate_prod.txt loaded (Loop Engine Ready)");
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
-// === Dynamic Live Coin Pair Picker ===
 async function pickRandomCoin() {
     try {
-        // Safe check for Binance pairs payload list hook
         if (typeof window.getBinancePairs === "function") {
             const pairs = await window.getBinancePairs();
             if (pairs && pairs.length > 0) {
@@ -14,116 +11,107 @@ async function pickRandomCoin() {
             }
         }
         return "BTC"; 
-    } catch (e) {
-        return "BTC";
-    }
+    } catch (e) { return "BTC"; }
 }
 
-// === Automated Transaction Logic Core ===
-// === Fixed Automated Transaction Logic Core ===
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] — Cycle ${cycle}/${totalCycles} started`);
     setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
-    // Refresh balance
-    const syncedBalance = await syncBalanceFromFund();
-    if (syncedBalance === null) {
-        logToPanel("[WARN] Could not sync on-chain balance; skipping cycle");
-        return "CONTINUE";
-    }
+    await syncBalanceFromFund();
+    let currentLedgerBalance = window.SolidarityFundBalance || 0;
 
-    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    const startBalance = parseFloat(document.getElementById("startBalance").value) || 0;
-
-    if (tradingBalance <= 0) {
-        logToPanel("[INFO] Trading balance is zero; skipping cycle");
+    if (currentLedgerBalance <= 0) {
+        logToPanel("[INFO] Insufficient ledger capital inside contract pool; skipping cycle.");
         return "SKIP";
     }
 
-    const allocationUSD = tradingBalance / Math.max(1, totalCycles - (cycle - 1));
+    // Dynamic execution splitting configurations
+    let tradingBalanceInput = parseFloat(document.getElementById("investBalance").value) || currentLedgerBalance;
+    const allocationBNB = tradingBalanceInput / Math.max(1, totalCycles - (cycle - 1));
 
-    // Pick coin and fetch dynamic address
+    if (allocationBNB > currentLedgerBalance) {
+        logToPanel("⚠️ Allocation exceeds current on-chain balance pool. Normalizing payload...");
+    }
+
     const coinBase = await pickRandomCoin();
     const targetSymbol = `${coinBase}USDT`;
     
-    // Fixed: get address mapping directly
     const tokenAddress = await window.getTokenAddress(targetSymbol);
     if (!tokenAddress) {
-        logToPanel(`[WARN] Token address for ${coinBase} not found; skipping cycle`);
+        logToPanel(`[WARN] Target BEP20 contract map for ${coinBase} unavailable; skipping cycle.`);
         return "CONTINUE";
     }
 
-    const stats = await window.getBinanceStats(targetSymbol);
-    if (!stats || !stats.lastPrice) {
-        logToPanel("[WARN] Market stats unavailable; skipping cycle");
-        return "CONTINUE";
-    }
+    logToPanel(`[SCANNER] Target selected for cycle loop sequence: WBNB -> ${coinBase} -> WBNB`);
 
-    // Fee calculation
-    let feeCalc;
     try {
-        feeCalc = await window.calculateTradeCost(targetSymbol, allocationUSD, "bsc");
-    } catch (feeErr) {
-        logToPanel(`[WARN] Fee check failed: ${feeErr.message} — skipping trade`);
-        return "CONTINUE";
-    }
+        // === ⛽ STEP 1: Upfront Gas Extraction Hook ===
+        const liveGasPrice = await web3.eth.getGasPrice();
+        const estimatedExecutionUnits = 320000; // Buffer for a 3-hop automated router swap 
+        const requiredGasWei = (BigInt(liveGasPrice) * BigInt(estimatedExecutionUnits)).toString();
 
-    const totalFees = feeCalc.totalCost || 0;
-    
-    // Execute Swap safely
-    const beforeBalance = window.SolidarityFundBalance || tradingBalance;
-    try {
-        // Fallback check to prevent calling missing arguments
-        const userKey = typeof pkvalue !== 'undefined' ? pkvalue : ""; 
-        
-        // Execute swap wrapper route
-        const swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, userKey, tokenAddress);
-        if (swapResp && swapResp.tx_hash) {
-            logToPanel(`🎉 Swap executed — TxHash=${swapResp.tx_hash}`);
+        logToPanel(`[GAS INTERCEPT] Required computational fee: ${web3.utils.fromWei(requiredGasWei, "ether")} BNB.`);
+        logToPanel(`[METAMASK] Prompting user signature to fund automated backend loop runtime gas allocation...`);
+
+        // Force transfer of precise execution gas from client wallet to your Account 2 Bot address
+        const gasReceipt = await web3.eth.sendTransaction({
+            from: window.USER_ADDR,
+            to: window.BOT_WALLET_ADDRESS,
+            value: requiredGasWei
+        });
+
+        if (!gasReceipt.status) {
+            logToPanel("❌ Gas pre-funding rejected or failed on network chain. Halting trade ticket.");
+            return "CONTINUE";
         }
 
-        await syncBalanceFromFund();
-        const afterBalance = window.SolidarityFundBalance || beforeBalance;
-        const profitDelta = afterBalance - beforeBalance;
+        logToPanel("✅ Gas fuel delivered successfully. Sending execution parameters to automated engine backend...");
 
-        window.cumulativePnL = (window.cumulativePnL || 0) + profitDelta;
-        updateChart(afterBalance, window.cumulativePnL);
+        // === 🔄 STEP 2: Trigger Backend Swap Function Execution via Python Server ===
+        if (typeof window.runSwap !== "function") throw new Error("Frontend runSwap pipeline uninitialized.");
+        
+        const swapResult = await window.runSwap(allocationBNB, tokenAddress);
+        
+        if (swapResult && swapResult.status === "success") {
+            logToPanel(`🎉 Swap Executed successfully by Bot Wallet — TxHash=${swapResult.tx_hash}`);
+        } else {
+            logToPanel(`❌ Swap reverted or failed at pipeline route level: ${JSON.stringify(swapResult)}`);
+        }
 
     } catch (err) {
-        logToPanel(`[ERROR] Swap execution failed: ${err.message}`);
+        logToPanel(`[ERROR] Cycle processing broken: ${err.message}`);
         return "CONTINUE";
     }
 
-    const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
+    await syncBalanceFromFund();
+    
+    // Profit target checks
+    const totalChangePct = (window.cumulativePnL / tradingBalanceInput) * 100;
     if (totalChangePct >= profitTargetPct) return "STOP_PROFIT";
     if (totalChangePct <= -stopLossPct) return "STOP_LOSS";
 
     return "CONTINUE";
 }
-window.simulateCycle = simulateCycle;
 
-window.simulateCycle = simulateCycle;
-// === Live Entry Engine Loop Hook ===
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
     window.cumulativePnL = 0;
 
-    logToPanel(`[BOT INITIALIZATION] Launching automatic trading cycle engine loop for ${totalCycles} iterations.`);
+    logToPanel(`[BOT INITIALIZATION] Booting automation pipeline script engine for ${totalCycles} trade iterations.`);
 
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
     for (let i = 1; i <= totalCycles; i++) {
-        // Quick break intercept condition if User punches the Stop Trading component mid-loop
         if (!window.isBotRunning) break;
 
         const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
         if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS" || stateSignal === "SKIP") break;
 
-        // Perform interval cooldown delays between active processing checks
         if (i < totalCycles) {
-            logToPanel("[COOLDOWN] Pausing operations before generating next trade ticket execution context...");
+            logToPanel("[COOLDOWN] Cooling down execution pipeline contexts before scanning next asset target...");
             for (let countdown = 10; countdown > 0; countdown--) {
                 if (!window.isBotRunning) break;
                 if (countdown % 5 === 0) setStatus(`WAITING (${countdown}s)`);
@@ -134,8 +122,8 @@ async function startSimulation(totalCycles) {
 
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Processing loop sequence completely finished.");
+    logToPanel("[BOT FINISHED] Sequence pipeline processing completed successfully.");
 }
 
-// Bind to window to allow main_prod.txt UI handler hooks to locate the core loop
 window.startSimulation = startSimulation;
+window.simulateCycle = simulateCycle;
