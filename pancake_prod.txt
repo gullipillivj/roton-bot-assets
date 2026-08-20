@@ -1,22 +1,23 @@
 logToPanel("pancake_prod.txt loaded");
 
-// === Contract Interaction Wrappers ===
-
-// Approve ERC20 token for spending by SolidarityFundV2
-async function runApprove(userAddress, amount, privateKey) {
-  return approveToken(amount, userAddress, privateKey);
+async function runSwap(bnbAmount, targetTokenAddress) {
+  try {
+    const res = await fetch("/prodbot/swap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_wallet: window.USER_ADDR,
+        target_token: targetTokenAddress,
+        amount_bnb: bnbAmount,
+        wbnb_address: window.WBNB_TOKEN_ADDRESS,
+        router: "0x10ED43C718714eb63d5aA57B78B54704E256024E" // PancakeSwap V2 Router Address
+      })
+    });
+    return await res.json();
+  } catch (err) {
+    logToPanel(`❌ Local server route bridge connection broken: ${err.message}`);
+    return { status: "error", message: err.message };
+  }
 }
 
-// DepositFunds is the trading swap in this contract
-async function runSwap(userAddress, amount, privateKey, tokenAddress) {
-  setStatus("TRADING");
-  await runApprove(userAddress, amount, privateKey);
-  return depositFunds(tokenAddress, amount, userAddress, privateKey);
-}
-
-// Withdrawals (payouts) are handled in main_prod only — not here
-
-// === Expose globally ===
-window.runApprove = runApprove;
-window.runSwap    = runSwap;
-window.setStatus  = setStatus;
+window.runSwap = runSwap;
