@@ -7,62 +7,7 @@ if (typeof window.ethereum !== 'undefined') {
     logToPanel("[WARN] No Web3 provider detected; falling back to public BSC endpoint.");
 }
 
-// Authoritative Master Contract References
-window.FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
-window.BOT_WALLET_ADDRESS = "0x07076BD62abB189ed37aC1f4ca7CD6a155B3F4a0"; // Account 2 (Bot Wallet) Derived from your verified tx records
-window.WBNB_TOKEN_ADDRESS = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // BSC Mainnet WBNB
-
-const MASTER_POOL_ABI = [
-  { "inputs": [{"internalType": "address", "name": "user", "type": "address"}], "name": "checkUserBalance", "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}], "stateMutability": "view", "type": "function" },
-  { "inputs": [], "name": "depositBNB", "outputs": [], "stateMutability": "payable", "type": "function" },
-  { "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}], "name": "withdrawUserCapital", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
-];
-
-window.MASTER_CONTRACT = new web3.eth.Contract(MASTER_POOL_ABI, window.FUND_ADDRESS);
-logToPanel("✅ Contract initialization complete — Master Pool wired");
-
-window.cumulativePnL = 0;
-window.isBotRunning = false;
-
-function logToPanel(msg) {
-    const panel = document.getElementById("logPanel");
-    if (panel) {
-        panel.value += msg + "\n";
-        panel.scrollTop = panel.scrollHeight;
-    } else { console.log(msg); }
-}
-
-window.setStatus = function(text) {
-    const statusLabel = document.getElementById("statusLabel");
-    if (statusLabel) statusLabel.textContent = "STATE: " + text;
-    else logToPanel(`STATE: ${text}`);
-};
-
-async function syncBalanceFromFund() {
-    try {
-        if (!window.MASTER_CONTRACT || !window.USER_ADDR) {
-            logToPanel("[SYNC] Connection components missing; skipping synchronization check.");
-            return null;
-        }
-        // Authoritative ledger fetch from your custom contract mapping matrix
-        const raw = await window.MASTER_CONTRACT.methods.checkUserBalance(window.USER_ADDR).call();
-        const balanceFloat = parseFloat(web3.utils.fromWei(raw, "ether"));
-
-        logToPanel(`[BALANCE SYNC] Internal Contract Ledger Balance: ${balanceFloat.toFixed(6)} BNB`);
-
-        const startBox = document.getElementById("startBalance");
-        const investBox = document.getElementById("investBalance");
-        if (startBox) startBox.value = balanceFloat.toFixed(6);
-        if (investBox) investBox.value = balanceFloat.toFixed(6);
-
-        window.SolidarityFundBalance = balanceFloat;
-        return balanceFloat;
-    } catch (err) {
-        logToPanel(`[SYNC ERROR] ${err.message}`);
-        return null;
-    }
-}
-
+037207
 async function handleLoginSuccess() {
     initSessionFromLabels();
     if (window.USER_ADDR) {
