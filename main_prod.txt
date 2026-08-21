@@ -1,61 +1,20 @@
-// main_prod.txt — Production Event Wiring (Cleaned & Unified)
-logToPanel("🟢 main_prod.txt engine pipeline successfully loaded into memory");
+logToPanel("main_prod.txt loaded — Initial Balance Fetch Mode");
 
-// Initialize explicit window web3 connection environments
-if (typeof window.ethereum !== 'undefined') {
-    window.web3 = new Web3(window.ethereum);
-} else {
-    window.web3 = new Web3(new Web3.providers.HttpProvider("https://binance.org"));
-    logToPanel("[WARN] Local extension wallet environment missing; falling back to BSC public endpoints.");
-}
-
-// Helper to disable UI elements during transaction processing
-function disableAllControls() {
-    const inputs = document.querySelectorAll("input, button");
-    inputs.forEach(el => el.disabled = true);
-}
-
-// Helper to re-enable UI elements post-transaction
-function enableAllControls() {
-    const inputs = document.querySelectorAll("input, button");
-    inputs.forEach(el => el.disabled = false);
-}
-
-// Authoritative server sync method needed by loop runtimes
-async function syncBalanceFromFund() {
+document.addEventListener("DOMContentLoaded", async () => {
     try {
-        if (!window.USER_ADDR) {
-            logToPanel("[WARN] User wallet address missing; skipping sync");
-            return null;
+        if (typeof window.ethereum === "undefined") {
+            document.getElementById("depisitmsg").textContent = "❌ MetaMask not detected.";
+            return;
         }
 
-        // Read balance directly from contract
-        const balanceWei = await window.MASTER_CONTRACT.methods.checkUserBalance(window.USER_ADDR).call();
-        const currentBalance = window.web3.utils.fromWei(balanceWei, "ether");
+        // Initialize Web3
+        window.web3 = new Web3(window.ethereum);
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        const accounts = await window.ethereum.request({ method: "eth_accounts" });
+        const userWallet = accounts[0];
+        window.USER_ADDR = userWallet;
 
-        // Update UI fields
-        document.getElementById("startBalance").value = currentBalance;
-        document.getElementById("investBalance").value = currentBalance;
-        document.getElementById("depisitmsg").textContent = `📡 Initial balance: ${currentBalance} BNB`;
-
-        return currentBalance;
-    } catch (err) {
-        logToPanel(`[ERROR] Balance sync failed: ${err.message}`);
-        return null;
-    }
-}
-
-async function handleLoginSuccess() {
-    // 🟢 FIXED: Safely reads the active wallet text label printed at the top of your dashboard screen
-    const currentUser = document.getElementById("currentUserLabel")?.textContent.trim();
-    const currentWallet = document.getElementById("currentWalletLabel")?.textContent.trim();
-    
-    window.USER_ID = currentUser || window.USER_ID;
-    window.USER_ADDR = currentWallet || window.USER_ADDR;
-
-    if (window.USER_ADDR) {
-        logToPanel(`[SESSION] Initializing contract instances for user wallet: ${window.USER_ADDR}`);
-        
+        // Contract ABI (only balance function)
         const MASTER_ABI = [
             {
                 "inputs": [{"internalType": "address", "name": "user", "type": "address"}],
@@ -63,140 +22,24 @@ async function handleLoginSuccess() {
                 "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
                 "stateMutability": "view",
                 "type": "function"
-            },
-            {
-                "inputs": [],
-                "name": "depositBNB",
-                "outputs": [],
-                "stateMutability": "payable",
-                "type": "function"
-            },
-            {
-                "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
-                "name": "withdrawUserCapital",
-                "outputs": [],
-                "stateMutability": "nonpayable",
-                "type": "function"
             }
         ];
-        
-        window.MASTER_CONTRACT = new window.web3.eth.Contract(MASTER_ABI, window.FUND_ADDRESS);
-        await syncBalanceFromFund();
+
+        // Contract instance
+        const contract = new window.web3.eth.Contract(MASTER_ABI, window.FUND_ADDRESS);
+
+        // Fetch balance
+        const balanceWei = await contract.methods.checkUserBalance(userWallet).call();
+        const balanceBNB = window.web3.utils.fromWei(balanceWei, "ether");
+
+        // Update UI
+        document.getElementById("startBalance").value = balanceBNB;
+        document.getElementById("investBalance").value = balanceBNB;
+        document.getElementById("depisitmsg").textContent = `✅ Current contract balance: ${balanceBNB} BNB`;
+
+        logToPanel(`✅ Balance fetched successfully for ${userWallet}: ${balanceBNB} BNB`);
+    } catch (err) {
+        document.getElementById("depisitmsg").textContent = `❌ Error fetching balance: ${err.message}`;
+        logToPanel(`[ERROR] ${err.message}`);
     }
-}
-
-// Connect layout observers on load
-document.addEventListener("DOMContentLoaded", async () => {
-    window.setStatus("READY TO OPERATE");
-    await handleLoginSuccess();
-
-    if (window.ethereum) {
-        window.ethereum.on('accountsChanged', async (accounts) => {
-            logToPanel("🔄 Active wallet account switched via extension.");
-            if (accounts && accounts.length > 0) {
-                window.USER_ADDR = accounts[0];
-                const walletLabel = document.getElementById("currentWalletLabel");
-                if (walletLabel) walletLabel.textContent = accounts[0];
-                await handleLoginSuccess();
-            }
-        });
-    }
-
-    // Pipeline Loop Execution Hook
-    document.getElementById("startBtn")?.addEventListener("click", async () => {
-        logToPanel("🚀 'Start Trading' button clicked.");
-        if (window.isBotRunning) {
-            logToPanel("[WARN] Trading engine loop is already active.");
-            return;
-        }
-        
-        const cycleInput = document.getElementById("cycleCount");
-        const executionCycles = cycleInput ? parseInt(cycleInput.value) || 10 : 10;
-        
-        if (typeof window.startSimulation === "function") {
-            logToPanel(`🔄 Starting trading core engine for ${executionCycles} cycles...`);
-            window.isBotRunning = true;
-            window.setStatus("RUNNING");
-            try { 
-                await window.startSimulation(executionCycles); 
-            } catch (err) { 
-                logToPanel(`[CRITICAL SIM ERROR] ${err.message}`); 
-                window.setStatus("CRITICAL ERROR");
-                window.isBotRunning = false;
-            }
-        } else {
-            logToPanel("❌ [ERROR] window.startSimulation function not found. Check if simulate_prod.txt loaded correctly.");
-        }
-    });
-
-    // Web3 transaction method execution layout mapping correctly to Metamask parameters
-    document.getElementById("depositBtn")?.addEventListener("click", async () => {
-        const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
-        if (amt <= 0) return logToPanel("❌ Please provide a valid deposit allocation size.");
-        
-        disableAllControls();
-        try {
-            logToPanel(`[METAMASK] Prompting signature authorization to deposit ${amt} BNB...`);
-            const amtWei = window.web3.utils.toWei(amt.toString(), "ether");
-            
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            const userWalletAddress = accounts[0];
-
-            await window.MASTER_CONTRACT.methods.depositBNB().send({
-                from: userWalletAddress,
-                value: amtWei
-            });
-            
-            logToPanel("✅ On-Chain Deposit Processed Successfully!");
-            await syncBalanceFromFund();
-        } catch (e) {
-            logToPanel(`[DEPOSIT ERROR] ${e.message}`);
-        }
-        enableAllControls();
-    });
-
-    // 🟢 FIXED: Corrected parameter target mapping to 'withdrawAmount' element instead of 'payoutAmount'
-    document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-        const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
-        if (amt <= 0) return logToPanel("❌ Please provide a valid withdrawal payout amount.");
-        
-        disableAllControls();
-        try {
-            logToPanel(`[METAMASK] Requesting withdrawal execution for ${amt} BNB...`);
-            const amtWei = window.web3.utils.toWei(amt.toString(), "ether");
-            
-            const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-            const userWalletAddress = accounts[0];
-
-            await window.MASTER_CONTRACT.methods.withdrawUserCapital(amtWei).send({
-                from: userWalletAddress
-            });
-            
-            logToPanel("✅ Payout Extraction Completed successfully!");
-            await syncBalanceFromFund();
-        } catch (e) {
-            logToPanel(`[WITHDRAWAL ERROR] ${e.message}`);
-        }
-        enableAllControls();
-    });
-
-   document.addEventListener("DOMContentLoaded", async () => {
-    window.setStatus("READY TO OPERATE");
-    await handleLoginSuccess();
-    await syncBalanceFromFund();  // 🟢 Initial balance fetch
 });
-
-    document.getElementById("stopBtn")?.addEventListener("click", () => {
-        window.isBotRunning = false;
-        window.setStatus("STOPPED");
-        logToPanel("[COMMAND] Immediate halt directive processed.");
-    });
-
-    document.getElementById("logoutBtn")?.addEventListener("click", () => {
-        window.location.href = `${window.BASE_URL}/logout`;
-    });
-});
-
-// Expose metrics indicators globally to allow asset loops to call tracking hooks natively
-window.syncBalanceFromFund = syncBalanceFromFund;
-window.handleLoginSuccess = handleLoginSuccess;
