@@ -1,50 +1,37 @@
-logToPanel("main_prod.txt loaded — Dual Balance Fetch Mode");
+logToPanel("main_prod.txt loaded — Backend Balance Fetch Mode");
 
 document.addEventListener("DOMContentLoaded", async () => {
     try {
-        if (typeof window.ethereum === "undefined") {
-            document.getElementById("depisitmsg").textContent = "❌ MetaMask not detected.";
+        if (!window.USER_ADDR) {
+            document.getElementById("depisitmsg").textContent = "❌ Wallet address not set.";
             return;
         }
 
-        // Initialize Web3
-        window.web3 = new Web3(window.ethereum);
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        const accounts = await window.ethereum.request({ method: "eth_accounts" });
-        const userWallet = accounts[0];
-        window.USER_ADDR = userWallet;
+        // Call backend balance endpoint
+        const response = await fetch(`${window.BASE_URL}/runbot/balances`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ wallet_address: window.USER_ADDR })
+        });
 
-        // Contract ABI (balance function only)
-        const MASTER_ABI = [
-            {
-                "inputs": [{"internalType": "address", "name": "user", "type": "address"}],
-                "name": "checkUserBalance",
-                "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-                "stateMutability": "view",
-                "type": "function"
-            }
-        ];
+        const data = await response.json();
+        if (data.status === "success") {
+            const balanceBNB = parseFloat(data.balance);
 
-        // Contract instance
-        window.MASTER_CONTRACT = new window.web3.eth.Contract(MASTER_ABI, window.FUND_ADDRESS);
+            // Update UI
+            document.getElementById("startBalance").value = balanceBNB;
+            document.getElementById("investBalance").value = balanceBNB;
+            document.getElementById("depisitmsg").textContent =
+                `✅ Current contract balance: ${balanceBNB} BNB`;
 
-        // Fetch raw contract wallet balance
-        const contractBalanceWei = await window.web3.eth.getBalance(window.FUND_ADDRESS);
-        const contractBalanceBNB = window.web3.utils.fromWei(contractBalanceWei, "ether");
-
-        // Fetch user mapped trading balance
-        const userBalanceWei = await window.MASTER_CONTRACT.methods.checkUserBalance(userWallet).call();
-        const userBalanceBNB = window.web3.utils.fromWei(userBalanceWei, "ether");
-
-        // Update UI
-        document.getElementById("startBalance").value = userBalanceBNB;
-        document.getElementById("investBalance").value = userBalanceBNB;
-        document.getElementById("depisitmsg").textContent =
-            `📡 Contract wallet: ${contractBalanceBNB} BNB | User mapped: ${userBalanceBNB} BNB`;
-
-        logToPanel(`✅ Balances fetched — Contract=${contractBalanceBNB} BNB, User=${userBalanceBNB} BNB`);
+            logToPanel(`✅ Balance fetched successfully for ${window.USER_ADDR}: ${balanceBNB} BNB`);
+        } else {
+            document.getElementById("depisitmsg").textContent =
+                `❌ Backend error: ${data.message}`;
+            logToPanel(`[ERROR] ${data.message}`);
+        }
     } catch (err) {
-        document.getElementById("depisitmsg").textContent = `❌ Error fetching balances: ${err.message}`;
+        document.getElementById("depisitmsg").textContent = `❌ Error fetching balance: ${err.message}`;
         logToPanel(`[ERROR] ${err.message}`);
     }
 });
