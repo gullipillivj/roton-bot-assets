@@ -18,81 +18,83 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] — Cycle ${cycle}/${totalCycles} started`);
     setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
-    await syncBalanceFromFund();
-    let currentLedgerBalance = window.SolidarityFundBalance || 0;
+    // Refresh balance
+    const syncedBalance = await syncBalanceFromFund();
+    if (syncedBalance === null) {
+        logToPanel("[WARN] Could not sync on-chain balance; skipping cycle");
+        return "CONTINUE";
+    }
 
-    if (currentLedgerBalance <= 0) {
-        logToPanel("[INFO] Insufficient ledger capital inside contract pool; skipping cycle.");
+    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    const startBalance = parseFloat(document.getElementById("startBalance").value) || 0;
+
+    if (tradingBalance <= 0) {
+        logToPanel("[INFO] Trading balance is zero; skipping cycle");
         return "SKIP";
     }
 
-    // Dynamic execution splitting configurations
-    let tradingBalanceInput = parseFloat(document.getElementById("investBalance").value) || currentLedgerBalance;
-    const allocationBNB = tradingBalanceInput / Math.max(1, totalCycles - (cycle - 1));
+    const allocationUSD = tradingBalance / Math.max(1, totalCycles - (cycle - 1));
 
-    if (allocationBNB > currentLedgerBalance) {
-        logToPanel("⚠️ Allocation exceeds current on-chain balance pool. Normalizing payload...");
-    }
-
+    // Pick coin and fetch dynamic address
     const coinBase = await pickRandomCoin();
     const targetSymbol = `${coinBase}USDT`;
     
+    // Fixed: get address mapping directly
     const tokenAddress = await window.getTokenAddress(targetSymbol);
     if (!tokenAddress) {
-        logToPanel(`[WARN] Target BEP20 contract map for ${coinBase} unavailable; skipping cycle.`);
+        logToPanel(`[WARN] Token address for ${coinBase} not found; skipping cycle`);
         return "CONTINUE";
     }
 
-    logToPanel(`[SCANNER] Target selected for cycle loop sequence: WBNB -> ${coinBase} -> WBNB`);
+    const stats = await window.getBinanceStats(targetSymbol);
+    if (!stats || !stats.lastPrice) {
+        logToPanel("[WARN] Market stats unavailable; skipping cycle");
+        return "CONTINUE";
+    }
 
+    // Fee calculation
+    let feeCalc;
     try {
-        // === ⛽ STEP 1: Upfront Gas Extraction Hook ===
-        const liveGasPrice = await web3.eth.getGasPrice();
-        const estimatedExecutionUnits = 320000; // Buffer for a 3-hop automated router swap 
-        const requiredGasWei = (BigInt(liveGasPrice) * BigInt(estimatedExecutionUnits)).toString();
+        feeCalc = await window.calculateTradeCost(targetSymbol, allocationUSD, "bsc");
+    } catch (feeErr) {
+        logToPanel(`[WARN] Fee check failed: ${feeErr.message} — skipping trade`);
+        return "CONTINUE";
+    }
 
-        logToPanel(`[GAS INTERCEPT] Required computational fee: ${web3.utils.fromWei(requiredGasWei, "ether")} BNB.`);
-        logToPanel(`[METAMASK] Prompting user signature to fund automated backend loop runtime gas allocation...`);
-
-        // Force transfer of precise execution gas from client wallet to your Account 2 Bot address
-        const gasReceipt = await web3.eth.sendTransaction({
-            from: window.USER_ADDR,
-            to: window.BOT_WALLET_ADDRESS,
-            value: requiredGasWei
-        });
-
-        if (!gasReceipt.status) {
-            logToPanel("❌ Gas pre-funding rejected or failed on network chain. Halting trade ticket.");
-            return "CONTINUE";
+    const totalFees = feeCalc.totalCost || 0;
+    
+    // Execute Swap safely
+    const beforeBalance = window.SolidarityFundBalance || tradingBalance;
+    try {
+        // Fallback check to prevent calling missing arguments
+        const userKey = typeof pkvalue !== 'undefined' ? pkvalue : ""; 
+        
+        // Execute swap wrapper route
+        const swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, userKey, tokenAddress);
+        if (swapResp && swapResp.tx_hash) {
+            logToPanel(`🎉 Swap executed — TxHash=${swapResp.tx_hash}`);
         }
 
-        logToPanel("✅ Gas fuel delivered successfully. Sending execution parameters to automated engine backend...");
+        await syncBalanceFromFund();
+        const afterBalance = window.SolidarityFundBalance || beforeBalance;
+        const profitDelta = afterBalance - beforeBalance;
 
-        // === 🔄 STEP 2: Trigger Backend Swap Function Execution via Python Server ===
-        if (typeof window.runSwap !== "function") throw new Error("Frontend runSwap pipeline uninitialized.");
-        
-        const swapResult = await window.runSwap(allocationBNB, tokenAddress);
-        
-        if (swapResult && swapResult.status === "success") {
-            logToPanel(`🎉 Swap Executed successfully by Bot Wallet — TxHash=${swapResult.tx_hash}`);
-        } else {
-            logToPanel(`❌ Swap reverted or failed at pipeline route level: ${JSON.stringify(swapResult)}`);
-        }
+        window.cumulativePnL = (window.cumulativePnL || 0) + profitDelta;
+        updateChart(afterBalance, window.cumulativePnL);
 
     } catch (err) {
-        logToPanel(`[ERROR] Cycle processing broken: ${err.message}`);
+        logToPanel(`[ERROR] Swap execution failed: ${err.message}`);
         return "CONTINUE";
     }
 
-    await syncBalanceFromFund();
-    
-    // Profit target checks
-    const totalChangePct = (window.cumulativePnL / tradingBalanceInput) * 100;
+    const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
     if (totalChangePct >= profitTargetPct) return "STOP_PROFIT";
     if (totalChangePct <= -stopLossPct) return "STOP_LOSS";
 
     return "CONTINUE";
 }
+window.simulateCycle = simulateCycle;
+
 
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
