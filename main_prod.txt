@@ -1,4 +1,4 @@
-// main_prod.txt — Production Event Wiring
+// main_prod.txt — Production Event Wiring (Cleaned & Unified)
 logToPanel("🟢 main_prod.txt engine pipeline successfully loaded into memory");
 
 // Initialize explicit window web3 connection environments
@@ -21,7 +21,7 @@ function enableAllControls() {
     inputs.forEach(el => el.disabled = false);
 }
 
-// 🟢 FIXED: Implemented authoritative server sync method needed by loop runtimes
+// Authoritative server sync method needed by loop runtimes
 async function syncBalanceFromFund() {
     try {
         if (!window.USER_ADDR) {
@@ -29,6 +29,7 @@ async function syncBalanceFromFund() {
             return null;
         }
 
+        logToPanel(`📡 Fetching on-chain balance for: ${window.USER_ADDR}...`);
         const response = await fetch(`${window.BASE_URL}/runbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -38,14 +39,15 @@ async function syncBalanceFromFund() {
         const data = await response.json();
         if (data && data.status === "success") {
             const currentBalance = parseFloat(data.balance);
+            logToPanel(`✅ Balance synced from contract: ${currentBalance} BNB`);
             
             // Push calculated values straight into dashboard forms
             const startEl = document.getElementById("startBalance");
             const investEl = document.getElementById("investBalance");
             
-            if (startEl) startEl.value = currentBalance.toFixed(5);
+            if (startEl) startEl.value = currentBalance;
             if (investEl && (parseFloat(investEl.value) === 0 || !investEl.value)) {
-                investEl.value = currentBalance.toFixed(5);
+                investEl.value = currentBalance;
             }
             
             window.SolidarityFundBalance = currentBalance;
@@ -69,15 +71,16 @@ async function syncBalanceFromFund() {
 }
 
 async function handleLoginSuccess() {
+    // 🟢 FIXED: Safely reads the active wallet text label printed at the top of your dashboard screen
     const currentUser = document.getElementById("currentUserLabel")?.textContent.trim();
     const currentWallet = document.getElementById("currentWalletLabel")?.textContent.trim();
+    
     window.USER_ID = currentUser || window.USER_ID;
     window.USER_ADDR = currentWallet || window.USER_ADDR;
 
     if (window.USER_ADDR) {
         logToPanel(`[SESSION] Initializing contract instances for user wallet: ${window.USER_ADDR}`);
         
-        // Setup Web3 instance referencing your layout parameter variables
         const MASTER_ABI = [
             {
                 "inputs": [{"internalType": "address", "name": "user", "type": "address"}],
@@ -112,7 +115,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.setStatus("READY TO OPERATE");
     await handleLoginSuccess();
 
-    // 🟢 FIXED: Safe account listener configuration to automatically react to active Metamask extensions
     if (window.ethereum) {
         window.ethereum.on('accountsChanged', async (accounts) => {
             logToPanel("🔄 Active wallet account switched via extension.");
@@ -127,27 +129,32 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Pipeline Loop Execution Hook
     document.getElementById("startBtn")?.addEventListener("click", async () => {
+        logToPanel("🚀 'Start Trading' button clicked.");
         if (window.isBotRunning) {
             logToPanel("[WARN] Trading engine loop is already active.");
             return;
         }
+        
         const cycleInput = document.getElementById("cycleCount");
         const executionCycles = cycleInput ? parseInt(cycleInput.value) || 10 : 10;
         
         if (typeof window.startSimulation === "function") {
+            logToPanel(`🔄 Starting trading core engine for ${executionCycles} cycles...`);
+            window.isBotRunning = true;
             window.setStatus("RUNNING");
             try { 
                 await window.startSimulation(executionCycles); 
             } catch (err) { 
                 logToPanel(`[CRITICAL SIM ERROR] ${err.message}`); 
                 window.setStatus("CRITICAL ERROR");
+                window.isBotRunning = false;
             }
         } else {
-            logToPanel("[ERROR] Loop simulation engine script files not located.");
+            logToPanel("❌ [ERROR] window.startSimulation function not found. Check if simulate_prod.txt loaded correctly.");
         }
     });
 
-    // 🟢 FIXED: Web3 transaction method execution layout mapping correctly to Metamask parameters
+    // Web3 transaction method execution layout mapping correctly to Metamask parameters
     document.getElementById("depositBtn")?.addEventListener("click", async () => {
         const amt = parseFloat(document.getElementById("depositAmount")?.value || "0") || 0;
         if (amt <= 0) return logToPanel("❌ Please provide a valid deposit allocation size.");
@@ -173,7 +180,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         enableAllControls();
     });
 
-    // 🟢 FIXED: Corrected parameter inputs targets mapping to 'withdrawAmount' element
+    // 🟢 FIXED: Corrected parameter target mapping to 'withdrawAmount' element instead of 'payoutAmount'
     document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
         const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0") || 0;
         if (amt <= 0) return logToPanel("❌ Please provide a valid withdrawal payout amount.");
@@ -202,6 +209,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.isBotRunning = false;
         window.setStatus("STOPPED");
         logToPanel("[COMMAND] Immediate halt directive processed.");
+    });
+
+    document.getElementById("logoutBtn")?.addEventListener("click", () => {
+        window.location.href = `${window.BASE_URL}/logout`;
     });
 });
 
