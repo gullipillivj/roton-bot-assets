@@ -25,47 +25,22 @@ function enableAllControls() {
 async function syncBalanceFromFund() {
     try {
         if (!window.USER_ADDR) {
-            logToPanel("[WARN] User wallet address parameter missing; skipping sync");
+            logToPanel("[WARN] User wallet address missing; skipping sync");
             return null;
         }
 
-        logToPanel(`📡 Fetching on-chain balance for: ${window.USER_ADDR}...`);
-        const response = await fetch(`${window.BASE_URL}/runbot/balances`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: window.USER_ADDR })
-        });
-        
-        const data = await response.json();
-        if (data && data.status === "success") {
-            const currentBalance = parseFloat(data.balance);
-            logToPanel(`✅ Balance synced from contract: ${currentBalance} BNB`);
-            
-            // Push calculated values straight into dashboard forms
-            const startEl = document.getElementById("startBalance");
-            const investEl = document.getElementById("investBalance");
-            
-            if (startEl) startEl.value = currentBalance;
-            if (investEl && (parseFloat(investEl.value) === 0 || !investEl.value)) {
-                investEl.value = currentBalance;
-            }
-            
-            window.SolidarityFundBalance = currentBalance;
-            
-            // Trigger database mirror synchronization endpoint
-            await fetch(`${window.BASE_URL}/prodbot/update_client`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userid: window.USER_ID, new_balance: currentBalance })
-            });
+        // Read balance directly from contract
+        const balanceWei = await window.MASTER_CONTRACT.methods.checkUserBalance(window.USER_ADDR).call();
+        const currentBalance = window.web3.utils.fromWei(balanceWei, "ether");
 
-            return currentBalance;
-        } else {
-            logToPanel(`[ERROR] Backend connection failed: ${data?.message}`);
-            return null;
-        }
+        // Update UI fields
+        document.getElementById("startBalance").value = currentBalance;
+        document.getElementById("investBalance").value = currentBalance;
+        document.getElementById("depisitmsg").textContent = `📡 Initial balance: ${currentBalance} BNB`;
+
+        return currentBalance;
     } catch (err) {
-        logToPanel(`[CRITICAL] Server pipeline tracking broken: ${err.message}`);
+        logToPanel(`[ERROR] Balance sync failed: ${err.message}`);
         return null;
     }
 }
@@ -204,6 +179,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         enableAllControls();
     });
+
+   document.addEventListener("DOMContentLoaded", async () => {
+    window.setStatus("READY TO OPERATE");
+    await handleLoginSuccess();
+    await syncBalanceFromFund();  // 🟢 Initial balance fetch
+});
 
     document.getElementById("stopBtn")?.addEventListener("click", () => {
         window.isBotRunning = false;
