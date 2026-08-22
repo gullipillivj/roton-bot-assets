@@ -35,3 +35,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         logToPanel(`[ERROR] ${err.message}`);
     }
 });
+
+
+// Attach listener to Submit button
+document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
+  const txId = document.getElementById("txId")?.value.trim();
+  const userAddr = window.USER_ADDR;
+
+  if (!txId) {
+    return logToPanel("❌ Please enter a valid transaction ID.");
+  }
+
+  try {
+    logToPanel(`[BACKEND] Sending tx id ${txId} for verification...`);
+
+    const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tx_id: txId,
+        user_address: userAddr
+      })
+    });
+
+    const data = await response.json();
+    if (data.status === "success") {
+      logToPanel(`✅ Deposit mapped successfully. Tx: ${data.tx_hash}`);
+      await syncBalanceFromFund();
+    } else {
+      logToPanel(`❌ Deposit mapping failed: ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[SUBMIT ERROR] ${err.message}`);
+  }
+});
