@@ -49,6 +49,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 });
 
+//sync balance 
+async function syncBalanceFromFund() {
+  try {
+    const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: window.USER_ADDR })
+    });
+
+    const data = await response.json();
+    if (data.status === "success") {
+      const balanceBNB = parseFloat(data.balance);
+      document.getElementById("startBalance").value = balanceBNB;
+      document.getElementById("investBalance").value = balanceBNB;
+      document.getElementById("depisitmsg").textContent =
+        `✅ Synced contract balance: ${balanceBNB} BNB`;
+      logToPanel(`✅ Balance synced successfully: ${balanceBNB} BNB`);
+    } else {
+      logToPanel(`❌ Sync failed: ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[SYNC ERROR] ${err.message}`);
+  }
+}
+
 // Attach listener to Submit button
 document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
   const txId = document.getElementById("txId")?.value.trim();
