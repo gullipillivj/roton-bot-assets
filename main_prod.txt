@@ -119,3 +119,29 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     logToPanel(`[WITHDRAW ERROR] ${err.message}`);
   }
 });
+
+//deposit button to invoke metamask etc
+document.getElementById("depositBtn")?.addEventListener("click", async () => {
+  const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
+  if (amt <= 0) return logToPanel("❌ Please provide a valid deposit amount.");
+
+  try {
+    logToPanel(`[METAMASK] Prompting raw transfer of ${amt} BNB...`);
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const userWalletAddress = accounts[0];
+    const amtWei = window.web3.utils.toWei(amt.toString(), "ether");
+
+    const txHash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: userWalletAddress,
+        to: window.FUND_ADDRESS,
+        value: amtWei
+      }]
+    });
+
+    logToPanel(`✅ Transfer submitted, tx: ${txHash}`);
+  } catch (e) {
+    logToPanel(`[DEPOSIT ERROR] ${e.message}`);
+  }
+});
