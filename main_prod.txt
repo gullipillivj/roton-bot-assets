@@ -1,5 +1,20 @@
 logToPanel("main_prod.txt loaded — Backend Balance Fetch Mode");
 
+async function loadConfig() {
+  try {
+    const response = await fetch("/static/dapp.config.json"); // adjust path if needed
+    const config = await response.json();
+
+    window.USER_ADDR = config.contract.address;   // or set dynamically later
+    window.FUND_ADDRESS = config.contract.address;
+    window.BASE_URL = "https://roton.store";
+
+    logToPanel(`✅ Config loaded: FUND_ADDRESS=${window.FUND_ADDRESS}`);
+  } catch (err) {
+    logToPanel(`❌ Failed to load config: ${err.message}`);
+  }
+}
+
 // Base configuration
 const BASE_URL = "https://roton.store";
 const FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
