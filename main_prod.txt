@@ -1,5 +1,25 @@
 logToPanel("main_prod.txt loaded — Backend Balance Fetch Mode");
 
+// Load config from backend
+async function initConfig() {
+  try {
+    const response = await fetch(`${BASE_URL}/static/dapp.config.json`);
+    const cfg = await response.json();
+
+    // Map values
+    window.FUND_ADDRESS = cfg.contract.address;
+    window.FUND_ABI = cfg.contract.abi;
+    window.USER_ADDR = cfg.contract.address; // temporary until you set actual user wallet
+
+    logToPanel(`✅ Config loaded: FUND_ADDRESS=${window.FUND_ADDRESS}`);
+  } catch (err) {
+    logToPanel(`❌ Config load failed: ${err.message}`);
+  }
+}
+
+// Call immediately
+initConfig();
+
 async function loadConfig() {
   try {
     const response = await fetch("/static/dapp.config.json"); // adjust path if needed
