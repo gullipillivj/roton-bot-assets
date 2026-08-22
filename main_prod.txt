@@ -1,5 +1,14 @@
 logToPanel("main_prod.txt loaded — Backend Balance Fetch Mode");
 
+// Define base URL and contract address
+const BASE_URL = "https://roton.store";
+const FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
+
+// Expose them to window so all functions can use
+window.BASE_URL = BASE_URL;
+window.FUND_ADDRESS = FUND_ADDRESS;
+
+
 document.addEventListener("DOMContentLoaded", async () => {
     try {
         if (!window.USER_ADDR) {
