@@ -1,58 +1,38 @@
 logToPanel("main_prod.txt loaded — Backend Balance Fetch Mode");
 
-// Load config from backend
-async function initConfig() {
-  try {
-    const response = await fetch(`${BASE_URL}/static/dapp.config.json`);
-    const cfg = await response.json();
-
-    // Map values
-    window.FUND_ADDRESS = cfg.contract.address;
-    window.FUND_ABI = cfg.contract.abi;
-    window.USER_ADDR = cfg.contract.address; // temporary until you set actual user wallet
-
-    logToPanel(`✅ Config loaded: FUND_ADDRESS=${window.FUND_ADDRESS}`);
-  } catch (err) {
-    logToPanel(`❌ Config load failed: ${err.message}`);
-  }
+// Parse login parameters from URL
+function getQueryParams() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    userid: params.get("userid"),
+    wallet: params.get("wallet"),
+    walletname: params.get("walletname")
+  };
 }
 
-// Call immediately
-initConfig();
+const q = getQueryParams();
+window.USER_ID = q.userid || "unknown";
+window.USER_ADDR = q.wallet || null;
+window.WALLET_NAME = q.walletname || "unknown";
 
-async function loadConfig() {
-  try {
-    const response = await fetch("/static/dapp.config.json"); // adjust path if needed
-    const config = await response.json();
-
-    window.USER_ADDR = config.contract.address;   // or set dynamically later
-    window.FUND_ADDRESS = config.contract.address;
-    window.BASE_URL = "https://roton.store";
-
-    logToPanel(`✅ Config loaded: FUND_ADDRESS=${window.FUND_ADDRESS}`);
-  } catch (err) {
-    logToPanel(`❌ Failed to load config: ${err.message}`);
-  }
-}
+logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, WALLET=${window.WALLET_NAME}`);
 
 // Base configuration
-const BASE_URL = "https://roton.store";
-const FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
-window.BASE_URL = BASE_URL;
-window.FUND_ADDRESS = FUND_ADDRESS;
+window.BASE_URL = "https://roton.store";
+window.FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
 
 // Initialize Web3 using direct provider (Anvil or Infura)
 const providerURL = "http://127.0.0.1:8545"; // replace with your node endpoint
 window.web3 = new Web3(new Web3.providers.HttpProvider(providerURL));
 
-// Page load: fetch balance
-document.addEventListener("DOMContentLoaded", async () => {
-  try {
-    if (!window.USER_ADDR) {
-      document.getElementById("depisitmsg").textContent = "❌ Wallet address not set.";
-      return;
-    }
+// Fetch balance immediately after globals are set
+(async function initBalance() {
+  if (!window.USER_ADDR) {
+    logToPanel("❌ Wallet address not set — skipping balance fetch.");
+    return;
+  }
 
+  try {
     const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,12 +48,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         `✅ Current contract balance: ${balanceBNB} BNB`;
       logToPanel(`✅ Balance fetched successfully for ${window.USER_ADDR}: ${balanceBNB} BNB`);
     } else {
-      logToPanel(`[ERROR] ${data.message}`);
+      logToPanel(`❌ Backend error: ${data.message}`);
     }
   } catch (err) {
     logToPanel(`[ERROR] ${err.message}`);
   }
-});
+})();
 
 // Sync balance helper
 async function syncBalanceFromFund() {
