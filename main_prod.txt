@@ -68,3 +68,54 @@ document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
     logToPanel(`[SUBMIT ERROR] ${err.message}`);
   }
 });
+
+// Attach listener to Withdraw button
+document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+  const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
+  const userAddr = window.USER_ADDR;
+
+  if (amt <= 0) {
+    return logToPanel("❌ Please enter a valid withdrawal amount.");
+  }
+
+  try {
+    logToPanel(`[BACKEND] Requesting withdrawal of ${amt} BNB for ${userAddr}...`);
+
+    const response = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: amt,
+        user_address: userAddr
+      })
+    });
+
+    const data = await response.json();
+    if (data.status === "success") {
+      logToPanel(`✅ Withdrawal processed successfully. Tx: ${data.tx_hash}`);
+
+      // Refresh balance from backend and update initial amount textbox
+      const balResponse = await fetch(`${window.BASE_URL}/prodbot/balances`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: userAddr })
+      });
+
+      const balData = await balResponse.json();
+      if (balData.status === "success") {
+        const balanceBNB = parseFloat(balData.balance);
+        document.getElementById("startBalance").value = balanceBNB;
+        document.getElementById("investBalance").value = balanceBNB;
+        document.getElementById("depisitmsg").textContent =
+          `✅ Updated contract balance: ${balanceBNB} BNB`;
+        logToPanel(`✅ Balance updated after withdrawal: ${balanceBNB} BNB`);
+      } else {
+        logToPanel(`❌ Balance refresh failed: ${balData.message}`);
+      }
+    } else {
+      logToPanel(`❌ Withdrawal failed: ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[WITHDRAW ERROR] ${err.message}`);
+  }
+});
