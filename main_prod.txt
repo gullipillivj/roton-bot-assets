@@ -1,55 +1,46 @@
 logToPanel("main_prod.txt loaded — Backend Balance Fetch Mode");
 
+// Base configuration
 const BASE_URL = "https://roton.store";
 const FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
 window.BASE_URL = BASE_URL;
 window.FUND_ADDRESS = FUND_ADDRESS;
 
-// Initialize Web3 from MetaMask provider
-if (window.ethereum) {
-  window.web3 = new Web3(window.ethereum);
-} else {
-  logToPanel("❌ MetaMask not detected. Please install it.");
-}
+// Initialize Web3 using direct provider (Anvil or Infura)
+const providerURL = "http://127.0.0.1:8545"; // replace with your node endpoint
+window.web3 = new Web3(new Web3.providers.HttpProvider(providerURL));
 
-//page load 
+// Page load: fetch balance
 document.addEventListener("DOMContentLoaded", async () => {
-    try {
-        if (!window.USER_ADDR) {
-            document.getElementById("depisitmsg").textContent = "❌ Wallet address not set.";
-            return;
-        }
-
-        // Call backend balance endpoint (correct route)
-        const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ wallet_address: window.USER_ADDR })
-        });
-
-        const data = await response.json();
-        if (data.status === "success") {
-            const balanceBNB = parseFloat(data.balance);
-
-            // Update UI
-            document.getElementById("startBalance").value = balanceBNB;
-            document.getElementById("investBalance").value = balanceBNB;
-            document.getElementById("depisitmsg").textContent =
-                `✅ Current contract balance: ${balanceBNB} BNB`;
-
-            logToPanel(`✅ Balance fetched successfully for ${window.USER_ADDR}: ${balanceBNB} BNB`);
-        } else {
-            document.getElementById("depisitmsg").textContent =
-                `❌ Backend error: ${data.message}`;
-            logToPanel(`[ERROR] ${data.message}`);
-        }
-    } catch (err) {
-        document.getElementById("depisitmsg").textContent = `❌ Error fetching balance: ${err.message}`;
-        logToPanel(`[ERROR] ${err.message}`);
+  try {
+    if (!window.USER_ADDR) {
+      document.getElementById("depisitmsg").textContent = "❌ Wallet address not set.";
+      return;
     }
+
+    const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: window.USER_ADDR })
+    });
+
+    const data = await response.json();
+    if (data.status === "success") {
+      const balanceBNB = parseFloat(data.balance);
+      document.getElementById("startBalance").value = balanceBNB;
+      document.getElementById("investBalance").value = balanceBNB;
+      document.getElementById("depisitmsg").textContent =
+        `✅ Current contract balance: ${balanceBNB} BNB`;
+      logToPanel(`✅ Balance fetched successfully for ${window.USER_ADDR}: ${balanceBNB} BNB`);
+    } else {
+      logToPanel(`[ERROR] ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[ERROR] ${err.message}`);
+  }
 });
 
-//sync balance 
+// Sync balance helper
 async function syncBalanceFromFund() {
   try {
     const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
@@ -74,25 +65,18 @@ async function syncBalanceFromFund() {
   }
 }
 
-// Attach listener to Submit button
+// Submit transaction ID for backend verification
 document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
   const txId = document.getElementById("txId")?.value.trim();
   const userAddr = window.USER_ADDR;
-
-  if (!txId) {
-    return logToPanel("❌ Please enter a valid transaction ID.");
-  }
+  if (!txId) return logToPanel("❌ Please enter a valid transaction ID.");
 
   try {
     logToPanel(`[BACKEND] Sending tx id ${txId} for verification...`);
-
     const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tx_id: txId,
-        user_address: userAddr
-      })
+      body: JSON.stringify({ tx_id: txId, user_address: userAddr })
     });
 
     const data = await response.json();
@@ -107,49 +91,24 @@ document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
   }
 });
 
-// Attach listener to Withdraw button
+// Withdraw handler
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
   const userAddr = window.USER_ADDR;
-
-  if (amt <= 0) {
-    return logToPanel("❌ Please enter a valid withdrawal amount.");
-  }
+  if (amt <= 0) return logToPanel("❌ Please enter a valid withdrawal amount.");
 
   try {
     logToPanel(`[BACKEND] Requesting withdrawal of ${amt} BNB for ${userAddr}...`);
-
     const response = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: amt,
-        user_address: userAddr
-      })
+      body: JSON.stringify({ amount: amt, user_address: userAddr })
     });
 
     const data = await response.json();
     if (data.status === "success") {
       logToPanel(`✅ Withdrawal processed successfully. Tx: ${data.tx_hash}`);
-
-      // Refresh balance from backend and update initial amount textbox
-      const balResponse = await fetch(`${window.BASE_URL}/prodbot/balances`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet_address: userAddr })
-      });
-
-      const balData = await balResponse.json();
-      if (balData.status === "success") {
-        const balanceBNB = parseFloat(balData.balance);
-        document.getElementById("startBalance").value = balanceBNB;
-        document.getElementById("investBalance").value = balanceBNB;
-        document.getElementById("depisitmsg").textContent =
-          `✅ Updated contract balance: ${balanceBNB} BNB`;
-        logToPanel(`✅ Balance updated after withdrawal: ${balanceBNB} BNB`);
-      } else {
-        logToPanel(`❌ Balance refresh failed: ${balData.message}`);
-      }
+      await syncBalanceFromFund();
     } else {
       logToPanel(`❌ Withdrawal failed: ${data.message}`);
     }
@@ -158,28 +117,27 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   }
 });
 
-//deposit button to invoke metamask etc
+// Deposit button — direct backend call (no MetaMask)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Please provide a valid deposit amount.");
 
   try {
-    logToPanel(`[METAMASK] Prompting raw transfer of ${amt} BNB...`);
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    const userWalletAddress = accounts[0];
-    const amtWei = window.web3.utils.toWei(amt.toString(), "ether");
-
-    const txHash = await window.ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: userWalletAddress,
-        to: window.FUND_ADDRESS,
-        value: amtWei
-      }]
+    logToPanel(`[BACKEND] Sending deposit request for ${amt} BNB...`);
+    const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: amt, user_address: window.USER_ADDR })
     });
 
-    logToPanel(`✅ Transfer submitted, tx: ${txHash}`);
-  } catch (e) {
-    logToPanel(`[DEPOSIT ERROR] ${e.message}`);
+    const data = await response.json();
+    if (data.status === "success") {
+      logToPanel(`✅ Deposit processed. Tx: ${data.tx_hash}`);
+      await syncBalanceFromFund();
+    } else {
+      logToPanel(`❌ Deposit failed: ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
