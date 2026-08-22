@@ -7,8 +7,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // Call backend balance endpoint
-        const response = await fetch(`${window.BASE_URL}/runbot/balances`, {
+        // Call backend balance endpoint (correct route)
+        const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ wallet_address: window.USER_ADDR })
@@ -35,7 +35,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         logToPanel(`[ERROR] ${err.message}`);
     }
 });
-
 
 // Attach listener to Submit button
 document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
