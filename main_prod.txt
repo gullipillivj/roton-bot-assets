@@ -56,3 +56,57 @@ window.BASE_URL = "https://roton.store";
     logToPanel(`[ERROR] ${err.message}`);
   }
 })();
+
+// Submit button transaction ID for backend mapping
+document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
+  const txId = document.getElementById("txId")?.value.trim();
+  const userAddr = window.USER_ADDR;
+  const userId = window.USER_ID;
+
+  if (!txId) {
+    return logToPanel("❌ Please enter a valid transaction ID.");
+  }
+
+  try {
+    logToPanel(`[BACKEND] Sending tx id ${txId} for deposit mapping...`);
+
+    // Call backend deposit route (maps user balance via depositBNB)
+    const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tx_id: txId, user_address: userAddr })
+    });
+
+    const data = await response.json();
+    if (data.status === "success") {
+      logToPanel(`✅ Deposit mapped successfully. Tx: ${data.tx_hash}`);
+
+      // Fetch updated balance from contract
+      const balResponse = await fetch(`${window.BASE_URL}/prodbot/balances`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: userAddr })
+      });
+      const balData = await balResponse.json();
+
+      if (balData.status === "success") {
+        const balanceBNB = parseFloat(balData.balance);
+
+        // Update clients.db via backend
+        await fetch(`${window.BASE_URL}/prodbot/update_client`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userid: userId, new_balance: balanceBNB })
+        });
+
+        // Update UI textbox
+        document.getElementById("startBalance").value = balanceBNB;
+        logToPanel(`✅ Balance updated for ${userId}: ${balanceBNB} BNB`);
+      }
+    } else {
+      logToPanel(`❌ Deposit mapping failed: ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[SUBMIT ERROR] ${err.message}`);
+  }
+});
