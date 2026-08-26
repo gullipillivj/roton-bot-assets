@@ -110,3 +110,60 @@ document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
     logToPanel(`[SUBMIT ERROR] ${err.message}`);
   }
 });
+
+//withdraw
+// Withdraw handler — RPC call to user wallet
+document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+  const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
+  const userAddr = window.USER_ADDR;
+  const userId = window.USER_ID;
+
+  if (amt <= 0) {
+    return logToPanel("❌ Please enter a valid withdrawal amount.");
+  }
+
+  try {
+    logToPanel(`[BACKEND] Requesting withdrawal of ${amt} BNB for ${userAddr}...`);
+
+    // Call backend withdraw route
+    const response = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: amt, user_address: userAddr })
+    });
+
+    const data = await response.json();
+    if (data.status === "success") {
+      logToPanel(`✅ Withdrawal processed successfully. Tx: ${data.tx_hash}`);
+
+      // Fetch updated balance from contract
+      const balResponse = await fetch(`${window.BASE_URL}/prodbot/balances`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet_address: userAddr })
+      });
+      const balData = await balResponse.json();
+
+      if (balData.status === "success") {
+        const balanceBNB = parseFloat(balData.balance);
+
+        // Update clients.db via backend
+        await fetch(`${window.BASE_URL}/prodbot/update_client`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userid: userId, new_balance: balanceBNB })
+        });
+
+        // Update UI textbox
+        document.getElementById("startBalance").value = balanceBNB;
+        logToPanel(`✅ Balance updated after withdrawal for ${userId}: ${balanceBNB} BNB`);
+      }
+    } else {
+      logToPanel(`❌ Withdrawal failed: ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[WITHDRAW ERROR] ${err.message}`);
+  }
+});
+
+
