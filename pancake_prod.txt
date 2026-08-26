@@ -1,23 +1,33 @@
 logToPanel("pancake_prod.txt loaded");
 
-async function runSwap(bnbAmount, targetTokenAddress) {
+async function runSwap(userAddr, bnbAmount, tokenAddress) {
   try {
-    const res = await fetch("/prodbot/swap", {
+    const res = await fetch(`${window.BASE_URL}/prodbot/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_wallet: window.USER_ADDR,
-        target_token: targetTokenAddress,
-        amount_bnb: bnbAmount,
+        user_address: userAddr,
+        bnb_amount: bnbAmount,
+        target_token: tokenAddress,
         wbnb_address: window.WBNB_TOKEN_ADDRESS,
-        router: "0x10ED43C718714eb63d5aA57B78B54704E256024E" // PancakeSwap V2 Router Address
+        router: "0x10ED43C718714eb63d5aA57B78B54704E256024E" // PancakeSwap V2 Router
       })
     });
-    return await res.json();
+
+    const data = await res.json();
+    if (data.status === "success") {
+      logToPanel(`✅ Swap executed successfully. TxHash=${data.tx_hash}`);
+      return data;
+    } else {
+      logToPanel(`❌ Swap failed: ${data.message}`);
+      return data;
+    }
   } catch (err) {
-    logToPanel(`❌ Local server route bridge connection broken: ${err.message}`);
+    logToPanel(`[SWAP ERROR] ${err.message}`);
     return { status: "error", message: err.message };
   }
 }
+
+window.runSwap = runSwap;
 
 window.runSwap = runSwap;
