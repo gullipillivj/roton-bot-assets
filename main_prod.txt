@@ -1,4 +1,4 @@
-logToPanel("main_prod.txt loaded — Backend Balance Fetch Mode");
+logToPanel("main_prod.txt loaded — Client Sync Mode");
 
 // Parse login parameters from URL
 function getQueryParams() {
@@ -19,20 +19,16 @@ logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${wind
 
 // Base configuration
 window.BASE_URL = "https://roton.store";
-window.FUND_ADDRESS = "0x32f8759F23da6C4847c0DCD2446Af73eB0DE1A8D";
 
-// Initialize Web3 using direct provider (Anvil or Infura)
-const providerURL = "http://127.0.0.1:8545"; // replace with your node endpoint
-window.web3 = new Web3(new Web3.providers.HttpProvider(providerURL));
-
-// Fetch balance immediately after globals are set
+// Fetch balance from contract and update clients.db
 (async function initBalance() {
-  if (!window.USER_ADDR) {
-    logToPanel("❌ Wallet address not set — skipping balance fetch.");
+  if (!window.USER_ADDR || !window.USER_ID) {
+    logToPanel("❌ Wallet or User ID not set — skipping balance fetch.");
     return;
   }
 
   try {
+    // Step 1: Get balance from contract
     const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,11 +38,17 @@ window.web3 = new Web3(new Web3.providers.HttpProvider(providerURL));
     const data = await response.json();
     if (data.status === "success") {
       const balanceBNB = parseFloat(data.balance);
+
+      // Step 2: Update clients.db via backend
+      await fetch(`${window.BASE_URL}/prodbot/update_client`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userid: window.USER_ID, new_balance: balanceBNB })
+      });
+
+      // Step 3: Update UI textbox
       document.getElementById("startBalance").value = balanceBNB;
-      document.getElementById("investBalance").value = balanceBNB;
-      document.getElementById("depisitmsg").textContent =
-        `✅ Current contract balance: ${balanceBNB} BNB`;
-      logToPanel(`✅ Balance fetched successfully for ${window.USER_ADDR}: ${balanceBNB} BNB`);
+      logToPanel(`✅ Balance synced for ${window.USER_ID}: ${balanceBNB} BNB`);
     } else {
       logToPanel(`❌ Backend error: ${data.message}`);
     }
@@ -54,106 +56,3 @@ window.web3 = new Web3(new Web3.providers.HttpProvider(providerURL));
     logToPanel(`[ERROR] ${err.message}`);
   }
 })();
-
-// Sync balance helper
-async function syncBalanceFromFund() {
-  try {
-    const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: window.USER_ADDR })
-    });
-
-    const data = await response.json();
-    if (data.status === "success") {
-      const balanceBNB = parseFloat(data.balance);
-      document.getElementById("startBalance").value = balanceBNB;
-      document.getElementById("investBalance").value = balanceBNB;
-      document.getElementById("depisitmsg").textContent =
-        `✅ Synced contract balance: ${balanceBNB} BNB`;
-      logToPanel(`✅ Balance synced successfully: ${balanceBNB} BNB`);
-    } else {
-      logToPanel(`❌ Sync failed: ${data.message}`);
-    }
-  } catch (err) {
-    logToPanel(`[SYNC ERROR] ${err.message}`);
-  }
-}
-
-// Submit transaction ID for backend verification
-document.getElementById("txSubmitBtn")?.addEventListener("click", async () => {
-  const txId = document.getElementById("txId")?.value.trim();
-  const userAddr = window.USER_ADDR;
-  if (!txId) return logToPanel("❌ Please enter a valid transaction ID.");
-
-  try {
-    logToPanel(`[BACKEND] Sending tx id ${txId} for verification...`);
-    const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tx_id: txId, user_address: userAddr })
-    });
-
-    const data = await response.json();
-    if (data.status === "success") {
-      logToPanel(`✅ Deposit mapped successfully. Tx: ${data.tx_hash}`);
-      await syncBalanceFromFund();
-    } else {
-      logToPanel(`❌ Deposit mapping failed: ${data.message}`);
-    }
-  } catch (err) {
-    logToPanel(`[SUBMIT ERROR] ${err.message}`);
-  }
-});
-
-// Withdraw handler
-document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-  const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
-  const userAddr = window.USER_ADDR;
-  if (amt <= 0) return logToPanel("❌ Please enter a valid withdrawal amount.");
-
-  try {
-    logToPanel(`[BACKEND] Requesting withdrawal of ${amt} BNB for ${userAddr}...`);
-    const response = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: amt, user_address: userAddr })
-    });
-
-    const data = await response.json();
-    if (data.status === "success") {
-      logToPanel(`✅ Withdrawal processed successfully. Tx: ${data.tx_hash}`);
-      await syncBalanceFromFund();
-    } else {
-      logToPanel(`❌ Withdrawal failed: ${data.message}`);
-    }
-  } catch (err) {
-    logToPanel(`[WITHDRAW ERROR] ${err.message}`);
-  }
-});
-
-// Deposit button — direct backend call (no MetaMask)
-document.getElementById("depositBtn")?.addEventListener("click", async () => {
-  const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
-  if (amt <= 0) return logToPanel("❌ Please provide a valid deposit amount.");
-
-  try {
-    logToPanel(`[BACKEND] Sending deposit request for ${amt} BNB...`);
-    const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: amt, user_address: window.USER_ADDR })
-    });
-
-    const data = await response.json();
-    if (data.status === "success") {
-      logToPanel(`✅ Deposit processed. Tx: ${data.tx_hash}`);
-      await syncBalanceFromFund();
-    } else {
-      logToPanel(`❌ Deposit failed: ${data.message}`);
-    }
-  } catch (err) {
-    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
-  }
-});
-
