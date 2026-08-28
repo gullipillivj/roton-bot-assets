@@ -195,4 +195,4 @@ window.logview = {
 window.logview = function (msg) {
   window.logToPanel(msg);
 };
-window.logToPanel = logToPanel(msg);
+window.logToPanel = logToPanel;
