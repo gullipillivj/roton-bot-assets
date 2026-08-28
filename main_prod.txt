@@ -11,6 +11,17 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+// ✅ Inline fallback logger — replaces old logger.txt
+function logToPanel(msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.value += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
+  }
+}
+
 // Parse login parameters from URL
 // ✅ Safe query extraction even inside iframe
 function getQueryParams() {
