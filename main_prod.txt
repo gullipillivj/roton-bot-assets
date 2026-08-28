@@ -1,5 +1,16 @@
 logToPanel("main_prod.txt loaded — Client Sync Mode");
 
+// ✅ Global logger available to all scripts
+window.logToPanel = function (msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.value += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
+  }
+};
+
 // ✅ Ensure logToPanel works inside iframe
 window.addEventListener("DOMContentLoaded", () => {
   if (typeof window.parent.logToPanel === "function") {
