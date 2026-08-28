@@ -185,3 +185,13 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
     logToPanel(`[SUBMIT ERROR] ${err.message}`);
   }
 });
+
+// ✅ Expose logToPanel globally for all assets
+window.logview = {
+  log: window.logToPanel
+};
+
+// Optional shorthand so other scripts can just call window.logview("msg")
+window.logview = function (msg) {
+  window.logToPanel(msg);
+};
