@@ -1,5 +1,16 @@
 logToPanel("main_prod.txt loaded — Client Sync Mode");
 
+// ✅ Ensure logToPanel works inside iframe
+window.addEventListener("DOMContentLoaded", () => {
+  if (typeof window.parent.logToPanel === "function") {
+    window.parent.logToPanel("main_prod.txt loaded — Client Sync Mode");
+  } else if (typeof logToPanel === "function") {
+    logToPanel("main_prod.txt loaded — Client Sync Mode");
+  } else {
+    console.log("⚠️ logToPanel not found in parent or local scope.");
+  }
+});
+
 // Parse login parameters from URL
 // ✅ Safe query extraction even inside iframe
 function getQueryParams() {
