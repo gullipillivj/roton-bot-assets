@@ -1,5 +1,5 @@
-// ✅ Global logger available to all scripts
-window.logToPanel = function (msg) {
+// ✅ Global logger
+function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
     panel.value += "\n" + msg;
@@ -7,37 +7,31 @@ window.logToPanel = function (msg) {
   } else {
     console.log(msg);
   }
-};
+}
+window.logToPanel = logToPanel;   // expose globally
+window.logview = logToPanel;      // alias
 
 // ✅ Status label updater
 window.updateStatus = function (state, message) {
   const label = document.getElementById("txStatusLabel");
   if (!label) return;
 
-  switch (state) {
-    case "pending":
-      label.style.color = "#FFD700"; // yellow
-      label.textContent = `Status: ⏳ ${message || "Processing..."}`;
-      break;
-    case "success":
-      label.style.color = "#00FF00"; // green
-      label.textContent = `Status: ✅ ${message || "Completed successfully!"}`;
-      break;
-    case "error":
-      label.style.color = "#FF4C4C"; // red
-      label.textContent = `Status: ❌ ${message || "An error occurred."}`;
-      break;
-    default:
-      label.style.color = "#00FF00";
-      label.textContent = `Status: ${message || "Waiting for input..."}`;
-  }
+  const states = {
+    pending: { color: "#FFD700", icon: "⏳", text: "Processing..." },
+    success: { color: "#00FF00", icon: "✅", text: "Completed successfully!" },
+    error:   { color: "#FF4C4C", icon: "❌", text: "An error occurred." },
+    default: { color: "#00FF00", icon: "", text: "Waiting for input..." }
+  };
+
+  const s = states[state] || states.default;
+  label.style.color = s.color;
+  label.textContent = `Status: ${s.icon} ${message || s.text}`;
 };
 
-
-// ✅ Initialization message
+// ✅ Initialization
 logToPanel("main_prod.txt loaded — Client Sync Mode");
 
-// ✅ Safe query extraction even inside iframe
+// ✅ Query params
 function getQueryParams() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -121,15 +115,15 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
   try {
-    logToPanel(`[RPC] Requesting deposit of ${amt} BNB from ${window.USER_ADDR}...`);
+    updateStatus("pending", `Requesting deposit of ${amt} BNB...`);
     const txHash = await window.ethereum.request({
       method: "eth_sendTransaction",
       params: [{ from: window.USER_ADDR, to: window.FUND_ADDRESS, value: window.web3.utils.toWei(amt.toString(), "ether") }]
     });
-    logToPanel(`✅ Deposit submitted. Tx: ${txHash}`);
+    updateStatus("success", `Deposit submitted. Tx: ${txHash}`);
     await syncBalanceFromFund();
   } catch (err) {
-    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
+    updateStatus("error", err.message);
   }
 });
 
@@ -139,7 +133,7 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid withdrawal amount.");
   try {
-    logToPanel(`[RPC] Requesting withdrawal of ${amt} BNB for ${window.USER_ADDR}...`);
+    updateStatus("pending", `Requesting withdrawal of ${amt} BNB...`);
     const txHash = await window.ethereum.request({
       method: "eth_sendTransaction",
       params: [{
@@ -148,10 +142,10 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
         data: fund_contract.methods.withdrawUserCapital(window.web3.utils.toWei(amt.toString(), "ether")).encodeABI()
       }]
     });
-    logToPanel(`✅ Withdrawal submitted. Tx: ${txHash}`);
+    updateStatus("success", `Withdrawal submitted. Tx: ${txHash}`);
     await syncBalanceFromFund();
   } catch (err) {
-    logToPanel(`[WITHDRAW ERROR] ${err.message}`);
+    updateStatus("error", err.message);
   }
 });
 
@@ -161,7 +155,7 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   const txId = document.getElementById("transactionId")?.value.trim();
   if (!txId) return logToPanel("❌ Please enter a valid transaction ID.");
   try {
-    logToPanel(`[BACKEND] Mapping deposit tx id ${txId} for ${window.USER_ADDR}...`);
+    updateStatus("pending", `Mapping deposit tx id ${txId}...`);
     const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -176,23 +170,12 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
       return;
     }
     if (data.status === "success") {
-      logToPanel(`✅ Deposit mapped successfully. Tx: ${data.tx_hash}`);
+      updateStatus("success", `Deposit mapped successfully. Tx: ${data.tx_hash}`);
       await syncBalanceFromFund();
     } else {
-      logToPanel(`❌ Deposit mapping failed: ${data.message}`);
+      updateStatus("error", data.message);
     }
   } catch (err) {
-    logToPanel(`[SUBMIT ERROR] ${err.message}`);
+    updateStatus("error", err.message);
   }
 });
-
-// ✅ Expose logToPanel globally for all assets
-window.logview = {
-  log: window.logToPanel
-};
-
-// Optional shorthand so other scripts can just call window.logview("msg")
-window.logview = function (msg) {
-  window.logToPanel(msg);
-};
-window.logToPanel = logToPanel;
