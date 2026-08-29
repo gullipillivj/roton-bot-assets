@@ -180,18 +180,51 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   }
 });
 
-// ✅ Connect Wallet button click
+// ✅ Connect Wallet button click — dynamic by wallet type
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
   try {
     logToPanel("🔗 ConnectWallet button clicked — initializing wallet connection...");
-    await ensureWalletConnected();
 
-    if (window.USER_ADDR) {
-      logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
-      updateStatus("success", "Wallet connected successfully!");
-    } else {
-      logToPanel("❌ Wallet connection failed or cancelled.");
-      updateStatus("error", "Wallet connection failed.");
+    switch ((window.WALLET_NAME || "").toLowerCase()) {
+      case "metamask":
+        if (typeof window.ethereum === "undefined") {
+          logToPanel("❌ MetaMask not detected — please install it.");
+          updateStatus("error", "MetaMask not detected.");
+          return;
+        }
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        window.USER_ADDR = accounts[0];
+        window.web3 = new Web3(window.ethereum);
+        logToPanel(`✅ MetaMask connected: ${window.USER_ADDR}`);
+        updateStatus("success", "MetaMask connected successfully!");
+        break;
+
+      case "binance":
+        window.web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-dataseed1.binance.org"));
+        // You may also integrate Binance Chain Wallet API if available
+        logToPanel("✅ Binance Wallet RPC connected.");
+        updateStatus("success", "Binance Wallet connected.");
+        break;
+
+      case "walletconnect":
+        // Example placeholder — integrate WalletConnect provider here
+        logToPanel("⚠️ WalletConnect integration not yet implemented.");
+        updateStatus("error", "WalletConnect not implemented.");
+        break;
+
+      default:
+        // Fallback RPC
+        window.web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-dataseed.binance.org"));
+        logToPanel(`⚠️ Fallback RPC used for wallet: ${window.WALLET_NAME}`);
+        updateStatus("success", "Fallback RPC connected.");
+    }
+
+    // Optional: disable button after success
+    const btn = document.getElementById("connectwalletBtn");
+    if (btn && window.USER_ADDR) {
+      btn.disabled = true;
+      btn.style.opacity = "0.6";
+      btn.textContent = "Connected";
     }
   } catch (err) {
     logToPanel(`[CONNECT ERROR] ${err.message}`);
