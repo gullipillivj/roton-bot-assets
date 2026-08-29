@@ -8,8 +8,8 @@ function logToPanel(msg) {
     console.log(msg);
   }
 }
-window.logToPanel = logToPanel;   // expose globally
-window.logview = logToPanel;      // alias
+window.logToPanel = logToPanel;
+window.logview = logToPanel;
 
 // ✅ Status label updater
 window.updateStatus = function (state, message) {
@@ -41,14 +41,6 @@ function getQueryParams() {
       walletname: params.get("walletname")
     };
   } catch {
-    if (window.parent && window.parent.location) {
-      const params = new URLSearchParams(window.parent.location.search);
-      return {
-        userid: params.get("userid"),
-        wallet: params.get("wallet"),
-        walletname: params.get("walletname")
-      };
-    }
     return { userid: "unknown", wallet: null, walletname: "unknown" };
   }
 }
@@ -61,24 +53,20 @@ window.BASE_URL = "https://roton.store";
 
 logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, WALLET=${window.WALLET_NAME}`);
 
-// ✅ Wallet connection helper
+// ✅ Wallet connection helper (ethers.js)
 async function ensureWalletConnected() {
-  if (!window.USER_ADDR) {
-    switch (window.WALLET_NAME) {
-      case "MetaMask":
-        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        window.USER_ADDR = accounts[0];
-        logToPanel("✅ MetaMask connection approved.");
-        break;
-      case "Binance":
-        window.web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-dataseed1.binance.org"));
-        logToPanel("✅ Binance Wallet RPC connected.");
-        break;
-      default:
-        window.web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-dataseed.binance.org"));
-        logToPanel(`⚠️ Fallback RPC used for wallet: ${window.WALLET_NAME}`);
-    }
+  if (typeof window.ethereum === "undefined") {
+    logToPanel("❌ No Ethereum provider found — please install MetaMask or another wallet.");
+    updateStatus("error", "No wallet provider detected.");
+    return;
   }
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  const signer = provider.getSigner();
+  window.USER_ADDR = await signer.getAddress();
+  window.provider = provider;
+  window.signer = signer;
+  logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
 }
 
 // ✅ Balance sync helper
@@ -91,9 +79,7 @@ async function syncBalanceFromFund() {
     });
     const text = await response.text();
     let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
+    try { data = JSON.parse(text); } catch {
       logToPanel(`[ERROR] Invalid JSON: ${text.slice(0, 100)}...`);
       return;
     }
@@ -109,47 +95,43 @@ async function syncBalanceFromFund() {
   }
 }
 
-// ✅ Deposit
+// ✅ Deposit (ethers.js)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   await ensureWalletConnected();
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
   try {
     updateStatus("pending", `Requesting deposit of ${amt} BNB...`);
-    const txHash = await window.ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{ from: window.USER_ADDR, to: window.FUND_ADDRESS, value: window.web3.utils.toWei(amt.toString(), "ether") }]
+    const tx = await window.signer.sendTransaction({
+      to: window.FUND_ADDRESS,
+      value: ethers.utils.parseEther(amt.toString())
     });
-    updateStatus("success", `Deposit submitted. Tx: ${txHash}`);
+    await tx.wait();
+    updateStatus("success", `Deposit submitted. Tx: ${tx.hash}`);
     await syncBalanceFromFund();
   } catch (err) {
     updateStatus("error", err.message);
   }
 });
 
-// ✅ Withdraw
+// ✅ Withdraw (ethers.js)
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   await ensureWalletConnected();
   const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid withdrawal amount.");
   try {
     updateStatus("pending", `Requesting withdrawal of ${amt} BNB...`);
-    const txHash = await window.ethereum.request({
-      method: "eth_sendTransaction",
-      params: [{
-        from: window.USER_ADDR,
-        to: window.FUND_ADDRESS,
-        data: fund_contract.methods.withdrawUserCapital(window.web3.utils.toWei(amt.toString(), "ether")).encodeABI()
-      }]
-    });
-    updateStatus("success", `Withdrawal submitted. Tx: ${txHash}`);
+    const contract = new ethers.Contract(window.FUND_ADDRESS, fundAbi, window.signer);
+    const tx = await contract.withdrawUserCapital(ethers.utils.parseEther(amt.toString()));
+    await tx.wait();
+    updateStatus("success", `Withdrawal submitted. Tx: ${tx.hash}`);
     await syncBalanceFromFund();
   } catch (err) {
     updateStatus("error", err.message);
   }
 });
 
-// ✅ Transaction submit
+// ✅ Transaction submit (ethers.js)
 document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   await ensureWalletConnected();
   const txId = document.getElementById("transactionId")?.value.trim();
@@ -163,9 +145,7 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
     });
     const text = await response.text();
     let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
+    try { data = JSON.parse(text); } catch {
       logToPanel(`[ERROR] Invalid JSON: ${text.slice(0, 100)}...`);
       return;
     }
@@ -180,48 +160,14 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   }
 });
 
-// ✅ Connect Wallet button click — dynamic by wallet type
+// ✅ Connect Wallet button click (ethers.js)
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
   try {
-    logToPanel("🔗 ConnectWallet button clicked — initializing wallet connection...");
-
-    switch ((window.WALLET_NAME || "").toLowerCase()) {
-      case "metamask":
-        if (typeof window.ethereum === "undefined") {
-          logToPanel("❌ MetaMask not detected — please install it.");
-          updateStatus("error", "MetaMask not detected.");
-          return;
-        }
-        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        window.USER_ADDR = accounts[0];
-        window.web3 = new Web3(window.ethereum);
-        logToPanel(`✅ MetaMask connected: ${window.USER_ADDR}`);
-        updateStatus("success", "MetaMask connected successfully!");
-        break;
-
-      case "binance":
-        window.web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-dataseed1.binance.org"));
-        // You may also integrate Binance Chain Wallet API if available
-        logToPanel("✅ Binance Wallet RPC connected.");
-        updateStatus("success", "Binance Wallet connected.");
-        break;
-
-      case "walletconnect":
-        // Example placeholder — integrate WalletConnect provider here
-        logToPanel("⚠️ WalletConnect integration not yet implemented.");
-        updateStatus("error", "WalletConnect not implemented.");
-        break;
-
-      default:
-        // Fallback RPC
-        window.web3 = new Web3(new Web3.providers.HttpProvider("https://bsc-dataseed.binance.org"));
-        logToPanel(`⚠️ Fallback RPC used for wallet: ${window.WALLET_NAME}`);
-        updateStatus("success", "Fallback RPC connected.");
-    }
-
-    // Optional: disable button after success
+    logToPanel("🔗 ConnectWallet button clicked — requesting wallet access...");
+    await ensureWalletConnected();
+    updateStatus("success", "Wallet connected successfully!");
     const btn = document.getElementById("connectwalletBtn");
-    if (btn && window.USER_ADDR) {
+    if (btn) {
       btn.disabled = true;
       btn.style.opacity = "0.6";
       btn.textContent = "Connected";
@@ -231,4 +177,3 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
     updateStatus("error", err.message);
   }
 });
-window.logToPanel = logToPanel;
