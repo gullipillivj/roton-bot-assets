@@ -179,3 +179,23 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
     updateStatus("error", err.message);
   }
 });
+
+// ✅ Connect Wallet button click
+document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
+  try {
+    logToPanel("🔗 ConnectWallet button clicked — initializing wallet connection...");
+    await ensureWalletConnected();
+
+    if (window.USER_ADDR) {
+      logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
+      updateStatus("success", "Wallet connected successfully!");
+    } else {
+      logToPanel("❌ Wallet connection failed or cancelled.");
+      updateStatus("error", "Wallet connection failed.");
+    }
+  } catch (err) {
+    logToPanel(`[CONNECT ERROR] ${err.message}`);
+    updateStatus("error", err.message);
+  }
+});
+window.logToPanel = logToPanel;
