@@ -160,12 +160,39 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   }
 });
 
-// ✅ Connect Wallet button click (ethers.js)
+// ✅ Connect Wallet button click (ethers.js + backend sync)
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
   try {
     logToPanel("🔗 ConnectWallet button clicked — requesting wallet access...");
-    await ensureWalletConnected();
+
+    if (typeof window.ethereum === "undefined") {
+      logToPanel("❌ No Ethereum provider found — please install a wallet.");
+      updateStatus("error", "No wallet provider detected.");
+      return;
+    }
+
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);   // 🔑 triggers popup
+    const signer = provider.getSigner();
+    window.USER_ADDR = await signer.getAddress();
+    window.provider = provider;
+    window.signer = signer;
+
+    logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
     updateStatus("success", "Wallet connected successfully!");
+
+    // 🔗 Call backend /prodbot/connection to log connection
+    await fetch(`${window.BASE_URL}/prodbot/connection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: window.USER_ID,
+        user_address: window.USER_ADDR,
+        walletname: window.WALLET_NAME
+      })
+    });
+
+    // Optional: disable button after success
     const btn = document.getElementById("connectwalletBtn");
     if (btn) {
       btn.disabled = true;
