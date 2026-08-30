@@ -1,4 +1,15 @@
 logToPanel("coins.txt loaded");
+// ✅ Global logger
+function logToPanel(msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.value += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
+  }
+}
+window.logToPanel = logToPanel;
 
 const BINANCE_INFO   = "https://binance.com";
 const BINANCE_TICKER = "https://binance.com";
