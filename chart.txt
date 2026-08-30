@@ -1,4 +1,15 @@
 logToPanel("chart.txt loaded");
+// ✅ Global logger
+function logToPanel(msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.value += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
+  }
+}
+window.logToPanel = logToPanel;
 
 function updateChart(balance, profit = null) {
     const canvas = document.getElementById("balanceChart");
