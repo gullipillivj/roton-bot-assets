@@ -158,6 +158,7 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 });
 
 // ✅ Transaction submit (ethers.js)
+// Transaction submit (production)
 document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   try {
     const txid = document.getElementById("transactionId")?.value.trim();
