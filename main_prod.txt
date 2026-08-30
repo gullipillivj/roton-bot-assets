@@ -158,9 +158,10 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 });
 
 // ✅ Transaction submit (ethers.js)
-document.getElementById("submitBtn")?.addEventListener("click", async () => {
+// ✅ Transaction submit (ethers.js)
+document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   try {
-    const txid = document.getElementById("txInput")?.value.trim();
+    const txid = document.getElementById("transactionId")?.value.trim();
     const userAddr = window.USER_ADDR;
 
     if (!txid || !userAddr) {
@@ -171,6 +172,7 @@ document.getElementById("submitBtn")?.addEventListener("click", async () => {
 
     updateStatus("pending", "Verifying deposit on-chain...");
 
+    // Step 1: Verify deposit via backend
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit_split`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -178,23 +180,17 @@ document.getElementById("submitBtn")?.addEventListener("click", async () => {
     });
 
     const data = await resp.json();
-    if (data.status === "success") {
-      logToPanel(`✅ Deposit verified. Commission=${data.commission}, GasPool=${data.gas_pool}, Credited=${data.credited_balance}`);
-      updateStatus("success", "Deposit verified successfully!");
-    } else {
+    if (data.status !== "success") {
       logToPanel(`❌ Verification failed: ${data.message}`);
       updateStatus("error", data.message);
+      return;
     }
-  } catch (err) {
-    logToPanel(`[SUBMIT ERROR] ${err.message}`);
-    updateStatus("error", err.message);
-  }
-});
 
+    logToPanel(`✅ Deposit verified. Commission=${data.commission}, GasPool=${data.gas_pool}, Credited=${data.credited_balance}`);
 
     // Step 2: Execute depositBNB on contract
     const contract = new ethers.Contract(window.FUND_ADDRESS, fundAbi, window.signer);
-    const depositTx = await contract.depositBNB({ value: ethers.utils.parseEther("0.00304") }); // replace with actual amount
+    const depositTx = await contract.depositBNB({ value: ethers.utils.parseEther(data.credited_balance.toString()) });
     await depositTx.wait();
     logToPanel(`✅ depositBNB executed — TxHash=${depositTx.hash}`);
 
@@ -202,7 +198,7 @@ document.getElementById("submitBtn")?.addEventListener("click", async () => {
     const balResp = await fetch(`${window.BASE_URL}/prodbot/balances`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: window.USER_ADDR })
+      body: JSON.stringify({ wallet_address: userAddr })
     });
     const balData = await balResp.json();
 
@@ -212,7 +208,7 @@ document.getElementById("submitBtn")?.addEventListener("click", async () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          txid: txId,
+          txid: txid,
           status: "success",
           amount: balData.balance
         })
