@@ -158,25 +158,39 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 });
 
 // ✅ Transaction submit (ethers.js)
-document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
-  await ensureWalletConnected();
-
-  const txId = document.getElementById("transactionId")?.value.trim();
-  if (!txId) return logToPanel("❌ Please enter a valid transaction ID.");
-
+document.getElementById("submitBtn")?.addEventListener("click", async () => {
   try {
-    updateStatus("pending", `Recording pending deposit for ${txId}...`);
+    const txid = document.getElementById("txInput")?.value.trim();
+    const userAddr = window.USER_ADDR;
 
-    // Step 1: Insert pending record
-    await fetch(`${window.BASE_URL}/prodbot/add_pending_deposit`, {
+    if (!txid || !userAddr) {
+      logToPanel("❌ Missing Tx ID or wallet address.");
+      updateStatus("error", "Missing Tx ID or wallet address.");
+      return;
+    }
+
+    updateStatus("pending", "Verifying deposit on-chain...");
+
+    const resp = await fetch(`${window.BASE_URL}/prodbot/deposit_split`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        txid: txId,
-        amount: 0 // leave 0 until confirmed
-      })
+      body: JSON.stringify({ tx_id: txid, user_address: userAddr })
     });
+
+    const data = await resp.json();
+    if (data.status === "success") {
+      logToPanel(`✅ Deposit verified. Commission=${data.commission}, GasPool=${data.gas_pool}, Credited=${data.credited_balance}`);
+      updateStatus("success", "Deposit verified successfully!");
+    } else {
+      logToPanel(`❌ Verification failed: ${data.message}`);
+      updateStatus("error", data.message);
+    }
+  } catch (err) {
+    logToPanel(`[SUBMIT ERROR] ${err.message}`);
+    updateStatus("error", err.message);
+  }
+});
+
 
     // Step 2: Execute depositBNB on contract
     const contract = new ethers.Contract(window.FUND_ADDRESS, fundAbi, window.signer);
