@@ -11,6 +11,13 @@ function logToPanel(msg) {
 window.logToPanel = logToPanel;
 window.logview = logToPanel;
 
+const provider = new WalletConnectProvider({
+  rpc: {
+    56: "https://bsc-dataseed.binance.org/", // or your Infura endpoint
+  },
+  chainId: 56,
+});
+
 // ✅ Status label updater
 window.updateStatus = function (state, message) {
   const label = document.getElementById("txStatusLabel");
