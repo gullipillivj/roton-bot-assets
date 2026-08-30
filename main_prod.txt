@@ -263,3 +263,35 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
     updateStatus("error", err.message);
   }
 });
+
+// ✅ Start Trading — triggers simulate_prod engine
+document.getElementById("startBtn")?.addEventListener("click", async () => {
+  const cycles = parseInt(document.getElementById("tradeCycles")?.value || "10");
+  logToPanel(`🚀 Starting trading for ${cycles} cycles...`);
+  updateStatus("pending", "Trading started...");
+  window.startSimulation(cycles); // calls simulate_prod.txt function
+});
+
+// ✅ Stop Trading — halts simulation loop
+document.getElementById("stopBtn")?.addEventListener("click", async () => {
+  logToPanel("🛑 Trading stopped by user");
+  updateStatus("error", "Trading stopped.");
+  window.isBotRunning = false; // stops simulateCycle loop
+});
+
+// ✅ Logout — backend call
+document.getElementById("logoutBtn")?.addEventListener("click", async () => {
+  logToPanel("👋 Logging out...");
+  try {
+    await fetch(`${window.BASE_URL}/prodbot/logout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userid: window.USER_ID })
+    });
+    updateStatus("success", "Logged out successfully.");
+  } catch (err) {
+    updateStatus("error", err.message);
+    logToPanel(`[LOGOUT ERROR] ${err.message}`);
+  }
+});
+
