@@ -160,31 +160,64 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
 // ✅ Transaction submit (ethers.js)
 document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   await ensureWalletConnected();
+
   const txId = document.getElementById("transactionId")?.value.trim();
   if (!txId) return logToPanel("❌ Please enter a valid transaction ID.");
+
   try {
-    updateStatus("pending", `Mapping deposit tx id ${txId}...`);
-    const response = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
+    updateStatus("pending", `Recording pending deposit for ${txId}...`);
+
+    // Step 1: Insert pending record
+    await fetch(`${window.BASE_URL}/prodbot/add_pending_deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tx_id: txId, user_address: window.USER_ADDR, walletname: window.WALLET_NAME })
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        txid: txId,
+        amount: 0 // leave 0 until confirmed
+      })
     });
-    const text = await response.text();
-    let data;
-    try { data = JSON.parse(text); } catch {
-      logToPanel(`[ERROR] Invalid JSON: ${text.slice(0, 100)}...`);
-      return;
-    }
-    if (data.status === "success") {
-      updateStatus("success", `Deposit mapped successfully. Tx: ${data.tx_hash}`);
-      await syncBalanceFromFund();
+
+    // Step 2: Execute depositBNB on contract
+    const contract = new ethers.Contract(window.FUND_ADDRESS, fundAbi, window.signer);
+    const depositTx = await contract.depositBNB({ value: ethers.utils.parseEther("0.00304") }); // replace with actual amount
+    await depositTx.wait();
+    logToPanel(`✅ depositBNB executed — TxHash=${depositTx.hash}`);
+
+    // Step 3: Check balance via backend
+    const balResp = await fetch(`${window.BASE_URL}/prodbot/balances`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ wallet_address: window.USER_ADDR })
+    });
+    const balData = await balResp.json();
+
+    if (balData.status === "success" && balData.balance > 0) {
+      // Step 4: Update transaction record to success
+      await fetch(`${window.BASE_URL}/prodbot/update_transaction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          txid: txId,
+          status: "success",
+          amount: balData.balance
+        })
+      });
+
+      // Step 5: Update UI
+      document.getElementById("startBalance").value = balData.balance;
+      updateStatus("success", `Deposit confirmed: ${balData.balance} BNB`);
     } else {
-      updateStatus("error", data.message);
+      updateStatus("error", "DepositBNB failed or balance not updated.");
+      logToPanel("❌ Balance check failed — transaction remains pending.");
     }
   } catch (err) {
     updateStatus("error", err.message);
+    logToPanel(`[SUBMIT ERROR] ${err.message}`);
   }
 });
+
+
 
 // ✅ Connect Wallet button click (ethers.js + backend sync)
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
