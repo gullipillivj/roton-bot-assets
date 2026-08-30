@@ -228,17 +228,61 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
 
 //connectwallet button 
 
+// Include WalletConnect provider script in your HTML head
+// <script src="https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.8.0/dist/umd/index.min.js"></script>
+
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
   try {
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    window.USER_ADDR = accounts[0];
-    logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
+    logToPanel("🔗 Connecting wallet via WebConnect...");
+
+    // Initialize WalletConnect provider
+    const provider = new WalletConnectProvider({
+      rpc: {
+        56: "https://bsc-dataseed.binance.org/", // Binance Smart Chain mainnet
+        1: "https://mainnet.infura.io/v3/6dc48b3fc4424773ad710e6042e54b23" // Ethereum fallback
+      },
+      chainId: 56, // Change if using another network
+    });
+
+    // Enable session (triggers QR or mobile deep link)
+    await provider.enable();
+
+    // Wrap provider with ethers.js
+    const ethersProvider = new ethers.providers.Web3Provider(provider);
+    const signer = ethersProvider.getSigner();
+    const address = await signer.getAddress();
+
+    window.USER_ADDR = address;
+    window.provider = ethersProvider;
+    window.signer = signer;
+
+    logToPanel(`✅ Wallet connected via WebConnect: ${address}`);
     updateStatus("success", "Wallet connected successfully!");
+
+    // 🔗 Optional: log connection to backend
+    await fetch(`${window.BASE_URL}/prodbot/connectwallet`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: window.USER_ID,
+        wallet_address: address,
+        walletname: "WebConnect"
+      })
+    });
+
+    // Disable button after success
+    const btn = document.getElementById("connectwalletBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = "0.6";
+      btn.textContent = "Connected";
+    }
   } catch (err) {
     logToPanel(`[CONNECT ERROR] ${err.message}`);
     updateStatus("error", err.message);
   }
 });
+
 
 
 // ✅ Start Trading — triggers simulate_prod engine
