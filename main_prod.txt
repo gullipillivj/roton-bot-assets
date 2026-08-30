@@ -18,6 +18,8 @@ const provider = new WalletConnectProvider({
   chainId: 56,
 });
 
+const contract = new ethers.Contract(FUND_ADDRESS, fundAbi, signer);
+
 // ✅ Status label updater
 window.updateStatus = function (state, message) {
   const label = document.getElementById("txStatusLabel");
