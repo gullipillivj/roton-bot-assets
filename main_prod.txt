@@ -219,50 +219,31 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
 
 
 
-// ✅ Connect Wallet button click (ethers.js + backend sync)
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
-  try {
-    logToPanel("🔗 ConnectWallet button clicked — requesting wallet access...");
+  logToPanel("🔗 Connecting wallet via backend Infura route...");
+  updateStatus("pending", "Connecting wallet...");
 
-    if (typeof window.ethereum === "undefined") {
-      logToPanel("❌ No Ethereum provider found — please install a wallet.");
-      updateStatus("error", "No wallet provider detected.");
-      return;
-    }
+  const res = await fetch(`${window.BASE_URL}/prodbot/connectwallet`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: window.USER_ID,
+      wallet_address: window.USER_ADDR,
+      walletname: window.WALLET_NAME
+    })
+  });
 
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    await provider.send("eth_requestAccounts", []);   // 🔑 triggers popup
-    const signer = provider.getSigner();
-    window.USER_ADDR = await signer.getAddress();
-    window.provider = provider;
-    window.signer = signer;
-
-    logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
+  const data = await res.json();
+  if (data.status === "success") {
     updateStatus("success", "Wallet connected successfully!");
-
-    // 🔗 Call backend /prodbot/connection to log connection
-    await fetch(`${window.BASE_URL}/prodbot/connection`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        user_id: window.USER_ID,
-        user_address: window.USER_ADDR,
-        walletname: window.WALLET_NAME
-      })
-    });
-
-    // Optional: disable button after success
-    const btn = document.getElementById("connectwalletBtn");
-    if (btn) {
-      btn.disabled = true;
-      btn.style.opacity = "0.6";
-      btn.textContent = "Connected";
-    }
-  } catch (err) {
-    logToPanel(`[CONNECT ERROR] ${err.message}`);
-    updateStatus("error", err.message);
+    logToPanel(`✅ Wallet verified via backend: ${data.wallet_address}`);
+  } else {
+    updateStatus("error", data.message);
+    logToPanel(`❌ Wallet connection failed: ${data.message}`);
   }
 });
+
+
 
 // ✅ Start Trading — triggers simulate_prod engine
 document.getElementById("startBtn")?.addEventListener("click", async () => {
