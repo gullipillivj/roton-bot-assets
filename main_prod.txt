@@ -96,23 +96,49 @@ async function syncBalanceFromFund() {
 }
 
 // ✅ Deposit (ethers.js)
+// ✅ Deposit (backend + wallet approve)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   await ensureWalletConnected();
+
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
+
   try {
-    updateStatus("pending", `Requesting deposit of ${amt} BNB...`);
-    const tx = await window.signer.sendTransaction({
-      to: window.FUND_ADDRESS,
-      value: ethers.utils.parseEther(amt.toString())
+    updateStatus("pending", `Preparing deposit of ${amt} BNB...`);
+
+    // 🔹 Step 1: Insert pending record in backend
+    const recordResp = await fetch(`${window.BASE_URL}/prodbot/add_pending_deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        txid: "pending-" + Date.now(),
+        amount: amt
+      })
     });
-    await tx.wait();
-    updateStatus("success", `Deposit submitted. Tx: ${tx.hash}`);
+    const recordData = await recordResp.json();
+    if (recordData.status !== "success") {
+      updateStatus("error", recordData.message || "Failed to log deposit.");
+      return;
+    }
+    logToPanel(`🗂️ Pending deposit recorded: ${recordData.txid}`);
+
+    // 🔹 Step 2: Approve and send deposit to contract
+    const contract = new ethers.Contract(window.FUND_ADDRESS, fundAbi, window.signer);
+    const approveTx = await contract.depositBNB({ value: ethers.utils.parseEther(amt.toString()) });
+    await approveTx.wait();
+
+    updateStatus("success", `Deposit confirmed on-chain. Tx: ${approveTx.hash}`);
+    logToPanel(`✅ Deposit executed successfully — TxHash=${approveTx.hash}`);
+
+    // 🔹 Step 3: Sync balance
     await syncBalanceFromFund();
   } catch (err) {
     updateStatus("error", err.message);
+    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
+
 
 // ✅ Withdraw (ethers.js)
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
