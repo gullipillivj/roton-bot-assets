@@ -217,32 +217,19 @@ document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
   }
 });
 
-
+//connectwallet button 
 
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
-  logToPanel("🔗 Connecting wallet via backend Infura route...");
-  updateStatus("pending", "Connecting wallet...");
-
-  const res = await fetch(`${window.BASE_URL}/prodbot/connectwallet`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      user_id: window.USER_ID,
-      wallet_address: window.USER_ADDR,
-      walletname: window.WALLET_NAME
-    })
-  });
-
-  const data = await res.json();
-  if (data.status === "success") {
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    window.USER_ADDR = accounts[0];
+    logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
     updateStatus("success", "Wallet connected successfully!");
-    logToPanel(`✅ Wallet verified via backend: ${data.wallet_address}`);
-  } else {
-    updateStatus("error", data.message);
-    logToPanel(`❌ Wallet connection failed: ${data.message}`);
+  } catch (err) {
+    logToPanel(`[CONNECT ERROR] ${err.message}`);
+    updateStatus("error", err.message);
   }
 });
-
 
 
 // ✅ Start Trading — triggers simulate_prod engine
@@ -253,12 +240,14 @@ document.getElementById("startBtn")?.addEventListener("click", async () => {
   window.startSimulation(cycles); // calls simulate_prod.txt function
 });
 
+
 // ✅ Stop Trading — halts simulation loop
 document.getElementById("stopBtn")?.addEventListener("click", async () => {
   logToPanel("🛑 Trading stopped by user");
   updateStatus("error", "Trading stopped.");
   window.isBotRunning = false; // stops simulateCycle loop
 });
+
 
 // ✅ Logout — backend call
 document.getElementById("logoutBtn")?.addEventListener("click", async () => {
