@@ -1,4 +1,15 @@
 logToPanel("pancake_prod.txt loaded");
+// ✅ Global logger
+function logToPanel(msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.value += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
+  }
+}
+window.logToPanel = logToPanel;
 
 async function runSwap(userAddr, bnbAmount, tokenAddress) {
   try {
