@@ -39,6 +39,5 @@ async function runSwap(userAddr, bnbAmount, tokenAddress) {
   }
 }
 
-window.runSwap = runSwap;
 
 window.runSwap = runSwap;
