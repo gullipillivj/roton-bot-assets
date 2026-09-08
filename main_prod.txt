@@ -122,15 +122,40 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
       return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
     }
 
-    // Show encoded calls
+    // ✅ Broadcast encoded calls via MetaMask
+    async function sendEncodedTx(to, dataHex) {
+      try {
+        const txParams = {
+          from: window.USER_ADDR,
+          to: to,       // contract address
+          data: dataHex,
+          value: "0x0"
+        };
+        const txHash = await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [txParams],
+        });
+        logToPanel(`✅ Transaction sent — TxHash=${txHash}`);
+      } catch (err) {
+        logToPanel(`❌ Transaction error: ${err.message}`);
+      }
+    }
+
     logToPanel(`✅ Deposit prepared successfully`);
     logToPanel(`Approve Charity: ${data.approve_charity}`);
     logToPanel(`Approve Contract: ${data.approve_contract}`);
     logToPanel(`Deposit Call: ${data.deposit}`);
+
+    // 🔹 Send the transactions in sequence
+    await sendEncodedTx(token, data.approve_charity);
+    await sendEncodedTx(token, data.approve_contract);
+    await sendEncodedTx(token, data.deposit);
+
   } catch (err) {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
+
 
 
 
