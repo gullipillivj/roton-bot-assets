@@ -13,8 +13,8 @@ window.logview = logToPanel;
 
 logToPanel("main_prod.txt loaded — minimal mode");
 
-// Define WBNB token address globally
-WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // PancakeSwap WBNB
+// Define WBNB token address globally (still available if needed)
+WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
 // ✅ Query params parser
 function getQueryParams() {
@@ -38,6 +38,39 @@ window.BASE_URL = "https://roton.store";
 
 logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, WALLET=${window.WALLET_NAME}`);
 
+// ✅ Populate dropdowns
+async function populateDropdowns() {
+  // Example static lists — replace with balanceOf / checkUserBalance calls
+  const walletTokens = [
+    { symbol: "BNB", address: WBNB_TOKEN_ADDRESS, balance: "1.25" },
+    { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", balance: "200.00" }
+  ];
+  const contractTokens = [
+    { symbol: "RR", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", balance: "5000.00" },
+    { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", balance: "100.00" }
+  ];
+
+  const walletSelect = document.getElementById("walletTokenSelect");
+  const contractSelect = document.getElementById("contractTokenSelect");
+  walletSelect.innerHTML = "";
+  contractSelect.innerHTML = "";
+
+  walletTokens.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.address;
+    opt.textContent = `${t.symbol} (${t.balance})`;
+    walletSelect.appendChild(opt);
+  });
+
+  contractTokens.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.address;
+    opt.textContent = `${t.symbol} (${t.balance})`;
+    contractSelect.appendChild(opt);
+  });
+
+  logToPanel("✅ Token dropdowns populated.");
+}
 
 // ✅ ConnectWallet button
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
@@ -49,21 +82,22 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     window.USER_ADDR = accounts[0];
     logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
+    populateDropdowns(); // populate dropdowns after connection
   } catch (err) {
     logToPanel(`[CONNECT ERROR] ${err.message}`);
   }
 });
 
-// ✅ Deposit button handler (frontend only)
-// ✅ Deposit button handler (backend-ready)
+// ✅ Deposit button handler
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
+  const token = document.getElementById("walletTokenSelect").value;
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) {
     return logToPanel("❌ Invalid deposit amount.");
   }
 
   try {
-    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with amount=${amt}`);
+    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${token}, amount=${amt}`);
 
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
@@ -72,7 +106,7 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
         walletname: window.WALLET_NAME,
-        token: window.WBNB_TOKEN_ADDRESS,   // WBNB address
+        token,
         amount: amt
       })
     });
@@ -88,5 +122,42 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     logToPanel(`✅ Deposit executed successfully — TxHash=${data.deposit_tx.result}`);
   } catch (err) {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
+  }
+});
+
+// ✅ Withdraw button handler
+document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+  const token = document.getElementById("contractTokenSelect").value;
+  const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
+  if (amt <= 0) {
+    return logToPanel("❌ Invalid withdraw amount.");
+  }
+
+  try {
+    logToPanel(`[DEBUG] Sending POST to /prodbot/withdraw with token=${token}, amount=${amt}`);
+
+    const resp = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        walletname: window.WALLET_NAME,
+        token,
+        amount: amt
+      })
+    });
+
+    logToPanel("[DEBUG] Response received from /prodbot/withdraw");
+    const data = await resp.json();
+    logToPanel(`[DEBUG] Withdraw response: ${JSON.stringify(data)}`);
+
+    if (!data.withdraw_tx) {
+      return logToPanel(`❌ Withdraw error: ${data.message || "Withdraw failed."}`);
+    }
+
+    logToPanel(`✅ Withdraw executed successfully — TxHash=${data.withdraw_tx.result}`);
+  } catch (err) {
+    logToPanel(`[WITHDRAW ERROR] ${err.message}`);
   }
 });
