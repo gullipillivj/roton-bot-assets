@@ -139,13 +139,13 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     const resp = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        wallet: window.USER_ADDR,
-        walletname: window.WALLET_NAME,
-        token,
-        amount: amt
-      })
+   body: JSON.stringify({
+  userid: window.USER_ID,
+  wallet: window.USER_ADDR,
+  walletname: window.WALLET_NAME,
+  token,
+  amount: weiAmount
+})
     });
 
     logToPanel("[DEBUG] Response received from /prodbot/withdraw");
