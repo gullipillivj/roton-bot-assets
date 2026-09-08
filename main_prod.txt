@@ -1,8 +1,9 @@
 // ✅ Global logger
+// ✅ Global logger (patched for WebView)
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
-    panel.value += "\n" + msg;
+    panel.innerText += "\n" + msg;   // use innerText instead of .value
     panel.scrollTop = panel.scrollHeight;
   } else {
     console.log(msg);
@@ -10,6 +11,7 @@ function logToPanel(msg) {
 }
 window.logToPanel = logToPanel;
 window.logview = logToPanel;
+
 
 // ✅ Status label updater
 window.updateStatus = function (state, message) {
