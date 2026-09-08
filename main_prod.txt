@@ -3,7 +3,7 @@
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
-    panel.innerText += "\n" + msg;   // use innerText instead of .value
+    panel.innerText += "\n" + msg;
     panel.scrollTop = panel.scrollHeight;
   } else {
     console.log(msg);
