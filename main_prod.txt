@@ -99,7 +99,8 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const weiAmount = Math.floor(amt * 1e18);
 
   try {
-    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${document.getElementById("walletTokenSelect").value}, amount=${weiAmount}`);
+    const token = document.getElementById("walletTokenSelect").value;
+    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${token}, amount=${weiAmount}`);
 
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
@@ -108,25 +109,29 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
         walletname: window.WALLET_NAME,
-        token: document.getElementById("walletTokenSelect").value,
+        token,
         amount: weiAmount
       })
     });
 
     logToPanel("[DEBUG] Response received from /prodbot/deposit");
     const data = await resp.json();
-logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
+    logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
 
-if (data.status !== "ok") {
-  return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
-}
+    if (data.status !== "ok") {
+      return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
+    }
 
-// Show encoded calls
-logToPanel(`✅ Deposit prepared successfully`);
-logToPanel(`Approve Charity: ${data.approve_charity}`);
-logToPanel(`Approve Contract: ${data.approve_contract}`);
-logToPanel(`Deposit Call: ${data.deposit}`);
+    // Show encoded calls
+    logToPanel(`✅ Deposit prepared successfully`);
+    logToPanel(`Approve Charity: ${data.approve_charity}`);
+    logToPanel(`Approve Contract: ${data.approve_contract}`);
+    logToPanel(`Deposit Call: ${data.deposit}`);
+  } catch (err) {
+    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
+  }
 });
+
 
 
 
