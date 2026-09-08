@@ -52,6 +52,7 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
 });
 
 // ✅ Deposit button handler (frontend only)
+// ✅ Deposit button handler (backend-ready)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) {
@@ -59,15 +60,29 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   }
 
   try {
-    logToPanel(`💡 Deposit button clicked — amount=${amt}`);
+    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with amount=${amt}`);
 
-    // For now, just simulate success without backend
-    logToPanel(`✅ Simulated deposit of ${amt} BNB`);
+    const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        walletname: window.WALLET_NAME,
+        token: window.WBNB_TOKEN_ADDRESS,   // WBNB address
+        amount: amt
+      })
+    });
 
-    // Later: replace with fetch to /prodbot/deposit
-    // const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {...});
-    // const data = await resp.json();
-    // logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
+    logToPanel("[DEBUG] Response received from /prodbot/deposit");
+    const data = await resp.json();
+    logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
+
+    if (!data.deposit_tx) {
+      return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
+    }
+
+    logToPanel(`✅ Deposit executed successfully — TxHash=${data.deposit_tx.result}`);
   } catch (err) {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
