@@ -106,39 +106,34 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   try {
     updateStatus("pending", `Preparing deposit of ${amt} BNB...`);
 
-    // 🔹 Step 1: Insert pending record in backend
-    const recordResp = await fetch(`${window.BASE_URL}/prodbot/add_pending_deposit`, {
+    // 🔹 Step 1: Call backend /prodbot/deposit
+    const recordResp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        userid: window.USER_ID,
-        txid: "pending-" + Date.now(),
+        token: window.WBNB_TOKEN_ADDRESS,   // WBNB address
         amount: amt
       })
     });
+
     const recordData = await recordResp.json();
-    if (recordData.status !== "success") {
+    if (!recordData.deposit_tx) {
       updateStatus("error", recordData.message || "Failed to log deposit.");
       return;
     }
-    logToPanel(`🗂️ Pending deposit recorded: ${recordData.txid}`);
+    logToPanel(`🗂️ Deposit submitted: ${JSON.stringify(recordData.deposit_tx)}`);
 
-    // 🔹 Step 2: Approve and send deposit to contract
-    const contract = new ethers.Contract(window.FUND_ADDRESS, fundAbi, window.signer);
-    const approveTx = await contract.depositBNB({ value: ethers.utils.parseEther(amt.toString()) });
-    await approveTx.wait();
-
-    updateStatus("success", `Deposit confirmed on-chain. Tx: ${approveTx.hash}`);
-    logToPanel(`✅ Deposit executed successfully — TxHash=${approveTx.hash}`);
-
-    // 🔹 Step 3: Sync balance
+    // 🔹 Step 2: Sync balance after deposit
     await syncBalanceFromFund();
+
+    updateStatus("success", `Deposit confirmed. TxHash=${recordData.deposit_tx.result}`);
+    logToPanel(`✅ Deposit executed successfully — TxHash=${recordData.deposit_tx.result}`);
+
   } catch (err) {
     updateStatus("error", err.message);
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
-
 
 // ✅ Withdraw (ethers.js)
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
