@@ -3,13 +3,12 @@ logToPanel("pancake_prod.txt loaded");
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
-    panel.value += "\n" + msg;
+    panel.innerText += "\n" + msg;
     panel.scrollTop = panel.scrollHeight;
   } else {
     console.log(msg);
   }
-}
-window.logToPanel = logToPanel;
+} logToPanel;
 
 async function runSwap(userAddr, bnbAmount, tokenAddress) {
   try {
