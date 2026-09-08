@@ -27,3 +27,25 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
     logToPanel(`[CONNECT ERROR] ${err.message}`);
   }
 });
+
+// ✅ Deposit button handler (frontend only)
+document.getElementById("depositBtn")?.addEventListener("click", async () => {
+  const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
+  if (amt <= 0) {
+    return logToPanel("❌ Invalid deposit amount.");
+  }
+
+  try {
+    logToPanel(`💡 Deposit button clicked — amount=${amt}`);
+
+    // For now, just simulate success without backend
+    logToPanel(`✅ Simulated deposit of ${amt} BNB`);
+
+    // Later: replace with fetch to /prodbot/deposit
+    // const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {...});
+    // const data = await resp.json();
+    // logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
+  } catch (err) {
+    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
+  }
+});
