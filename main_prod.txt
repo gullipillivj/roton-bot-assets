@@ -95,13 +95,12 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     return logToPanel("❌ Invalid deposit amount.");
   }
 
-  // Convert to wei (integer)
   const weiAmount = Math.floor(amt * 1e18);
+  const tokenAddr = document.getElementById("walletTokenSelect").value;
+  const contractAddr = "0x9cA041d9B75093fc33890Ead7cDfF28284826eCa"; // SolidarityV9
 
   try {
-    const token = document.getElementById("walletTokenSelect").value;
-    const contractAddr = "0x9cA041d9B75093fc33890Ead7cDfF28284826eCa"; // SolidarityV9 contract
-    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${token}, amount=${weiAmount}`);
+    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${tokenAddr}, amount=${weiAmount}`);
 
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
@@ -110,12 +109,11 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
         walletname: window.WALLET_NAME,
-        token,
+        token: tokenAddr,
         amount: weiAmount
       })
     });
 
-    logToPanel("[DEBUG] Response received from /prodbot/deposit");
     const data = await resp.json();
     logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
 
@@ -123,14 +121,14 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
       return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
     }
 
-    // ✅ Broadcast encoded calls via MetaMask
     async function sendEncodedTx(to, dataHex) {
       try {
         const txParams = {
           from: window.USER_ADDR,
-          to: to,       // contract address
+          to: to,
           data: dataHex,
-          value: "0x0"
+          value: "0x0",
+          gasPrice: "0xB2D05E00" // ~3 Gwei
         };
         const txHash = await window.ethereum.request({
           method: "eth_sendTransaction",
@@ -147,16 +145,17 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     logToPanel(`Approve Contract: ${data.approve_contract}`);
     logToPanel(`Deposit Call: ${data.deposit}`);
 
-    // 🔹 Send the transactions in sequence to the SolidarityV9 contract
-    await sendEncodedTx(contractAddr, data.approve_charity);
-    await sendEncodedTx(contractAddr, data.approve_contract);
+    // 🔹 Approvals go to token contract
+    await sendEncodedTx(tokenAddr, data.approve_charity);
+    await sendEncodedTx(tokenAddr, data.approve_contract);
+
+    // 🔹 Deposit goes to SolidarityV9 contract
     await sendEncodedTx(contractAddr, data.deposit);
 
   } catch (err) {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
-
 
 
 
