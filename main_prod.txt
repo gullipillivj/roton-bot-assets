@@ -90,14 +90,16 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
 
 // ✅ Deposit button handler
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
-  const token = document.getElementById("walletTokenSelect").value;
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) {
     return logToPanel("❌ Invalid deposit amount.");
   }
 
+  // Convert to wei (integer)
+  const weiAmount = Math.floor(amt * 1e18);
+
   try {
-    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${token}, amount=${amt}`);
+    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${document.getElementById("walletTokenSelect").value}, amount=${weiAmount}`);
 
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
@@ -106,8 +108,8 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
         userid: window.USER_ID,
         wallet: window.USER_ADDR,
         walletname: window.WALLET_NAME,
-        token,
-        amount: amt
+        token: document.getElementById("walletTokenSelect").value,
+        amount: weiAmount
       })
     });
 
@@ -124,6 +126,8 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
+
+
 
 // ✅ Withdraw button handler
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
