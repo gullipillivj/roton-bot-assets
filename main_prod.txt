@@ -91,17 +91,13 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
 // ✅ Deposit button handler
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
-  if (amt <= 0) {
-    return logToPanel("❌ Invalid deposit amount.");
-  }
+  if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
 
   const weiAmount = Math.floor(amt * 1e18);
   const tokenAddr = document.getElementById("walletTokenSelect").value;
   const contractAddr = "0x9cA041d9B75093fc33890Ead7cDfF28284826eCa"; // SolidarityV9
 
   try {
-    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with token=${tokenAddr}, amount=${weiAmount}`);
-
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -122,34 +118,25 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
     }
 
     async function sendEncodedTx(to, dataHex) {
-      try {
-        const txParams = {
-          from: window.USER_ADDR,
-          to: to,
-          data: dataHex,
-          value: "0x0",
-          gasPrice: "0xB2D05E00" // ~3 Gwei
-        };
-        const txHash = await window.ethereum.request({
-          method: "eth_sendTransaction",
-          params: [txParams],
-        });
-        logToPanel(`✅ Transaction sent — TxHash=${txHash}`);
-      } catch (err) {
-        logToPanel(`❌ Transaction error: ${err.message}`);
-      }
+      const txParams = {
+        from: window.USER_ADDR,
+        to: to,
+        data: dataHex,
+        value: "0x0"
+      };
+      const txHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [txParams],
+      });
+      logToPanel(`✅ Transaction sent — TxHash=${txHash}`);
     }
 
     logToPanel(`✅ Deposit prepared successfully`);
-    logToPanel(`Approve Charity: ${data.approve_charity}`);
-    logToPanel(`Approve Contract: ${data.approve_contract}`);
-    logToPanel(`Deposit Call: ${data.deposit}`);
 
-    // 🔹 Approvals go to token contract
-    await sendEncodedTx(tokenAddr, data.approve_charity);
+    // Step 1: Approve SolidarityV9 on token contract
     await sendEncodedTx(tokenAddr, data.approve_contract);
 
-    // 🔹 Deposit goes to SolidarityV9 contract
+    // Step 2: Call depositToken() on SolidarityV9
     await sendEncodedTx(contractAddr, data.deposit);
 
   } catch (err) {
