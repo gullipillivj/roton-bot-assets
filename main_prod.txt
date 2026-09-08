@@ -115,16 +115,17 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
 
     logToPanel("[DEBUG] Response received from /prodbot/deposit");
     const data = await resp.json();
-    logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
+logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
 
-    if (!data.deposit_tx) {
-      return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
-    }
+if (data.status !== "ok") {
+  return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
+}
 
-    logToPanel(`✅ Deposit executed successfully — TxHash=${data.deposit_tx.result}`);
-  } catch (err) {
-    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
-  }
+// Show encoded calls
+logToPanel(`✅ Deposit prepared successfully`);
+logToPanel(`Approve Charity: ${data.approve_charity}`);
+logToPanel(`Approve Contract: ${data.approve_contract}`);
+logToPanel(`Deposit Call: ${data.deposit}`);
 });
 
 
