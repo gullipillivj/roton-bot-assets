@@ -14,7 +14,7 @@ window.logview = logToPanel;
 logToPanel("main_prod.txt loaded — minimal mode");
 
 // Define WBNB token address globally
-window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // PancakeSwap WBNB
+WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // PancakeSwap WBNB
 
 // ✅ Query params parser
 function getQueryParams() {
