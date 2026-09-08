@@ -13,6 +13,29 @@ window.logview = logToPanel;
 
 logToPanel("main_prod.txt loaded — minimal mode");
 
+// ✅ Query params parser
+function getQueryParams() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      userid: params.get("userid"),
+      wallet: params.get("wallet"),
+      walletname: params.get("walletname")
+    };
+  } catch {
+    return { userid: "unknown", wallet: null, walletname: "unknown" };
+  }
+}
+
+const q = getQueryParams();
+window.USER_ID = q.userid || "unknown";
+window.USER_ADDR = q.wallet || null;
+window.WALLET_NAME = q.walletname || "unknown";
+window.BASE_URL = "https://roton.store";
+
+logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, WALLET=${window.WALLET_NAME}`);
+
+
 // ✅ ConnectWallet button
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
   try {
