@@ -3,7 +3,7 @@ logToPanel("simulate_prod.txt loaded (Loop Engine Ready)");
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
-    panel.value += "\n" + msg;
+    panel.innerText += "\n" + msg;
     panel.scrollTop = panel.scrollHeight;
   } else {
     console.log(msg);
