@@ -70,64 +70,37 @@ async function ensureWalletConnected() {
 }
 
 // ✅ Balance sync helper
-async function syncBalanceFromFund() {
-  try {
-    const response = await fetch(`${window.BASE_URL}/prodbot/balances`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ wallet_address: window.USER_ADDR, walletname: window.WALLET_NAME })
-    });
-    const text = await response.text();
-    let data;
-    try { data = JSON.parse(text); } catch {
-      logToPanel(`[ERROR] Invalid JSON: ${text.slice(0, 100)}...`);
-      return;
-    }
-    if (data.status === "success") {
-      const balanceBNB = parseFloat(data.balance);
-      document.getElementById("startBalance").value = balanceBNB;
-      logToPanel(`✅ Balance synced successfully: ${balanceBNB} BNB`);
-    } else {
-      logToPanel(`❌ Sync failed: ${data.message}`);
-    }
-  } catch (err) {
-    logToPanel(`[SYNC ERROR] ${err.message}`);
-  }
-}
-
-// ✅ Deposit (ethers.js)
-// ✅ Deposit (backend + wallet approve)
+// ✅ Deposit handler with debug logs
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   await ensureWalletConnected();
-
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
 
   try {
+    logToPanel(`[DEBUG] Sending POST to /prodbot/deposit with amount=${amt}`);
     updateStatus("pending", `Preparing deposit of ${amt} BNB...`);
 
-    // 🔹 Step 1: Call backend /prodbot/deposit
-    const recordResp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
+    const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token: window.WBNB_TOKEN_ADDRESS,   // WBNB address
+        token: window.WBNB_TOKEN_ADDRESS,
         amount: amt
       })
     });
 
-    const recordData = await recordResp.json();
-    if (!recordData.deposit_tx) {
-      updateStatus("error", recordData.message || "Failed to log deposit.");
-      return;
+    logToPanel("[DEBUG] Response received from /prodbot/deposit");
+    const data = await resp.json();
+    logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
+
+    if (!data.deposit_tx) {
+      updateStatus("error", data.message || "Deposit failed.");
+      return logToPanel(`❌ Deposit error: ${data.message}`);
     }
-    logToPanel(`🗂️ Deposit submitted: ${JSON.stringify(recordData.deposit_tx)}`);
 
-    // 🔹 Step 2: Sync balance after deposit
+    updateStatus("success", `Deposit confirmed. TxHash=${data.deposit_tx.result}`);
+    logToPanel(`✅ Deposit executed successfully — TxHash=${data.deposit_tx.result}`);
     await syncBalanceFromFund();
-
-    updateStatus("success", `Deposit confirmed. TxHash=${recordData.deposit_tx.result}`);
-    logToPanel(`✅ Deposit executed successfully — TxHash=${recordData.deposit_tx.result}`);
 
   } catch (err) {
     updateStatus("error", err.message);
@@ -135,23 +108,73 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   }
 });
 
-// ✅ Withdraw (ethers.js)
+
+// ✅ Withdraw handler with debug logs
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   await ensureWalletConnected();
   const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid withdrawal amount.");
+
   try {
+    logToPanel(`[DEBUG] Sending POST to /prodbot/withdraw with amount=${amt}`);
     updateStatus("pending", `Requesting withdrawal of ${amt} BNB...`);
-    const contract = new ethers.Contract(window.FUND_ADDRESS, fundAbi, window.signer);
-    const tx = await contract.withdrawUserCapital(ethers.utils.parseEther(amt.toString()));
-    await tx.wait();
-    updateStatus("success", `Withdrawal submitted. Tx: ${tx.hash}`);
+
+    const resp = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token: window.WBNB_TOKEN_ADDRESS,
+        amount: amt
+      })
+    });
+
+    logToPanel("[DEBUG] Response received from /prodbot/withdraw");
+    const data = await resp.json();
+    logToPanel(`[DEBUG] Withdraw response: ${JSON.stringify(data)}`);
+
+    if (!data.withdraw_tx) {
+      updateStatus("error", data.message || "Withdraw failed.");
+      return logToPanel(`❌ Withdraw error: ${data.message}`);
+    }
+
+    updateStatus("success", `Withdrawal confirmed. TxHash=${data.withdraw_tx.result}`);
+    logToPanel(`✅ Withdrawal executed successfully — TxHash=${data.withdraw_tx.result}`);
     await syncBalanceFromFund();
+
   } catch (err) {
     updateStatus("error", err.message);
+    logToPanel(`[WITHDRAW ERROR] ${err.message}`);
   }
 });
 
+
+// ✅ Balance sync debug
+async function syncBalanceFromFund() {
+  try {
+    logToPanel("[DEBUG] Sending POST to /prodbot/balance...");
+    const response = await fetch(`${window.BASE_URL}/prodbot/balance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user: window.USER_ADDR,
+        token: window.WBNB_TOKEN_ADDRESS
+      })
+    });
+
+    logToPanel("[DEBUG] Response received from /prodbot/balance");
+    const data = await response.json();
+    logToPanel(`[DEBUG] Balance response: ${JSON.stringify(data)}`);
+
+    if (data.status === "success" || data.balance) {
+      document.getElementById("startBalance").value = data.balance;
+      logToPanel(`✅ Balance synced successfully: ${data.balance} ${data.symbol}`);
+    } else {
+      logToPanel(`❌ Balance sync failed: ${data.message}`);
+    }
+  } catch (err) {
+    logToPanel(`[SYNC ERROR] ${err.message}`);
+  }
+}
 // ✅ Transaction submit (ethers.js)
 // Transaction submit (production)
 document.getElementById("submitTxBtn")?.addEventListener("click", async () => {
