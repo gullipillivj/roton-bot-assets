@@ -1,9 +1,10 @@
 logToPanel("coins.txt loaded");
+
 // ✅ Global logger
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
-    panel.innerText += "\n" + msg;
+    panel.value += "\n" + msg;
     panel.scrollTop = panel.scrollHeight;
   } else {
     console.log(msg);
@@ -11,11 +12,13 @@ function logToPanel(msg) {
 }
 window.logToPanel = logToPanel;
 
+// ✅ API endpoints
 const BINANCE_INFO   = "https://binance.com";
 const BINANCE_TICKER = "https://binance.com";
 const BINANCE_KLINES = "https://binance.com";
 const CHANGENOW_API  = "https://changenow.io";
 
+// ✅ Binance helpers
 async function getBinancePairs() {
   try {
     const res = await fetch(BINANCE_INFO);
@@ -47,6 +50,7 @@ async function getBinanceHistory(symbol, interval="1h", limit=200) {
   } catch (e) { return []; }
 }
 
+// ✅ Token address resolver
 async function getTokenAddress(symbol) {
   try {
     const res = await fetch(CHANGENOW_API);
@@ -57,7 +61,58 @@ async function getTokenAddress(symbol) {
   } catch (e) { return null; }
 }
 
-window.getBinancePairs = getBinancePairs;
-window.getBinanceStats = getBinanceStats;
+// ✅ Coin evaluator
+function movingAverage(closes, window) {
+  if (!closes || closes.length < window) return null;
+  const slice = closes.slice(-window);
+  return slice.reduce((a,b) => a+b, 0) / window;
+}
+
+async function evaluateCoin(symbol) {
+  const stats = await getBinanceStats(symbol);
+  const closes = await getBinanceHistory(symbol, "1h", 200);
+
+  const ma20  = movingAverage(closes, 20);
+  const ma50  = movingAverage(closes, 50);
+  const ma100 = movingAverage(closes, 100);
+
+  const upward = ma20 && ma50 && ma20 > ma50;
+
+  const tokenAddress = await getTokenAddress(symbol);
+
+  // Simple network tagging
+  let network = "erc20";
+  if (/BNB|BUSD/.test(symbol)) network = "bep20";
+  if (/MATIC|AVAX|FTM/.test(symbol)) network = "crosschain";
+
+  return {
+    symbol,
+    lastPrice: stats ? stats.lastPrice : null,
+    "24hr%": stats ? stats.priceChangePercent : null,
+    volume: stats ? stats.volume : null,
+    ma20, ma50, ma100,
+    upward_trend: upward,
+    tokenAddress,
+    network
+  };
+}
+
+// ✅ Categorizer
+async function categorizeCoins() {
+  const symbols = await getBinancePairs();
+  const results = await Promise.all(symbols.map(s => evaluateCoin(s)));
+
+  const long_term  = results.sort((a,b) => (b.ma100||0) - (a.ma100||0)).slice(0,10);
+  const mid_term   = results.sort((a,b) => (b.ma50||0) - (a.ma50||0)).slice(0,10);
+  const short_term = results.sort((a,b) => (b.ma20||0) - (a.ma20||0)).slice(0,10);
+
+  return { long_term, mid_term, short_term };
+}
+
+// ✅ Expose globally
+window.getBinancePairs   = getBinancePairs;
+window.getBinanceStats   = getBinanceStats;
 window.getBinanceHistory = getBinanceHistory;
-window.getTokenAddress = getTokenAddress;
+window.getTokenAddress   = getTokenAddress;
+window.evaluateCoin      = evaluateCoin;
+window.categorizeCoins   = categorizeCoins;
