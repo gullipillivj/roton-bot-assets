@@ -25,6 +25,27 @@ async function pickRandomCoin() {
     } catch (e) { return "BTC"; }
 }
 
+// ✅ RR fallback swap
+async function swapRR(amount) {
+  try {
+    const resp = await window.runSwap({
+      router: "0x10ED43C718714eb63d5aA57B78B54704E256024E", // Pancake router
+      tokenIn: "0xba67186fd454D0256a0D3744783538bE08C58feD", // RR token 1
+      tokenOut: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", // RR token 2
+      amountIn: amount,
+      amountOutMin: 0
+    });
+    if (resp && resp.tx_hash) {
+      logToPanel(`[RR_FALLBACK] 🔄 RR swap executed — TxHash=${resp.tx_hash}`);
+    }
+  } catch (err) {
+    logToPanel(`[RR_FALLBACK ERROR] ${err.message}`);
+  }
+  return "CONTINUE";
+}
+
+
+
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] — Cycle ${cycle}/${totalCycles} started`);
     setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
