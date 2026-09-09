@@ -75,11 +75,9 @@ async function populateDropdowns() {
 const startBtn = document.getElementById("startBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
-            if (typeof window.initBot === "function") {
-                window.initBot(10); // always run 10 cycles
-            } else {
-                logToPanel("ERROR: initBot not found");
-            }
+        
+                window.StartSinulation(1); // always run 10 cycles
+      
         });
     }
 
@@ -87,11 +85,9 @@ const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
-            if (typeof window.stopBot === "function") {
+         
                 window.stopBot();
-            } else {
-                logToPanel("ERROR: stopBot not found");
-            }
+        
         });
     }
 
