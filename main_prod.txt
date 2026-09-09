@@ -72,6 +72,30 @@ async function populateDropdowns() {
   logToPanel("✅ Token dropdowns populated.");
 }
 
+const startBtn = document.getElementById("startBtn");
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            if (typeof window.initBot === "function") {
+                window.initBot(10); // always run 10 cycles
+            } else {
+                logToPanel("ERROR: initBot not found");
+            }
+        });
+    }
+
+    // Stop Trading button
+    const stopBtn = document.getElementById("stopBtn");
+    if (stopBtn) {
+        stopBtn.addEventListener("click", () => {
+            if (typeof window.stopBot === "function") {
+                window.stopBot();
+            } else {
+                logToPanel("ERROR: stopBot not found");
+            }
+        });
+    }
+
+
 // ✅ ConnectWallet button
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
   try {
