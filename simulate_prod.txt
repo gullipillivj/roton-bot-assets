@@ -47,86 +47,87 @@ async function swapRR(amount) {
 
 
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`[INFO] — Cycle ${cycle}/${totalCycles} started`);
-    setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
+  logToPanel(`[INFO] — Cycle ${cycle}/${totalCycles} started`);
+  setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
 
-    // Refresh balance
-    const syncedBalance = await syncBalanceFromFund();
-    if (syncedBalance === null) {
-        logToPanel("[WARN] Could not sync on-chain balance; skipping cycle");
-        return "CONTINUE";
+  const syncedBalance = await syncBalanceFromFund();
+  if (syncedBalance === null) {
+    logToPanel("[WARN] Could not sync balance; RR fallback triggered");
+    return await swapRR(0);
+  }
+
+  let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+  if (tradingBalance <= 0) {
+    logToPanel("[INFO] Trading balance is zero; RR fallback triggered");
+    return await swapRR(0);
+  }
+
+  const allocationUSD = tradingBalance / Math.max(1, totalCycles - (cycle - 1));
+
+  const coinBase = await pickRandomCoin();
+  const targetSymbol = `${coinBase}USDT`;
+
+  // ✅ Pull full coin info (address + network)
+  const coinInfo = await window.evaluateCoin(targetSymbol);
+  if (!coinInfo || !coinInfo.tokenAddress) {
+    logToPanel(`[WARN] Token address for ${coinBase} not found; RR fallback triggered`);
+    return await swapRR(allocationUSD);
+  }
+
+  logToPanel(`[INFO] Selected ${targetSymbol} — Network=${coinInfo.network}`);
+
+  const stats = await window.getBinanceStats(targetSymbol);
+  if (!stats || !stats.lastPrice) {
+    logToPanel("[WARN] Market stats unavailable; RR fallback triggered");
+    return await swapRR(allocationUSD);
+  }
+
+  let feeCalc;
+  try {
+    feeCalc = await window.calculateTradeCost(targetSymbol, allocationUSD, coinInfo.network);
+  } catch (feeErr) {
+    logToPanel(`[WARN] Fee check failed: ${feeErr.message} — RR fallback triggered`);
+    return await swapRR(allocationUSD);
+  }
+
+  const beforeBalance = window.SolidarityFundBalance || tradingBalance;
+  try {
+    let swapResp;
+
+    // ✅ Route based on network type
+    if (coinInfo.network === "erc20") {
+      swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, coinInfo.tokenAddress);
+    } else if (coinInfo.network === "bep20") {
+      swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, coinInfo.tokenAddress);
+    } else if (coinInfo.network === "crosschain") {
+      swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, coinInfo.tokenAddress);
     }
 
-    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    const startBalance = parseFloat(document.getElementById("startBalance").value) || 0;
-
-    if (tradingBalance <= 0) {
-        logToPanel("[INFO] Trading balance is zero; skipping cycle");
-        return "SKIP";
+    if (swapResp && swapResp.tx_hash) {
+      logToPanel(`🎉 Swap executed — TxHash=${swapResp.tx_hash}`);
+    } else {
+      logToPanel("[ERROR] Swap failed — RR fallback triggered");
+      return await swapRR(allocationUSD);
     }
 
-    const allocationUSD = tradingBalance / Math.max(1, totalCycles - (cycle - 1));
+    await syncBalanceFromFund();
+    const afterBalance = window.SolidarityFundBalance || beforeBalance;
+    const profitDelta = afterBalance - beforeBalance;
 
-    // Pick coin and fetch dynamic address
-    const coinBase = await pickRandomCoin();
-    const targetSymbol = `${coinBase}USDT`;
-    
-    // Fixed: get address mapping directly
-    const tokenAddress = await window.getTokenAddress(targetSymbol);
-    if (!tokenAddress) {
-        logToPanel(`[WARN] Token address for ${coinBase} not found; skipping cycle`);
-        return "CONTINUE";
-    }
+    window.cumulativePnL = (window.cumulativePnL || 0) + profitDelta;
+    updateChart(afterBalance, window.cumulativePnL);
 
-    const stats = await window.getBinanceStats(targetSymbol);
-    if (!stats || !stats.lastPrice) {
-        logToPanel("[WARN] Market stats unavailable; skipping cycle");
-        return "CONTINUE";
-    }
+  } catch (err) {
+    logToPanel(`[ERROR] Swap execution failed: ${err.message} — RR fallback triggered`);
+    return await swapRR(allocationUSD);
+  }
 
-    // Fee calculation
-    let feeCalc;
-    try {
-        feeCalc = await window.calculateTradeCost(targetSymbol, allocationUSD, "bsc");
-    } catch (feeErr) {
-        logToPanel(`[WARN] Fee check failed: ${feeErr.message} — skipping trade`);
-        return "CONTINUE";
-    }
+  const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
+  if (totalChangePct >= profitTargetPct) return "STOP_PROFIT";
+  if (totalChangePct <= -stopLossPct) return "STOP_LOSS";
 
-    const totalFees = feeCalc.totalCost || 0;
-    
-    // Execute Swap safely
-    const beforeBalance = window.SolidarityFundBalance || tradingBalance;
-    try {
-        // Fallback check to prevent calling missing arguments
-        const userKey = typeof pkvalue !== 'undefined' ? pkvalue : ""; 
-        
-        // Execute swap wrapper route
-        const swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, userKey, tokenAddress);
-        if (swapResp && swapResp.tx_hash) {
-            logToPanel(`🎉 Swap executed — TxHash=${swapResp.tx_hash}`);
-        }
-
-        await syncBalanceFromFund();
-        const afterBalance = window.SolidarityFundBalance || beforeBalance;
-        const profitDelta = afterBalance - beforeBalance;
-
-        window.cumulativePnL = (window.cumulativePnL || 0) + profitDelta;
-        updateChart(afterBalance, window.cumulativePnL);
-
-    } catch (err) {
-        logToPanel(`[ERROR] Swap execution failed: ${err.message}`);
-        return "CONTINUE";
-    }
-
-    const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
-    if (totalChangePct >= profitTargetPct) return "STOP_PROFIT";
-    if (totalChangePct <= -stopLossPct) return "STOP_LOSS";
-
-    return "CONTINUE";
+  return "CONTINUE";
 }
-window.simulateCycle = simulateCycle;
-
 
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
