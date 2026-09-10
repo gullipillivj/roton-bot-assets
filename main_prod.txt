@@ -168,6 +168,7 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
 
 
 // ✅ Withdraw button handler
+// ✅ Withdraw button handler (SolidarityV11)
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   const token = document.getElementById("contractTokenSelect").value;
   const amt = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
@@ -175,30 +176,52 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     return logToPanel("❌ Invalid withdraw amount.");
   }
 
+  // Convert amount to wei
+  const weiAmount = Math.floor(amt * 1e18);
+  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3"; // SolidarityV11
+
   try {
-    logToPanel(`[DEBUG] Sending POST to /prodbot/withdraw with token=${token}, amount=${amt}`);
+    logToPanel(`[DEBUG] Sending POST to /prodbot/withdraw with token=${token}, amount=${weiAmount}`);
 
     const resp = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-   body: JSON.stringify({
-  userid: window.USER_ID,
-  wallet: window.USER_ADDR,
-  walletname: window.WALLET_NAME,
-  token,
-  amount: weiAmount
-})
+      body: JSON.stringify({
+        userid: window.USER_ID,
+        wallet: window.USER_ADDR,
+        walletname: window.WALLET_NAME,
+        token,
+        amount: weiAmount
+      })
     });
 
     logToPanel("[DEBUG] Response received from /prodbot/withdraw");
     const data = await resp.json();
     logToPanel(`[DEBUG] Withdraw response: ${JSON.stringify(data)}`);
 
-    if (!data.withdraw_tx) {
+    if (!data.withdraw_call) {
       return logToPanel(`❌ Withdraw error: ${data.message || "Withdraw failed."}`);
     }
 
-    logToPanel(`✅ Withdraw executed successfully — TxHash=${data.withdraw_tx.result}`);
+    async function sendEncodedTx(to, dataHex) {
+      const txParams = {
+        from: window.USER_ADDR,
+        to: to,
+        data: dataHex,
+        value: "0x0"
+      };
+      const txHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [txParams],
+      });
+      logToPanel(`✅ Transaction sent — TxHash=${txHash}`);
+    }
+
+    // Execute withdraw transaction
+    await sendEncodedTx(contractAddr, data.withdraw_call);
+
+    logToPanel(`✅ Withdraw executed successfully`);
+
   } catch (err) {
     logToPanel(`[WITHDRAW ERROR] ${err.message}`);
   }
