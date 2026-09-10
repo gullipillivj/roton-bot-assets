@@ -109,13 +109,14 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
 });
 
 // ✅ Deposit button handler
+// ✅ Deposit button handler (SolidarityV11)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
 
   const weiAmount = Math.floor(amt * 1e18);
   const tokenAddr = document.getElementById("walletTokenSelect").value;
-  const contractAddr = "0x9cA041d9B75093fc33890Ead7cDfF28284826eCa"; // SolidarityV9
+  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3"; // SolidarityV11
 
   try {
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
@@ -153,11 +154,11 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
 
     logToPanel(`✅ Deposit prepared successfully`);
 
-    // Step 1: Approve SolidarityV9 on token contract
-    await sendEncodedTx(tokenAddr, data.approve_contract);
+    // Step 1: Commission transfer
+    await sendEncodedTx(contractAddr, data.commission_call);
 
-    // Step 2: Call depositToken() on SolidarityV9
-    await sendEncodedTx(contractAddr, data.deposit);
+    // Step 2: Actual deposit (updates _userTradingBalances)
+    await sendEncodedTx(contractAddr, data.deposit_call);
 
   } catch (err) {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
