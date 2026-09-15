@@ -54,31 +54,44 @@ document.getElementById("transactionBtn").addEventListener("click", () => {
 
 // ✅ Populate dropdowns (show all tokens from list)
 async function populateWalletTokens() {
-    if (!window.ethereum) {
-        logToPanel("❌ Wallet not connected.");
+    if (!window.USER_ADDR) {
+        logToPanel("❌ Wallet address not set.");
         return;
     }
-
-    // Get the connected account
-    accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    userAddr = accounts[0];
 
     walletSelect = document.getElementById("walletTokenSelect");
     walletSelect.innerHTML = "";
 
-    // Ask MetaMask for all assets it knows about
-    assets = await window.ethereum.request({ method: "wallet_getPermissions" });
+    apiKey = "YOUR_BSCSCAN_API_KEY"; // replace with your key
+    url = `https://api.bscscan.com/api?module=account&action=tokentx&address=${window.USER_ADDR}&apikey=${apiKey}`;
 
-    // Just dump whatever comes back
-    for (i = 0; i < assets.length; i++) {
-        opt = document.createElement("option");
-        opt.value = assets[i].parentCapability || assets[i].id || i;
-        opt.textContent = JSON.stringify(assets[i]);
-        walletSelect.appendChild(opt);
+    try {
+        res = await fetch(url);
+        data = await res.json();
+
+        if (data.status !== "1") {
+            logToPanel("❌ Error fetching tokens: " + data.message);
+            return;
+        }
+
+        seen = {};
+        for (i = 0; i < data.result.length; i++) {
+            tx = data.result[i];
+            if (!seen[tx.contractAddress]) {
+                opt = document.createElement("option");
+                opt.value = tx.contractAddress;
+                opt.textContent = tx.tokenSymbol;
+                walletSelect.appendChild(opt);
+                seen[tx.contractAddress] = true;
+            }
+        }
+
+        logToPanel("✅ Wallet tokens dropdown populated from BscScan.");
+    } catch (err) {
+        logToPanel("❌ API error: " + err.message);
     }
-
-    logToPanel("✅ Wallet tokens dropdown populated directly from wallet.");
 }
+
 
 
 //✅populate contract tokens 
