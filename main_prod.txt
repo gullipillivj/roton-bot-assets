@@ -59,26 +59,27 @@ async function populateWalletTokens() {
         return;
     }
 
+    // Get the connected account
     accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     userAddr = accounts[0];
 
-    provider = new ethers.providers.Web3Provider(window.ethereum);
     walletSelect = document.getElementById("walletTokenSelect");
     walletSelect.innerHTML = "";
 
     // Ask MetaMask for all assets it knows about
-    assets = await window.ethereum.request({ method: "eth_accounts" });
+    assets = await window.ethereum.request({ method: "wallet_getPermissions" });
 
     // Just dump whatever comes back
     for (i = 0; i < assets.length; i++) {
         opt = document.createElement("option");
-        opt.value = assets[i];
-        opt.textContent = assets[i];
+        opt.value = assets[i].parentCapability || assets[i].id || i;
+        opt.textContent = JSON.stringify(assets[i]);
         walletSelect.appendChild(opt);
     }
 
     logToPanel("✅ Wallet tokens dropdown populated directly from wallet.");
 }
+
 
 //✅populate contract tokens 
 async function populateContractTokens() {
