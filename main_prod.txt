@@ -164,29 +164,12 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
   }
 });
 
-
-// ✅ PK storing button (corrected route + required fields)
-document.getElementById("approvePkBtn").addEventListener("click", async () => {
-    const pk = document.getElementById("userPk").value;
-    const password = document.getElementById("userPassword").value;
-
-    if (!pk || !password) {
-        logToPanel("❌ Please enter both PK and password.");
-        return;
-    }
-
+// ✅ Approve PK button — just trigger backend route
+document.getElementById("approvePkBtn")?.addEventListener("click", async () => {
     try {
-        const res = await fetch(`${window.BASE_URL}/prodbot/approve_pk`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                userid: window.USER_ID,
-                wallet: window.USER_ADDR,
-                pk,
-                password
-            })
+        const res = await fetch(`${window.BASE_URL}/prodbot/approve_pk?userid=${window.USER_ID}&wallet=${window.USER_ADDR}`, {
+            method: "POST"
         });
-
         const data = await res.json();
         logToPanel("✅ " + data.message);
     } catch (err) {
