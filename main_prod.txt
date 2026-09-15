@@ -148,60 +148,44 @@ document.getElementById("approvePkBtn").addEventListener("click", async () => {
 // ✅ Deposit button handler
 // ✅ Deposit button handler (SolidarityV11)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
-  const amt = parseFloat(document.getElementById("depositAmount")?.value || "0");
+  const amt = parseFloat(document.getElementById("depositAmount").value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
 
   const weiAmount = Math.floor(amt * 1e18);
   const tokenAddr = document.getElementById("walletTokenSelect").value;
-  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3"; // SolidarityV11
+  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3";
 
   try {
     const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        userid: window.USER_ID,
         wallet: window.USER_ADDR,
-        walletname: window.WALLET_NAME,
         token: tokenAddr,
         amount: weiAmount
       })
     });
 
     const data = await resp.json();
-    logToPanel(`[DEBUG] Deposit response: ${JSON.stringify(data)}`);
+    if (data.status !== "ok") return logToPanel(`❌ Deposit error: ${data.message}`);
 
-    if (data.status !== "ok") {
-      return logToPanel(`❌ Deposit error: ${data.message || "Deposit failed."}`);
-    }
+    // Step 1: Approve
+    await window.ethereum.request({ method: "eth_sendTransaction", params: [{ from: window.USER_ADDR, to: contractAddr, data: data.approve_call }] });
 
-    async function sendEncodedTx(to, dataHex) {
-      const txParams = {
-        from: window.USER_ADDR,
-        to: to,
-        data: dataHex,
-        value: "0x0"
-      };
-      const txHash = await window.ethereum.request({
-        method: "eth_sendTransaction",
-        params: [txParams],
-      });
-      logToPanel(`✅ Transaction sent — TxHash=${txHash}`);
-    }
+    // Step 2: Commission
+    await window.ethereum.request({ method: "eth_sendTransaction", params: [{ from: window.USER_ADDR, to: contractAddr, data: data.commission_call }] });
 
-    logToPanel(`✅ Deposit prepared successfully`);
+    // Step 3: Deposit
+    await window.ethereum.request({ method: "eth_sendTransaction", params: [{ from: window.USER_ADDR, to: contractAddr, data: data.deposit_call }] });
 
-    // Step 1: Commission transfer
-    await sendEncodedTx(contractAddr, data.commission_call);
+    // Update balance field
+    document.getElementById("startBalance").value = (parseFloat(data.balance) / 1e18).toFixed(4);
 
-    // Step 2: Actual deposit (updates _userTradingBalances)
-    await sendEncodedTx(contractAddr, data.deposit_call);
-
+    logToPanel("✅ Deposit complete");
   } catch (err) {
     logToPanel(`[DEPOSIT ERROR] ${err.message}`);
   }
 });
-
 
 
 // ✅ Withdraw button handler
