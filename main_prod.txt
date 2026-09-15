@@ -38,6 +38,20 @@ window.BASE_URL = "https://roton.store";
 
 logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, WALLET=${window.WALLET_NAME}`);
 
+//View Transactions
+document.getElementById("transactionBtn").addEventListener("click", () => {
+    const walletAddr = document.getElementById("currentWalletLabel").innerText.trim();
+    if (!walletAddr || walletAddr === "{wallet}") {
+        logToPanel("❌ Wallet address not loaded yet.");
+        return;
+    }
+    const bscUrl = `https://bscscan.com/address/${walletAddr}`;
+    window.open(bscUrl, "_blank");
+    logToPanel(`🔗 Opened BscScan for wallet: ${walletAddr}`);
+});
+
+
+
 // ✅ Populate dropdowns
 async function populateDropdowns() {
   // Example static lists — replace with balanceOf / checkUserBalance calls
