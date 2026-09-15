@@ -54,34 +54,30 @@ document.getElementById("transactionBtn").addEventListener("click", () => {
 
 // ✅ Populate dropdowns (show all tokens from list)
 async function populateWalletTokens() {
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
-  const walletSelect = document.getElementById("walletTokenSelect");
-  walletSelect.innerHTML = "";
+    if (!window.ethereum) {
+        logToPanel("❌ Wallet not connected.");
+        return;
+    }
 
-  const tokenList = [
-    { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
-    { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
-    { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
-  ];
+    accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    userAddr = accounts[0];
 
-  const erc20Abi = [
-    { "constant": true, "inputs": [{ "name": "account", "type": "address" }],
-      "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }],
-      "type": "function" }
-  ];
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    walletSelect = document.getElementById("walletTokenSelect");
+    walletSelect.innerHTML = "";
 
-  for (const t of tokenList) {
-    const contract = new ethers.Contract(t.address, erc20Abi, provider);
-    const bal = await contract.balanceOf(window.USER_ADDR);
-    const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
+    // Ask MetaMask for all assets it knows about
+    assets = await window.ethereum.request({ method: "eth_accounts" });
 
-    const opt = document.createElement("option");
-    opt.value = t.address;
-    opt.textContent = `${t.symbol} (${humanBal})`;
-    walletSelect.appendChild(opt);
-  }
+    // Just dump whatever comes back
+    for (i = 0; i < assets.length; i++) {
+        opt = document.createElement("option");
+        opt.value = assets[i];
+        opt.textContent = assets[i];
+        walletSelect.appendChild(opt);
+    }
 
-  logToPanel("✅ Wallet tokens populated from MetaMask via window.ethereum.");
+    logToPanel("✅ Wallet tokens dropdown populated directly from wallet.");
 }
 
 //✅populate contract tokens 
