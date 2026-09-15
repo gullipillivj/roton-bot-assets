@@ -125,7 +125,7 @@ async function populateDropdowns() {
 }
 
 
-//Start Trading 
+//✅Start Trading 
 const startBtn = document.getElementById("startBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
@@ -136,7 +136,7 @@ const startBtn = document.getElementById("startBtn");
     }
 
 
-//Stop Trading 
+//✅Stop Trading 
     // Stop Trading button
     const stopBtn = document.getElementById("stopBtn");
     if (stopBtn) {
