@@ -52,8 +52,7 @@ document.getElementById("transactionBtn").addEventListener("click", () => {
 
 
 
-// ✅ Populate dropdowns using window.ethereum (exclude BNB/ETH)
-// ✅ Populate dropdowns (exclude BNB/ETH, show all ERC20 tokens)
+// ✅ Populate dropdowns (show all tokens from list)
 async function populateDropdowns() {
     if (!window.ethereum || !window.USER_ADDR) {
         logToPanel("❌ Wallet not connected.");
@@ -66,12 +65,13 @@ async function populateDropdowns() {
     walletSelect.innerHTML = "";
     contractSelect.innerHTML = "";
 
-    // ERC20 tokens you want to support (expand list as needed)
+    // Token list (include all you want to expose)
     const tokenList = [
+        { symbol: "BNB",  address: "native", decimals: 18 }, // native marker
+        { symbol: "ETH",  address: "native", decimals: 18 }, // native marker
         { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
         { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
         { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
-        // add more ERC20 tokens here
     ];
 
     const erc20Abi = [{
@@ -82,25 +82,24 @@ async function populateDropdowns() {
         "type": "function"
     }];
 
-    // Populate wallet tokens (exclude BNB/ETH, only ERC20 balances > 0)
     for (const t of tokenList) {
         try {
-            const contract = new ethers.Contract(t.address, erc20Abi, provider);
-            const bal = await contract.balanceOf(window.USER_ADDR);
-            const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
-
-            if (Number(bal) > 0) {
-                const opt = document.createElement("option");
-                opt.value = t.address;
-                opt.textContent = `${t.symbol} (${humanBal})`;
-                walletSelect.appendChild(opt);
-
-                // also add to contract dropdown
-                const opt2 = document.createElement("option");
-                opt2.value = t.address;
-                opt2.textContent = `${t.symbol} (${humanBal})`;
-                contractSelect.appendChild(opt2);
+            let humanBal = "native";
+            if (t.address !== "native") {
+                const contract = new ethers.Contract(t.address, erc20Abi, provider);
+                const bal = await contract.balanceOf(window.USER_ADDR);
+                humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
             }
+
+            const opt = document.createElement("option");
+            opt.value = t.address;
+            opt.textContent = `${t.symbol} (${humanBal})`;
+            walletSelect.appendChild(opt);
+
+            const opt2 = document.createElement("option");
+            opt2.value = t.address;
+            opt2.textContent = `${t.symbol} (${humanBal})`;
+            contractSelect.appendChild(opt2);
         } catch (err) {
             logToPanel(`❌ Error fetching ${t.symbol} balance: ${err.message}`);
         }
@@ -108,21 +107,18 @@ async function populateDropdowns() {
 
     // ✅ Send userid + wallet to backend for tracking/logging
     try {
-        await fetch(`${window.BASE_URL}/prodbot/balance`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                userid: window.USER_ID,
-                wallet: window.USER_ADDR
-            })
+        await fetch(`${window.BASE_URL}/prodbot/balance?userid=${window.USER_ID}&wallet=${window.USER_ADDR}`, {
+            method: "POST"
         });
         logToPanel(`✅ User context sent: USER_ID=${window.USER_ID}, WALLET=${window.USER_ADDR}`);
     } catch (err) {
         logToPanel("❌ Error sending user context: " + err.message);
     }
 
-    logToPanel("✅ Token dropdowns populated (excluding BNB/ETH).");
+    logToPanel("✅ Token dropdowns populated (all tokens shown).");
 }
+
+
 
 
 //✅Start Trading 
@@ -134,6 +130,7 @@ const startBtn = document.getElementById("startBtn");
       
         });
     }
+
 
 
 //✅Stop Trading 
