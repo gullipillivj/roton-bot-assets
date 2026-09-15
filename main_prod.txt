@@ -38,7 +38,7 @@ window.BASE_URL = "https://roton.store";
 
 logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, WALLET=${window.WALLET_NAME}`);
 
-//View Transactions
+//✅User View Transactions
 document.getElementById("transactionBtn").addEventListener("click", () => {
     const walletAddr = document.getElementById("currentWalletLabel").innerText.trim();
     if (!walletAddr || walletAddr === "{wallet}") {
@@ -53,72 +53,76 @@ document.getElementById("transactionBtn").addEventListener("click", () => {
 
 
 // ✅ Populate dropdowns (show all tokens from list)
-async function populateDropdowns() {
-    if (!window.ethereum || !window.USER_ADDR) {
-        logToPanel("❌ Wallet not connected.");
-        return;
-    }
+async function populateWalletTokens() {
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const walletSelect = document.getElementById("walletTokenSelect");
+  walletSelect.innerHTML = "";
 
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const walletSelect = document.getElementById("walletTokenSelect");
-    const contractSelect = document.getElementById("contractTokenSelect");
-    walletSelect.innerHTML = "";
-    contractSelect.innerHTML = "";
+  const tokenList = [
+    { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
+    { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
+    { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
+  ];
 
-    // Token list (include all you want to expose)
-    const tokenList = [
-        { symbol: "BNB",  address: "native", decimals: 18 }, // native marker
-        { symbol: "ETH",  address: "native", decimals: 18 }, // native marker
-        { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
-        { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
-        { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
-    ];
+  const erc20Abi = [
+    { "constant": true, "inputs": [{ "name": "account", "type": "address" }],
+      "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }],
+      "type": "function" }
+  ];
 
-    const erc20Abi = [{
-        "constant": true,
-        "inputs": [{ "name": "account", "type": "address" }],
-        "name": "balanceOf",
-        "outputs": [{ "name": "", "type": "uint256" }],
-        "type": "function"
-    }];
+  for (const t of tokenList) {
+    const contract = new ethers.Contract(t.address, erc20Abi, provider);
+    const bal = await contract.balanceOf(window.USER_ADDR);
+    const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
 
-    for (const t of tokenList) {
-        try {
-            let humanBal = "native";
-            if (t.address !== "native") {
-                const contract = new ethers.Contract(t.address, erc20Abi, provider);
-                const bal = await contract.balanceOf(window.USER_ADDR);
-                humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
-            }
+    const opt = document.createElement("option");
+    opt.value = t.address;
+    opt.textContent = `${t.symbol} (${humanBal})`;
+    walletSelect.appendChild(opt);
+  }
 
-            const opt = document.createElement("option");
-            opt.value = t.address;
-            opt.textContent = `${t.symbol} (${humanBal})`;
-            walletSelect.appendChild(opt);
-
-            const opt2 = document.createElement("option");
-            opt2.value = t.address;
-            opt2.textContent = `${t.symbol} (${humanBal})`;
-            contractSelect.appendChild(opt2);
-        } catch (err) {
-            logToPanel(`❌ Error fetching ${t.symbol} balance: ${err.message}`);
-        }
-    }
-
-    // ✅ Send userid + wallet to backend for tracking/logging
-    try {
-        await fetch(`${window.BASE_URL}/prodbot/balance?userid=${window.USER_ID}&wallet=${window.USER_ADDR}`, {
-            method: "POST"
-        });
-        logToPanel(`✅ User context sent: USER_ID=${window.USER_ID}, WALLET=${window.USER_ADDR}`);
-    } catch (err) {
-        logToPanel("❌ Error sending user context: " + err.message);
-    }
-
-    logToPanel("✅ Token dropdowns populated (all tokens shown).");
+  logToPanel("✅ Wallet tokens populated from MetaMask via window.ethereum.");
 }
 
+//✅populate contract tokens 
+async function populateContractTokens() {
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const contractSelect = document.getElementById("contractTokenSelect");
+  contractSelect.innerHTML = "";
 
+  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3"; // your bot contract
+
+  const tokenList = [
+    { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
+    { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
+    { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
+  ];
+
+  const erc20Abi = [
+    { "constant": true, "inputs": [{ "name": "account", "type": "address" }],
+      "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }],
+      "type": "function" }
+  ];
+
+  for (const t of tokenList) {
+    const contract = new ethers.Contract(t.address, erc20Abi, provider);
+    const bal = await contract.balanceOf(contractAddr);
+    const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
+
+    const opt = document.createElement("option");
+    opt.value = t.address;
+    opt.textContent = `${t.symbol} (${humanBal})`;
+    contractSelect.appendChild(opt);
+  }
+
+  logToPanel("✅ Contract tokens populated via balanceOf(contract).");
+}
+
+//✅ drop-down trigger 
+async function populateDropdowns() {
+  await populateWalletTokens();
+  await populateContractTokens();
+}
 
 //✅Start Trading
 startBtn.addEventListener("click", () => {
@@ -140,20 +144,13 @@ startBtn.addEventListener("click", () => {
 
 
 // ✅ ConnectWallet button
-document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
-  try {
-    if (!window.ethereum) {
-      logToPanel("❌ No Ethereum provider found — install MetaMask.");
-      return;
-    }
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    window.USER_ADDR = accounts[0];
-    logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
-    populateDropdowns(); // populate dropdowns after connection
-  } catch (err) {
-    logToPanel(`[CONNECT ERROR] ${err.message}`);
-  }
+document.getElementById("connectwalletBtn").addEventListener("click", async () => {
+  const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+  window.USER_ADDR = accounts[0];
+  logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
+  populateDropdowns();
 });
+
 
 // ✅ Approve PK button — just trigger backend route
 document.getElementById("approvePkBtn")?.addEventListener("click", async () => {
