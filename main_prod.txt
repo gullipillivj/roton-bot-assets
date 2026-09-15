@@ -130,7 +130,7 @@ const startBtn = document.getElementById("startBtn");
     if (startBtn) {
         startBtn.addEventListener("click", () => {
         
-                window.StartSimulation(10); // always run 10 cycles
+                window.startSimulation(10); // always run 10 cycles
       
         });
     }
