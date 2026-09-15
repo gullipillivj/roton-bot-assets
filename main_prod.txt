@@ -53,62 +53,45 @@ document.getElementById("transactionBtn").addEventListener("click", () => {
 
 
 // ✅ Populate dropdowns using window.ethereum (exclude BNB/ETH)
+// ✅ Populate dropdowns (exclude BNB/ETH)
 async function populateDropdowns() {
-    if (!window.ethereum || !window.USER_ADDR) {
-        logToPanel("❌ Wallet not connected or provider missing.");
-        return;
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const walletSelect = document.getElementById("walletTokenSelect");
+  const contractSelect = document.getElementById("contractTokenSelect");
+  walletSelect.innerHTML = "";
+  contractSelect.innerHTML = "";
+
+  const tokenList = [
+    { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
+    { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
+    { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
+  ];
+
+  const erc20Abi = [{"constant":true,"inputs":[{"name":"account","type":"address"}],
+                     "name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"type":"function"}];
+
+  for (const t of tokenList) {
+    const contract = new ethers.Contract(t.address, erc20Abi, provider);
+    const bal = await contract.balanceOf(window.USER_ADDR);
+    const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
+    if (Number(bal) > 0) {
+      const opt = document.createElement("option");
+      opt.value = t.address;
+      opt.textContent = `${t.symbol} (${humanBal})`;
+      walletSelect.appendChild(opt);
     }
+  }
 
-    const provider = new ethers.providers.Web3Provider(window.ethereum);
-    const walletSelect = document.getElementById("walletTokenSelect");
-    const contractSelect = document.getElementById("contractTokenSelect");
-    walletSelect.innerHTML = "";
-    contractSelect.innerHTML = "";
+  // Contract dropdown → only USDT
+  const usdtOpt = document.createElement("option");
+  usdtOpt.value = "0x55d398326f99059fF775485246999027B3197955";
+  usdtOpt.textContent = "USDT";
+  contractSelect.appendChild(usdtOpt);
 
-    // ERC‑20 tokens to check in wallet
-    const tokenList = [
-        { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
-        { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
-        { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
-        // add more ERC‑20 tokens here
-    ];
-
-    const erc20Abi = [
-        {
-            "constant": true,
-            "inputs": [{ "name": "account", "type": "address" }],
-            "name": "balanceOf",
-            "outputs": [{ "name": "", "type": "uint256" }],
-            "type": "function"
-        }
-    ];
-
-    // Populate wallet tokens (ERC‑20 only)
-    for (const t of tokenList) {
-        try {
-            const contract = new ethers.Contract(t.address, erc20Abi, provider);
-            const bal = await contract.balanceOf(window.USER_ADDR);
-            const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
-
-            if (Number(bal) > 0) {
-                const opt = document.createElement("option");
-                opt.value = t.address;
-                opt.textContent = `${t.symbol} (${humanBal})`;
-                walletSelect.appendChild(opt);
-            }
-        } catch (err) {
-            logToPanel(`❌ Error fetching ${t.symbol} balance: ${err.message}`);
-        }
-    }
-
-    // Contract dropdown → only USDT
-    const usdtOpt = document.createElement("option");
-    usdtOpt.value = "0x55d398326f99059fF775485246999027B3197955";
-    usdtOpt.textContent = "USDT";
-    contractSelect.appendChild(usdtOpt);
-
-    logToPanel("✅ Wallet tokens populated (excluding BNB/ETH).");
+  logToPanel("✅ Wallet tokens populated (excluding BNB/ETH).");
 }
+
+
 
 //Start Trading 
 const startBtn = document.getElementById("startBtn");
