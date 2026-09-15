@@ -25,6 +25,14 @@ async function pickRandomCoin() {
     } catch (e) { return "BTC"; }
 }
 
+// ✅ Stop Trading 
+function stopBot() {
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT STOPPED] Trading halted by user.");
+}
+window.stopBot = stopBot;
+
 // ✅ RR fallback swap
 async function swapRR(amount) {
   try {
