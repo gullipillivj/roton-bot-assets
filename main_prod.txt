@@ -108,6 +108,29 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
   }
 });
 
+//PK storing button 
+document.getElementById("approvePkBtn").addEventListener("click", async () => {
+    const pk = document.getElementById("userPk").value;
+    const password = document.getElementById("userPassword").value;
+
+    if (!pk || !password) {
+        logToPanel("❌ Please enter both PK and password.");
+        return;
+    }
+
+    try {
+        const res = await fetch("/approve_pk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pk, password })
+        });
+        const data = await res.json();
+        logToPanel("✅ " + data.message);
+    } catch (err) {
+        logToPanel("❌ Error approving PK: " + err);
+    }
+});
+
 // ✅ Deposit button handler
 // ✅ Deposit button handler (SolidarityV11)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
