@@ -10,17 +10,22 @@ function logToPanel(msg) {
   }
 } logToPanel;
 
+
+//run swap
 async function runSwap(userAddr, bnbAmount, tokenAddress) {
   try {
     const res = await fetch(`${window.BASE_URL}/prodbot/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        user_address: userAddr,
-        bnb_amount: bnbAmount,
-        target_token: tokenAddress,
-        wbnb_address: window.WBNB_TOKEN_ADDRESS,
-        router: "0x10ED43C718714eb63d5aA57B78B54704E256024E" // PancakeSwap V2 Router
+        userid: window.USER_ID,
+        router: "0x10ED43C718714eb63d5aA57B78B54704E256024E",
+        tokenIn: window.WBNB_TOKEN_ADDRESS,       // input token (BNB wrapped)
+        tokenOut: tokenAddress,                   // output token
+        amountIn: Math.floor(bnbAmount * 1e18),   // convert to wei
+        amountOutMin: 0,                          // set slippage minOut if needed
+        dstChainId: null,
+        recipient: userAddr
       })
     });
 
@@ -37,6 +42,5 @@ async function runSwap(userAddr, bnbAmount, tokenAddress) {
     return { status: "error", message: err.message };
   }
 }
-
 
 window.runSwap = runSwap;
