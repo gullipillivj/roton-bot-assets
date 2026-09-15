@@ -179,47 +179,22 @@ document.getElementById("approvePkBtn")?.addEventListener("click", async () => {
 
 
 
-// ✅ Deposit button handler (SolidarityV11)
+// ✅ Deposit button — just trigger backend route
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
-  const amt = parseFloat(document.getElementById("depositAmount").value || "0");
-  if (amt <= 0) return logToPanel("❌ Invalid deposit amount.");
-
-  const weiAmount = Math.floor(amt * 1e18);
-  const tokenAddr = document.getElementById("walletTokenSelect").value;
-  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3";
-
-  try {
-    const resp = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        wallet: window.USER_ADDR,
-        token: tokenAddr,
-        amount: weiAmount
-      })
-    });
-
-    const data = await resp.json();
-    if (data.status !== "ok") return logToPanel(`❌ Deposit error: ${data.message}`);
-
-    // Step 1: Approve
-    await window.ethereum.request({ method: "eth_sendTransaction", params: [{ from: window.USER_ADDR, to: contractAddr, data: data.approve_call }] });
-
-    // Step 2: Commission
-    await window.ethereum.request({ method: "eth_sendTransaction", params: [{ from: window.USER_ADDR, to: contractAddr, data: data.commission_call }] });
-
-    // Step 3: Deposit
-    await window.ethereum.request({ method: "eth_sendTransaction", params: [{ from: window.USER_ADDR, to: contractAddr, data: data.deposit_call }] });
-
-    // Update balance field
-    document.getElementById("startBalance").value = (parseFloat(data.balance) / 1e18).toFixed(4);
-
-    logToPanel("✅ Deposit complete");
-  } catch (err) {
-    logToPanel(`[DEPOSIT ERROR] ${err.message}`);
-  }
+    try {
+        const res = await fetch(`${window.BASE_URL}/prodbot/deposit?userid=${window.USER_ID}&wallet=${window.USER_ADDR}`, {
+            method: "POST"
+        });
+        const data = await res.json();
+        if (data.status === "ok") {
+            logToPanel("✅ Deposit route activated — backend processing deposit");
+        } else {
+            logToPanel(`❌ Deposit error: ${data.message}`);
+        }
+    } catch (err) {
+        logToPanel("❌ Error triggering deposit: " + err.message);
+    }
 });
-
 
 
 //✅✅withdraw button handler 
