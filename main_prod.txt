@@ -135,6 +135,14 @@ async function populateDropdowns() {
 }
 
 //✅Start Trading
+// ✅ Start Trading button binding
+const startBtn = document.getElementById("startBtn");
+if (startBtn) {
+    startBtn.addEventListener("click", () => {
+        window.startSimulation(10); // run your simulation loop
+    });
+}
+
 startBtn.addEventListener("click", () => {
     window.startSimulation(10);
 });
