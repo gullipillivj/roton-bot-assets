@@ -135,16 +135,15 @@ async function populateDropdowns() {
 }
 
 //✅Start Trading
-// ✅ Start Trading button binding
-const startBtn = document.getElementById("startBtn");
-if (startBtn) {
-    startBtn.addEventListener("click", () => {
-        window.startSimulation(10); // run your simulation loop
-    });
-}
-
-startBtn.addEventListener("click", () => {
-    window.startSimulation(10);
+// ✅ Bind Start Trading button correctly
+document.addEventListener("DOMContentLoaded", () => {
+    const startBtn = document.getElementById("startBtn");
+    if (startBtn) {
+        startBtn.addEventListener("click", () => {
+            logToPanel("▶️ Start Trading clicked — launching simulation...");
+            window.startSimulation(10); // run your simulation loop
+        });
+    }
 });
 
 
