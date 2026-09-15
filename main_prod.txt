@@ -164,7 +164,8 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
   }
 });
 
-//PK storing button 
+
+// ✅ PK storing button (corrected route + required fields)
 document.getElementById("approvePkBtn").addEventListener("click", async () => {
     const pk = document.getElementById("userPk").value;
     const password = document.getElementById("userPassword").value;
@@ -175,19 +176,26 @@ document.getElementById("approvePkBtn").addEventListener("click", async () => {
     }
 
     try {
-        const res = await fetch("/approve_pk", {
+        const res = await fetch(`${window.BASE_URL}/prodbot/approve_pk`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pk, password })
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                wallet: window.USER_ADDR,
+                pk,
+                password
+            })
         });
+
         const data = await res.json();
         logToPanel("✅ " + data.message);
     } catch (err) {
-        logToPanel("❌ Error approving PK: " + err);
+        logToPanel("❌ Error approving PK: " + err.message);
     }
 });
 
-// ✅ Deposit button handler
+
+
 // ✅ Deposit button handler (SolidarityV11)
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("depositAmount").value || "0");
@@ -230,7 +238,8 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
 });
 
 
-//withdraw button handler 
+
+//✅✅withdraw button handler 
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   const amt = parseFloat(document.getElementById("withdrawAmount").value || "0");
   if (amt <= 0) return logToPanel("❌ Invalid withdraw amount.");
