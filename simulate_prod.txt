@@ -25,6 +25,18 @@ async function pickRandomCoin() {
     } catch (e) { return "BTC"; }
 }
 
+// ✅ Status updater
+function setStatus(msg) {
+    const statusLabel = document.querySelector(".status-label");
+    if (statusLabel) {
+        statusLabel.textContent = msg;
+    } else {
+        logToPanel(`[STATUS] ${msg}`);
+    }
+}
+window.setStatus = setStatus;
+
+
 // ✅ Stop Trading 
 function stopBot() {
     window.isBotRunning = false;
