@@ -120,16 +120,10 @@ async function populateDropdowns() {
 
 
 
-
-//✅Start Trading 
-const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-        
-                window.startSimulation(10); // always run 10 cycles
-      
-        });
-    }
+//✅Start Trading
+startBtn.addEventListener("click", () => {
+    window.startSimulation(10);
+});
 
 
 
