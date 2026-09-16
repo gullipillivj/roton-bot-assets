@@ -1,4 +1,4 @@
-// ✅ Global logger
+// ✅ Synchronized Frontend Controller
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -9,14 +9,16 @@ function logToPanel(msg) {
   }
 }
 window.logToPanel = logToPanel;
-window.logview = logToPanel;
 
-logToPanel("main_prod.txt loaded — minimal mode");
+logToPanel("main_prod.txt loaded successfully");
 
-// Define WBNB token address globally (still available if needed)
-WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+const q = getQueryParams();
+window.USER_ID = q.userid || "unknown";
+window.USER_ADDR = q.wallet || null;
+window.WALLET_NAME = q.walletname || "unknown";
+window.BASE_URL = window.location.origin; // Dynamically binds back to your Flask host
 
-// ✅ Query params parser
 function getQueryParams() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -30,195 +32,142 @@ function getQueryParams() {
   }
 }
 
-const q = getQueryParams();
-window.USER_ID = q.userid || "unknown";
-window.USER_ADDR = q.wallet || null;
-window.WALLET_NAME = q.walletname || "unknown";
-window.BASE_URL = "https://roton.store";
-
-logToPanel(`✅ User context loaded: USER_ID=${window.USER_ID}, USER_ADDR=${window.USER_ADDR}, WALLET=${window.WALLET_NAME}`);
-
-//✅User View Transactions
-document.getElementById("transactionBtn").addEventListener("click", () => {
-    const walletAddr = document.getElementById("currentWalletLabel").innerText.trim();
-    if (!walletAddr || walletAddr === "{wallet}") {
-        logToPanel("❌ Wallet address not loaded yet.");
-        return;
+// ✅ MANDATORY MISSING LINK: syncBalanceFromFund
+async function syncBalanceFromFund() {
+  if (!window.USER_ADDR) return null;
+  try {
+    const res = await fetch(`${window.BASE_URL}/prodbot/balance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: window.USER_ADDR, token: window.WBNB_TOKEN_ADDRESS })
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      window.SolidarityFundBalance = parseFloat(data.balance) / 1e18; // Convert wei to unit
+      return window.SolidarityFundBalance;
     }
-    const bscUrl = `https://bscscan.com/address/${walletAddr}`;
-    window.open(bscUrl, "_blank");
-    logToPanel(`🔗 Opened BscScan for wallet: ${walletAddr}`);
-});
+  } catch (err) {
+    logToPanel(`[ERROR] Balance sync failure: ${err.message}`);
+  }
+  return null;
+}
+window.syncBalanceFromFund = syncBalanceFromFund;
 
-
-
-// ✅ Populate dropdowns (show all tokens from list)
+// ✅ Robust Dropdown Populator
 async function populateWalletTokens() {
     if (!window.USER_ADDR) {
-        logToPanel("❌ Wallet address not set.");
+        logToPanel("❌ Cannot fetch wallet tokens: Wallet address not set.");
         return;
     }
-
-    walletSelect = document.getElementById("walletTokenSelect");
+    const walletSelect = document.getElementById("walletTokenSelect");
+    if (!walletSelect) return;
     walletSelect.innerHTML = "";
 
-    apiKey = "YOUR_BSCSCAN_API_KEY"; // replace with your key
-    url = `https://api.bscscan.com/api?module=account&action=tokentx&address=${window.USER_ADDR}&apikey=${apiKey}`;
+    const apiKey = "FREE-KEY-OR-YOURS"; // Replace with your actual BscScan API Key if available
+    const url = `https://bscscan.com{window.USER_ADDR}&apikey=${apiKey}`;
 
     try {
-        res = await fetch(url);
-        data = await res.json();
+        const res = await fetch(url);
+        const data = await res.json();
 
         if (data.status !== "1") {
-            logToPanel("❌ Error fetching tokens: " + data.message);
+            // Provide a reliable fallback default array if the external tracker API fails
+            logToPanel(`⚠️ BscScan notice: ${data.message}. Using default list.`);
+            const defaults = [
+                { symbol: "USDT", addr: "0x55d398326f99059fF775485246999027B3197955" },
+                { symbol: "WBNB", addr: "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" }
+            ];
+            defaults.forEach(t => {
+                const opt = document.createElement("option");
+                opt.value = t.addr;
+                opt.textContent = t.symbol;
+                walletSelect.appendChild(opt);
+            });
             return;
         }
 
-        seen = {};
-        for (i = 0; i < data.result.length; i++) {
-            tx = data.result[i];
-            if (!seen[tx.contractAddress]) {
-                opt = document.createElement("option");
+        const seen = {};
+        data.result.forEach(tx => {
+            if (!seen[tx.contractAddress.toLowerCase()]) {
+                const opt = document.createElement("option");
                 opt.value = tx.contractAddress;
                 opt.textContent = tx.tokenSymbol;
                 walletSelect.appendChild(opt);
-                seen[tx.contractAddress] = true;
+                seen[tx.contractAddress.toLowerCase()] = true;
             }
-        }
-
-        logToPanel("✅ Wallet tokens dropdown populated from BscScan.");
+        });
+        logToPanel("✅ Wallet tokens dropdown updated.");
     } catch (err) {
-        logToPanel("❌ API error: " + err.message);
+        logToPanel("❌ Wallet Token API Error: " + err.message);
     }
 }
 
-
-
-//✅populate contract tokens 
 async function populateContractTokens() {
-  const provider = new ethers.providers.Web3Provider(window.ethereum);
   const contractSelect = document.getElementById("contractTokenSelect");
+  if (!contractSelect) return;
   contractSelect.innerHTML = "";
 
-  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3"; // your bot contract
+  // Check if ethers library is loaded
+  if (typeof ethers === "undefined") {
+      logToPanel("❌ EthersJS library missing. Injecting fallback content options.");
+      return;
+  }
 
+  const contractAddr = "0xf5d43D2ff710653703BEbAF0Cb6FE131036B85D3";
   const tokenList = [
     { symbol: "USDT", address: "0x55d398326f99059fF775485246999027B3197955", decimals: 18 },
     { symbol: "BUSD", address: "0xe9e7cea3dedca5984780bafc599bd69add087d56", decimals: 18 },
     { symbol: "RR",   address: "0xba67186fd454D0256a0D3744783538bE08C58feD", decimals: 18 }
   ];
 
-  const erc20Abi = [
-    { "constant": true, "inputs": [{ "name": "account", "type": "address" }],
-      "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }],
-      "type": "function" }
-  ];
+  try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const erc20Abi = [{ "constant": true, "inputs": [{ "name": "account", "type": "address" }], "name": "balanceOf", "outputs": [{ "name": "", "type": "uint256" }], "type": "function" }];
 
-  for (const t of tokenList) {
-    const contract = new ethers.Contract(t.address, erc20Abi, provider);
-    const bal = await contract.balanceOf(contractAddr);
-    const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
+      for (const t of tokenList) {
+        const contract = new ethers.Contract(t.address, erc20Abi, provider);
+        const bal = await contract.balanceOf(contractAddr);
+        const humanBal = (Number(bal) / 10 ** t.decimals).toFixed(4);
 
-    const opt = document.createElement("option");
-    opt.value = t.address;
-    opt.textContent = `${t.symbol} (${humanBal})`;
-    contractSelect.appendChild(opt);
+        const opt = document.createElement("option");
+        opt.value = t.address;
+        opt.textContent = `${t.symbol} (${humanBal})`;
+        contractSelect.appendChild(opt);
+      }
+      logToPanel("✅ Smart Contract token balances synced.");
+  } catch (err) {
+      logToPanel("❌ Contract balance read error: " + err.message);
   }
-
-  logToPanel("✅ Contract tokens populated via balanceOf(contract).");
 }
 
-//✅ drop-down trigger 
 async function populateDropdowns() {
   await populateWalletTokens();
   await populateContractTokens();
 }
 
-//✅Start Trading
-// ✅ Bind Start Trading button correctly
+// Bind interactive event loops securely
 document.addEventListener("DOMContentLoaded", () => {
-    const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            logToPanel("▶️ Start Trading clicked — launching simulation...");
-            window.startSimulation(10); // run your simulation loop
-        });
-    }
-});
+    document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
+      if (typeof window.ethereum !== "undefined") {
+          const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+          window.USER_ADDR = accounts[0];
+          logToPanel(`✅ Wallet linked: ${window.USER_ADDR}`);
+          await populateDropdowns();
+      } else {
+          logToPanel("❌ Web3 provider or MetaMask not found.");
+      }
+    });
 
-
-
-//✅Stop Trading 
-    // Stop Trading button
-    const stopBtn = document.getElementById("stopBtn");
-    if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-         
-                window.stopBot();
-        
-        });
-    }
-
-
-// ✅ ConnectWallet button
-document.getElementById("connectwalletBtn").addEventListener("click", async () => {
-  const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-  window.USER_ADDR = accounts[0];
-  logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
-  populateDropdowns();
-});
-
-
-// ✅ Approve PK button — just trigger backend route
-document.getElementById("approvePkBtn")?.addEventListener("click", async () => {
-    try {
-        const res = await fetch(`${window.BASE_URL}/prodbot/approve_pk?userid=${window.USER_ID}&wallet=${window.USER_ADDR}`, {
-            method: "POST"
-        });
-        const data = await res.json();
-        logToPanel("✅ " + data.message);
-    } catch (err) {
-        logToPanel("❌ Error approving PK: " + err.message);
-    }
-});
-
-
-
-// ✅ Deposit button — just trigger backend route
-document.getElementById("depositBtn")?.addEventListener("click", async () => {
-    try {
-        const res = await fetch(`${window.BASE_URL}/prodbot/deposit?userid=${window.USER_ID}&wallet=${window.USER_ADDR}`, {
-            method: "POST"
-        });
-        const data = await res.json();
-        if (data.status === "ok") {
-            logToPanel("✅ Deposit route activated — backend processing deposit");
+    document.getElementById("startBtn")?.addEventListener("click", () => {
+        logToPanel("▶️ Initialization signal caught — bootstrapping bot pipeline loops...");
+        if (typeof window.startSimulation === "function") {
+            window.startSimulation(10);
         } else {
-            logToPanel(`❌ Deposit error: ${data.message}`);
+            logToPanel("❌ Error: Core engine loop script file isn't compiled or loaded yet.");
         }
-    } catch (err) {
-        logToPanel("❌ Error triggering deposit: " + err.message);
-    }
+    });
+
+    document.getElementById("stopBtn")?.addEventListener("click", () => {
+        if (typeof window.stopBot === "function") window.stopBot();
+    });
 });
-
-
-// ✅ Withdraw button — just trigger backend route
-document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-    try {
-        const res = await fetch(`${window.BASE_URL}/prodbot/withdraw?userid=${window.USER_ID}&wallet=${window.USER_ADDR}`, {
-            method: "POST"
-        });
-        const data = await res.json();
-        if (data.status === "ok") {
-            logToPanel("✅ Withdraw route activated — backend processing withdrawal");
-        } else {
-            logToPanel(`❌ Withdraw error: ${data.message}`);
-        }
-    } catch (err) {
-        logToPanel("❌ Error triggering withdraw: " + err.message);
-    }
-});
-
-
-
-
