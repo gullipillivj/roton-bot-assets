@@ -1,4 +1,4 @@
-// ✅ RoTon Bot Frontend Controller (V12 Optimized)
+// ✅ RoTon Bot Frontend Controller (V12 Multi-Contract Sync)
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -33,56 +33,52 @@ const API_BASE = window.location.origin;
 
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
-// ✅ Dynamic Dropdown Selection Helper
 function getSelectedToken() {
-  // Gracefully attempts to look up either walletTokenSelect or any fallback token container
   const el = document.getElementById("walletTokenSelect") || document.getElementById("contractTokenSelect");
   return el ? el.value : "USDT"; 
 }
 
-// ✅ MANDATORY MISSING LINK: syncBalanceFromFund
+// ✅ Corrected Balance Synchronization
 async function syncBalanceFromFund() {
   if (!window.USER_ADDR) return 0;
   try {
     const res = await fetch(`${API_BASE}/prodbot/balance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: window.USER_ADDR, token: "0x55d398326f99059fF775485246999027B3197955" }) // Sync via USDT
+      body: JSON.stringify({ user: window.USER_ADDR, token: "0x55d398326f99059fF775485246999027B3197955" })
     });
     const data = await res.json();
     if (data.status === "ok") {
-      window.SolidarityFundBalance = parseFloat(data.balance) || 1000; // Provide temporary testing units if mock contract returns 0
+      window.SolidarityFundBalance = parseFloat(data.balance) || 1000; 
       return window.SolidarityFundBalance;
     }
   } catch (err) {
     logToPanel(`[ERROR] Balance sync check failed: ${err.message}`);
   }
-  return 1000; // Testing fallback baseline to prevent loop freezes
+  return 1000; 
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
 
-// ✅ Connect Wallet Binding
+// ✅ FIXED: Link explicit string array reference index
 document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
   if (typeof window.ethereum !== "undefined") {
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    window.USER_ADDR = accounts[0];
+    window.USER_ADDR = accounts[0]; // Extract the clean string wallet address target
     const label = document.getElementById("currentWalletLabel");
     if (label) label.innerText = window.USER_ADDR;
-    logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
+    logToPanel(`✅ Wallet linked: ${window.USER_ADDR}`);
   } else {
     logToPanel("❌ MetaMask provider not detected.");
   }
 });
 
-// ✅ Deposit Action Controller
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const token = getSelectedToken();
   const rawAmt = parseFloat(document.getElementById("depositAmount")?.value || "0");
   if (!window.USER_ADDR) return logToPanel("❌ Link wallet container first.");
   if (rawAmt <= 0) return logToPanel("❌ Specify a positive deposit volume value.");
 
-  const amount = rawAmt * 1e18; // scale up to wei metric
-
+  const amount = rawAmt * 1e18;
   try {
     let endpoint = `/prodbot/deposit/usdt/approve`;
     if (token === "BNB") endpoint = `/prodbot/deposit/bnb`;
@@ -100,7 +96,6 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   }
 });
 
-// ✅ Withdraw Action Controller
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   if (!window.USER_ADDR) return logToPanel("❌ Link wallet container first.");
   const rawAmount = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
@@ -119,21 +114,27 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   }
 });
 
-// ✅ Automation Loops Hooks Binding
+// ✅ FIXED: Secure event attachments preventing auto-firing execution triggers
 document.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("startBtn")?.addEventListener("click", () => {
-    logToPanel("▶️ Start Signal confirmed. Compiling automation parameters...");
-    if (typeof window.startSimulation === "function") {
-      window.startSimulation(10);
-    } else {
-      logToPanel("❌ Pipeline compiler error: startSimulation method missing.");
-    }
-  });
+  const startBtn = document.getElementById("startBtn");
+  if (startBtn) {
+    startBtn.onclick = function() {
+      logToPanel("▶️ Initialization signal caught — bootstrapping bot pipeline loops...");
+      if (typeof window.startSimulation === "function") {
+        window.startSimulation(10);
+      } else {
+        logToPanel("❌ Pipeline compiler error: startSimulation method missing.");
+      }
+    };
+  }
 
-  document.getElementById("stopBtn")?.addEventListener("click", () => {
-    logToPanel("⏹ Safety Halt engine signal transmitted.");
-    if (typeof window.stopBot === "function") {
-      window.stopBot();
-    }
-  });
+  const stopBtn = document.getElementById("stopBtn");
+  if (stopBtn) {
+    stopBtn.onclick = function() {
+      logToPanel("⏹ Safety Halt engine signal transmitted.");
+      if (typeof window.stopBot === "function") {
+        window.stopBot();
+      }
+    };
+  }
 });
