@@ -16,12 +16,11 @@ function getQueryParams() {
   try {
     const url = new URL(window.location.href);
     const params = url.searchParams;
-
-    const userid = params.get("userid") || "unknown";
-    const wallet = params.get("wallet") || null;
-    const walletname = params.get("walletname") || "unknown";
-
-    return { userid, wallet, walletname };
+    return {
+      userid: params.get("userid") || "unknown",
+      wallet: params.get("wallet") || null,
+      walletname: params.get("walletname") || "unknown"
+    };
   } catch (err) {
     logToPanel(`❌ URL parsing error: ${err.message}`);
     return { userid: "unknown", wallet: null, walletname: "unknown" };
@@ -35,18 +34,16 @@ window.USER_ADDR = q.wallet;
 window.WALLET_NAME = q.walletname;
 const API_BASE = window.location.origin;
 
-// ✅ Inject parsed URL parameters into HTML labels
-const userLabel = document.getElementById("currentUserLabel");
-const walletLabel = document.getElementById("currentWalletLabel");
-const walletNameLabel = document.getElementById("currentWalletName");
-
-if (userLabel) userLabel.innerText = window.USER_ID;
-if (walletLabel) walletLabel.innerText = window.USER_ADDR;
-if (walletNameLabel) walletNameLabel.innerText = window.WALLET_NAME;
+// ✅ Inject parsed values into HTML labels
+document.getElementById("currentUserLabel").innerText = window.USER_ID;
+document.getElementById("currentWalletLabel").innerText = window.USER_ADDR;
+document.getElementById("currentWalletName").innerText = window.WALLET_NAME;
 
 logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
 
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+
+
 // ✅ FIXED: Maps correctly to your specific HTML select element values
 function getSelectedToken() {
   const el = document.getElementById("tokenSelect");
