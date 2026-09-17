@@ -32,6 +32,16 @@ function getQueryParams() {
   }
 }
 
+// ✅ Inject parsed URL parameters into HTML labels
+const userLabel = document.getElementById("currentUserLabel");
+const walletLabel = document.getElementById("currentWalletLabel");
+const walletNameLabel = document.getElementById("currentWalletName");
+
+if (userLabel) userLabel.innerText = window.USER_ID;
+if (walletLabel) walletLabel.innerText = window.USER_ADDR;
+if (walletNameLabel) walletNameLabel.innerText = window.WALLET_NAME;
+
+logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
 
 const q = getQueryParams();
 window.USER_ID = q.userid || "unknown";
