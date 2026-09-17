@@ -119,11 +119,22 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
 
 
 // ✅ Withdraw
+// ✅ Withdraw (USDT only, V12)
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-  const token = document.getElementById("tokenSelect").value;
-  const amount = parseFloat(document.getElementById("withdrawAmount").value) * 1e6;
-  if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+  if (!window.USER_ADDR) {
+    return logToPanel("❌ Connect wallet first.");
+  }
+
+  const rawAmount = parseFloat(document.getElementById("withdrawAmount").value);
+  if (isNaN(rawAmount) || rawAmount <= 0) {
+    return logToPanel("❌ Enter a valid withdraw amount.");
+  }
+
+  // Always USDT, 6 decimals
+  const token = "USDT";
+  const amount = rawAmount * 1e6;
   const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
+
   try {
     const res = await fetch(`${API_BASE}/prodbot/withdraw`, {
       method: "POST",
@@ -140,12 +151,18 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
     if (data.status !== "ok") {
       logToPanel(`❌ Withdraw failed: ${data.message || "Unknown error"}`);
     } else {
-      logToPanel(`✅ Withdraw prepared: ${JSON.stringify(data)}`);
+      logToPanel(`✅ USDT withdraw prepared: ${JSON.stringify(data)}`);
+      // 🔑 Next step: execute transaction with MetaMask
+      // window.ethereum.request({
+      //   method: "eth_sendTransaction",
+      //   params: [ { from: window.USER_ADDR, to: V12_ADDR, data: data.withdraw_call } ]
+      // });
     }
   } catch (err) {
     logToPanel(`❌ Withdraw error: ${err.message}`);
   }
 });
+
 
 // ✅ Balance Sync
 async function syncBalance() {
