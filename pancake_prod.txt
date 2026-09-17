@@ -1,5 +1,4 @@
-logToPanel("pancake_prod.txt loaded");
-// ✅ Global logger
+// ✅ RoTon Bot Frontend Controller (V12)
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -8,39 +7,129 @@ function logToPanel(msg) {
   } else {
     console.log(msg);
   }
-} logToPanel;
+}
+window.logToPanel = logToPanel;
 
+logToPanel("main_prod.txt loaded successfully");
 
-//run swap
-async function runSwap(userAddr, bnbAmount, tokenAddress) {
+// ✅ Parse URL params
+function getQueryParams() {
   try {
-    const res = await fetch(`${window.BASE_URL}/prodbot/swap`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userid: window.USER_ID,
-        router: "0x10ED43C718714eb63d5aA57B78B54704E256024E",
-        tokenIn: window.WBNB_TOKEN_ADDRESS,       // input token (BNB wrapped)
-        tokenOut: tokenAddress,                   // output token
-        amountIn: Math.floor(bnbAmount * 1e18),   // convert to wei
-        amountOutMin: 0,                          // set slippage minOut if needed
-        dstChainId: null,
-        recipient: userAddr
-      })
-    });
-
-    const data = await res.json();
-    if (data.status === "success") {
-      logToPanel(`✅ Swap executed successfully. TxHash=${data.tx_hash}`);
-      return data;
-    } else {
-      logToPanel(`❌ Swap failed: ${data.message}`);
-      return data;
-    }
-  } catch (err) {
-    logToPanel(`[SWAP ERROR] ${err.message}`);
-    return { status: "error", message: err.message };
+    const params = new URLSearchParams(window.location.search);
+    return {
+      userid: params.get("userid"),
+      wallet: params.get("wallet"),
+      walletname: params.get("walletname")
+    };
+  } catch {
+    return { userid: "unknown", wallet: null, walletname: "unknown" };
   }
 }
 
-window.runSwap = runSwap;
+const q = getQueryParams();
+window.USER_ID = q.userid || "unknown";
+window.USER_ADDR = q.wallet || null;
+window.WALLET_NAME = q.walletname || "unknown";
+window.BASE_URL = window.location.origin;
+window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+
+// ✅ Connect Wallet
+document.getElementById("connectwalletBtn")?.addEventListener("click", async () => {
+  if (typeof window.ethereum !== "undefined") {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    window.USER_ADDR = accounts[0];
+    document.getElementById("currentWalletLabel").innerText = window.USER_ADDR;
+    logToPanel(`✅ Wallet connected: ${window.USER_ADDR}`);
+  } else {
+    logToPanel("❌ MetaMask not found.");
+  }
+});
+
+// ✅ Deposit
+document.getElementById("depositBtn")?.addEventListener("click", async () => {
+  const token = document.getElementById("tokenSelect").value;
+  const amount = parseFloat(document.getElementById("depositAmount").value) * 1e6;
+  if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+  const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
+  try {
+    const res = await fetch(`${window.BASE_URL}/prodbot/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    logToPanel(`✅ Deposit prepared: ${JSON.stringify(data)}`);
+  } catch (err) {
+    logToPanel(`❌ Deposit error: ${err.message}`);
+  }
+});
+
+// ✅ Withdraw
+document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+  const token = document.getElementById("tokenSelect").value;
+  const amount = parseFloat(document.getElementById("withdrawAmount").value) * 1e6;
+  if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+  const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
+  try {
+    const res = await fetch(`${window.BASE_URL}/prodbot/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    logToPanel(`✅ Withdraw prepared: ${JSON.stringify(data)}`);
+  } catch (err) {
+    logToPanel(`❌ Withdraw error: ${err.message}`);
+  }
+});
+
+// ✅ Balance Sync
+async function syncBalance() {
+  if (!window.USER_ADDR) return;
+  const token = document.getElementById("tokenSelect").value;
+  try {
+    const res = await fetch(`${window.BASE_URL}/prodbot/balance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: window.USER_ADDR, token })
+    });
+    const data = await res.json();
+    if (data.status === "ok") {
+      const balance = parseFloat(data.balance) / 1e6;
+      document.getElementById("liveProfitValue").innerText = `${balance.toFixed(2)} USDT`;
+      if (typeof window.updateChart === "function") {
+        window.updateChart(balance);
+      }
+      logToPanel(`💰 Balance synced: ${balance.toFixed(2)} USDT`);
+    }
+  } catch (err) {
+    logToPanel(`❌ Balance sync error: ${err.message}`);
+  }
+}
+setInterval(syncBalance, 10000); // every 10 seconds
+
+// ✅ Trading Controls (simulate_prod.txt integration)
+document.getElementById("startBtn")?.addEventListener("click", () => {
+  logToPanel(`▶️ Start Trading — USER_ID=${window.USER_ID}, WALLET=${window.USER_ADDR}`);
+  if (typeof window.startSimulation === "function") {
+    window.startSimulation(10); // default 10 cycles
+  } else {
+    logToPanel("❌ Simulation engine not loaded.");
+  }
+});
+
+document.getElementById("stopBtn")?.addEventListener("click", () => {
+  logToPanel(`⏹ Stop Trading — USER_ID=${window.USER_ID}, WALLET=${window.USER_ADDR}`);
+  if (typeof window.stopBot === "function") {
+    window.stopBot();
+  } else {
+    logToPanel("❌ Stop function not available.");
+  }
+});
+
+// ✅ Logout
+document.getElementById("logoutBtn")?.addEventListener("click", () => {
+  logToPanel("🚪 Logged out.");
+  window.USER_ADDR = null;
+  document.getElementById("currentWalletLabel").innerText = "{wallet}";
+});
