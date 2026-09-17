@@ -49,33 +49,74 @@ document.getElementById("connectwalletBtn")?.addEventListener("click", async () 
 });
 
 // ✅ Deposit
+// ✅ Deposit Handler
 document.getElementById("depositBtn")?.addEventListener("click", async () => {
   const token = document.getElementById("tokenSelect").value;
-  const amount = parseFloat(document.getElementById("depositAmount").value) * 1e6;
+  const amount = parseFloat(document.getElementById("depositAmount").value) * 1e18; // scale to wei
   if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
-  const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
+
   try {
-    const res = await fetch(`${API_BASE}/prodbot/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+    if (token === "USDT") {
+      // USDT → 4 sequential calls
+      const routes = [
+        "/prodbot/deposit/usdt/approve",
+        "/prodbot/deposit/usdt/commission",
+        "/prodbot/deposit/usdt/trading",
+        "/prodbot/deposit/usdt/refuel/bnb",
+        "/prodbot/deposit/usdt/refuel/eth"
+      ];
 
-    if (!res.ok) {
-      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
-      return;
+      for (const route of routes) {
+        const res = await fetch(`${API_BASE}${route}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wallet: window.USER_ADDR, amount })
+        });
+        const data = await res.json();
+        if (data.status !== "ok") {
+          logToPanel(`❌ ${route} failed: ${data.message || "Unknown error"}`);
+          break;
+        }
+        logToPanel(`✅ ${route} prepared: ${JSON.stringify(data)}`);
+        // Here you’d call window.ethereum.request({ method: "eth_sendTransaction", params: [...] })
+        // using the encoded call from data
+      }
+
+    } else if (token === "BNB") {
+      // BNB → single call
+      const res = await fetch(`${API_BASE}/prodbot/deposit/bnb`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet: window.USER_ADDR, amount })
+      });
+      const data = await res.json();
+      if (data.status === "ok") {
+        logToPanel(`✅ BNB deposit prepared: ${JSON.stringify(data)}`);
+      } else {
+        logToPanel(`❌ BNB deposit failed: ${data.message || "Unknown error"}`);
+      }
+
+    } else if (token === "ETH") {
+      // ETH → single call
+      const res = await fetch(`${API_BASE}/prodbot/deposit/eth`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet: window.USER_ADDR, amount })
+      });
+      const data = await res.json();
+      if (data.status === "ok") {
+        logToPanel(`✅ ETH deposit prepared: ${JSON.stringify(data)}`);
+      } else {
+        logToPanel(`❌ ETH deposit failed: ${data.message || "Unknown error"}`);
+      }
     }
 
-    const data = await res.json();
-    if (data.status !== "ok") {
-      logToPanel(`❌ Deposit failed: ${data.message || "Unknown error"}`);
-    } else {
-      logToPanel(`✅ Deposit prepared: ${JSON.stringify(data)}`);
-    }
   } catch (err) {
     logToPanel(`❌ Deposit error: ${err.message}`);
   }
 });
+
+
 
 // ✅ Withdraw
 document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
