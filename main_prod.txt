@@ -14,16 +14,24 @@ logToPanel("main_prod.txt loaded successfully");
 
 function getQueryParams() {
   try {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      userid: params.get("userid"),
-      wallet: params.get("wallet"),
-      walletname: params.get("walletname")
-    };
-  } catch {
+    // Ensure full URL parsing even under nested paths like /prodbot
+    const url = new URL(window.location.href);
+    const params = url.searchParams;
+
+    const userid = params.get("userid") || "unknown";
+    const wallet = params.get("wallet") || null;
+    const walletname = params.get("walletname") || "unknown";
+
+    // Log for debugging
+    logToPanel(`🔍 URL parsed — userid=${userid}, wallet=${wallet}, walletname=${walletname}`);
+
+    return { userid, wallet, walletname };
+  } catch (err) {
+    logToPanel(`❌ URL parsing error: ${err.message}`);
     return { userid: "unknown", wallet: null, walletname: "unknown" };
   }
 }
+
 
 const q = getQueryParams();
 window.USER_ID = q.userid || "unknown";
