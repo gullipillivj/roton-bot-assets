@@ -83,70 +83,134 @@ window.syncBalanceFromFund = syncBalanceFromFund;
 // ==========================================
 // 🚀 METAMASK POPUP TRIGGER INTEGRATION
 // ==========================================
+depBtn.onclick = async function () {
 
-const depBtn = document.getElementById("depositBtn");
-if (depBtn) {
-  depBtn.onclick = async function() {
     const token = getSelectedToken();
-    const amountInputEl = document.getElementById("depositAmount");
-    const rawAmt = amountInputEl ? parseFloat(amountInputEl.value) : 0;
-    const runtimeUserAddress = window.USER_ADDR || q.wallet;
 
-    if (!runtimeUserAddress || runtimeUserAddress === "{wallet}") {
-      return logToPanel("❌ Action Halted: Connect your wallet or check URL params first.");
-    }
-    if (isNaN(rawAmt) || rawAmt <= 0) {
-      return logToPanel("❌ Action Halted: Specify a positive numerical deposit amount.");
-    }
+    const rawAmt =
+        parseFloat(
+            document.getElementById("depositAmount").value
+        );
 
-    const amount = BigInt(Math.floor(rawAmt * 1e18)).toString();
-    logToPanel(`⏳ Requesting compiled data from backend for ${token} deposit pipeline...`);
+    const amount =
+        BigInt(
+            Math.floor(rawAmt * 1e18)
+        ).toString();
+
+    const wallet =
+        window.USER_ADDR;
+
+    if (!wallet) {
+        logToPanel("Connect Wallet First");
+        return;
+    }
 
     try {
-      let endpoint = `/prodbot/deposit/usdt/approve`; 
-      if (token === "BNB") endpoint = `/prodbot/deposit/bnb`;
-      if (token === "ETH") endpoint = `/prodbot/deposit/eth`;
 
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: String(runtimeUserAddress), amount: amount })
-      });
-      const data = await res.json();
+        if (token === "USDT") {
 
-      if (data.status !== "ok") {
-        return logToPanel(`❌ Server error: ${data.message || "Unknown exception"}`);
-      }
+            const usdt =
+                "0x55d398326f99059fF775485246999027B3197955";
 
-      logToPanel("🚀 Backend processing complete. Dispatching transaction prompt directly to MetaMask...");
+            const v12 =
+                "0x1854170353ea89672638F9fa5acB477c45523871";
 
-      const transactionPayloadData = data.approve_call || data.deposit_call || data.bnb_refuel_call;
-      const contractDestinationAddress = (token === "USDT") 
-        ? "0x1854170353ea89672638F9fa5acB477c45523871" 
-        : "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5";
+            const approveData =
+                "0x095ea7b3" +
+                v12.replace("0x","").padStart(64,"0") +
+                BigInt(amount).toString(16).padStart(64,"0");
 
-      if (!transactionPayloadData) {
-        return logToPanel("❌ Payload error: Hex interaction data string is missing.");
-      }
+            await ethereum.request({
+                method: "eth_sendTransaction",
+                params: [{
+                    from: wallet,
+                    to: usdt,
+                    data: approveData
+                }]
+            });
 
-      // ⚡ METAMASK POPUP DISPATCH
-      const txHash = await window.ethereum.request({
-        method: "eth_sendTransaction",
-        params: [{
-          from: String(runtimeUserAddress),
-          to: contractDestinationAddress,
-          data: transactionPayloadData,
-          value: (token === "BNB") ? "0x" + BigInt(amount).toString(16) : "0x0"
-        }]
-      });
+            logToPanel("USDT approved");
 
-      logToPanel(`🎉 On-chain transaction broadcasted! TxHash: ${txHash}`);
+            const c1 = await fetch("/prodbot/deposit/usdt/commission",{
+                method:"POST",
+                headers:{
+                    "Content-Type":"application/json"
+                },
+                body:JSON.stringify({
+                    amount:amount
+                })
+            });
 
-    } catch (err) {
-      logToPanel(`❌ Extension exception or transaction rejected: ${err.message}`);
+            const commission =
+                await c1.json();
+
+            await ethereum.request({
+                method:"eth_sendTransaction",
+                params:[{
+                    from:wallet,
+                    to:commission.contract,
+                    data:commission.txdata
+                }]
+            });
+
+            logToPanel("Commission paid");
+
+            const c2 = await fetch("/prodbot/deposit/usdt/trading",{
+                method:"POST",
+                headers:{
+                    "Content-Type":"application/json"
+                },
+                body:JSON.stringify({
+                    amount:amount
+                })
+            });
+
+            const trading =
+                await c2.json();
+
+            await ethereum.request({
+                method:"eth_sendTransaction",
+                params:[{
+                    from:wallet,
+                    to:trading.contract,
+                    data:trading.txdata
+                }]
+            });
+
+            logToPanel("Trading deposit complete");
+        }
+
+        else if (token === "BNB") {
+
+            await ethereum.request({
+                method:"eth_sendTransaction",
+                params:[{
+                    from:wallet,
+                    to:"0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
+                    value:"0x" + BigInt(amount).toString(16)
+                }]
+            });
+
+            logToPanel("BNB deposited to V13");
+        }
+
+        else if (token === "ETH") {
+
+            logToPanel(
+                "Approve ETH token then call depositToken()"
+            );
+        }
+
+    } catch(err) {
+
+        logToPanel(
+            "Deposit Error: " + err.message
+        );
+
     }
-  };
-}
+};
+
+
 
 // Connect Wallet Click Target
 const connBtn = document.getElementById("connectwalletBtn");
