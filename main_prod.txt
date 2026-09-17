@@ -14,7 +14,6 @@ logToPanel("main_prod.txt loaded successfully");
 
 function getQueryParams() {
   try {
-    // Ensure full URL parsing even under nested paths like /prodbot
     const url = new URL(window.location.href);
     const params = url.searchParams;
 
@@ -22,15 +21,19 @@ function getQueryParams() {
     const wallet = params.get("wallet") || null;
     const walletname = params.get("walletname") || "unknown";
 
-    // Log for debugging
-    logToPanel(`🔍 URL parsed — userid=${userid}, wallet=${wallet}, walletname=${walletname}`);
-
     return { userid, wallet, walletname };
   } catch (err) {
     logToPanel(`❌ URL parsing error: ${err.message}`);
     return { userid: "unknown", wallet: null, walletname: "unknown" };
   }
 }
+
+// ✅ Parse URL params first
+const q = getQueryParams();
+window.USER_ID = q.userid;
+window.USER_ADDR = q.wallet;
+window.WALLET_NAME = q.walletname;
+const API_BASE = window.location.origin;
 
 // ✅ Inject parsed URL parameters into HTML labels
 const userLabel = document.getElementById("currentUserLabel");
@@ -41,25 +44,9 @@ if (userLabel) userLabel.innerText = window.USER_ID;
 if (walletLabel) walletLabel.innerText = window.USER_ADDR;
 if (walletNameLabel) walletNameLabel.innerText = window.WALLET_NAME;
 
-logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, // Parse URL params first
-const q = getQueryParams();
-window.USER_ID = q.userid || "unknown";
-window.USER_ADDR = q.wallet || null;
-window.WALLET_NAME = q.walletname || "unknown";
-const API_BASE = window.location.origin;
-
-// ✅ Now inject into HTML labels
-const userLabel = document.getElementById("currentUserLabel");
-const walletLabel = document.getElementById("currentWalletLabel");
-const walletNameLabel = document.getElementById("currentWalletName");
-
-if (userLabel) userLabel.innerText = window.USER_ID;
-if (walletLabel) walletLabel.innerText = window.USER_ADDR;
-if (walletNameLabel) walletNameLabel.innerText = window.WALLET_NAME;
-
 logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
-window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
+window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 // ✅ FIXED: Maps correctly to your specific HTML select element values
 function getSelectedToken() {
   const el = document.getElementById("tokenSelect");
