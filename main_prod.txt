@@ -30,7 +30,10 @@ const q = getQueryParams();
 window.USER_ID = q.userid || "unknown";
 window.USER_ADDR = q.wallet || null;
 window.WALLET_NAME = q.walletname || "unknown";
-window.BASE_URL = window.location.origin;
+
+// 🔑 Hardcode backend base URL
+const API_BASE = "https://roton.store";
+
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
 // ✅ Connect Wallet
@@ -52,13 +55,23 @@ document.getElementById("depositBtn")?.addEventListener("click", async () => {
   if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
   const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
   try {
-    const res = await fetch(`https://roton.store/prodbot/deposit`, {
+    const res = await fetch(`${API_BASE}/prodbot/deposit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
+    if (!res.ok) {
+      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
+      return;
+    }
+
     const data = await res.json();
-    logToPanel(`✅ Deposit prepared: ${JSON.stringify(data)}`);
+    if (data.status !== "ok") {
+      logToPanel(`❌ Deposit failed: ${data.message || "Unknown error"}`);
+    } else {
+      logToPanel(`✅ Deposit prepared: ${JSON.stringify(data)}`);
+    }
   } catch (err) {
     logToPanel(`❌ Deposit error: ${err.message}`);
   }
@@ -71,13 +84,23 @@ document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
   if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
   const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
   try {
-    const res = await fetch(`https://roton.store/prodbot/withdraw`, {
+    const res = await fetch(`${API_BASE}/prodbot/withdraw`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
+    if (!res.ok) {
+      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
+      return;
+    }
+
     const data = await res.json();
-    logToPanel(`✅ Withdraw prepared: ${JSON.stringify(data)}`);
+    if (data.status !== "ok") {
+      logToPanel(`❌ Withdraw failed: ${data.message || "Unknown error"}`);
+    } else {
+      logToPanel(`✅ Withdraw prepared: ${JSON.stringify(data)}`);
+    }
   } catch (err) {
     logToPanel(`❌ Withdraw error: ${err.message}`);
   }
@@ -88,11 +111,17 @@ async function syncBalance() {
   if (!window.USER_ADDR) return;
   const token = document.getElementById("tokenSelect").value;
   try {
-    const res = await fetch(`https://roton.store/prodbot/balance`, {
+    const res = await fetch(`${API_BASE}/prodbot/balance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user: window.USER_ADDR, token })
     });
+
+    if (!res.ok) {
+      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
+      return;
+    }
+
     const data = await res.json();
     if (data.status === "ok") {
       const balance = parseFloat(data.balance) / 1e6;
@@ -101,6 +130,8 @@ async function syncBalance() {
         window.updateChart(balance);
       }
       logToPanel(`💰 Balance synced: ${balance.toFixed(2)} USDT`);
+    } else {
+      logToPanel(`❌ Balance fetch failed: ${data.message || "Unknown error"}`);
     }
   } catch (err) {
     logToPanel(`❌ Balance sync error: ${err.message}`);
