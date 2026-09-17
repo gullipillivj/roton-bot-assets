@@ -41,14 +41,23 @@ if (userLabel) userLabel.innerText = window.USER_ID;
 if (walletLabel) walletLabel.innerText = window.USER_ADDR;
 if (walletNameLabel) walletNameLabel.innerText = window.WALLET_NAME;
 
-logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
-
+logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, // Parse URL params first
 const q = getQueryParams();
 window.USER_ID = q.userid || "unknown";
 window.USER_ADDR = q.wallet || null;
 window.WALLET_NAME = q.walletname || "unknown";
 const API_BASE = window.location.origin;
 
+// ✅ Now inject into HTML labels
+const userLabel = document.getElementById("currentUserLabel");
+const walletLabel = document.getElementById("currentWalletLabel");
+const walletNameLabel = document.getElementById("currentWalletName");
+
+if (userLabel) userLabel.innerText = window.USER_ID;
+if (walletLabel) walletLabel.innerText = window.USER_ADDR;
+if (walletNameLabel) walletNameLabel.innerText = window.WALLET_NAME;
+
+logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
 // ✅ FIXED: Maps correctly to your specific HTML select element values
