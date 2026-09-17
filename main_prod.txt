@@ -34,16 +34,14 @@ window.USER_ADDR = q.wallet;
 window.WALLET_NAME = q.walletname;
 const API_BASE = window.location.origin;
 
-// ✅ Inject parsed values into HTML labels
-document.getElementById("currentUserLabel").innerText = window.USER_ID;
-document.getElementById("currentWalletLabel").innerText = window.USER_ADDR;
-document.getElementById("currentWalletName").innerText = window.WALLET_NAME;
+// ✅ Inject parsed values directly into labels
+document.getElementById("currentUserLabel").innerText = "Current User: " + window.USER_ID;
+document.getElementById("currentWalletLabel").innerText = "Wallet Address: " + window.USER_ADDR;
+document.getElementById("currentWalletName").innerText = "Wallet Name: " + window.WALLET_NAME;
 
 logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
 
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
-
-
 // ✅ FIXED: Maps correctly to your specific HTML select element values
 function getSelectedToken() {
   const el = document.getElementById("tokenSelect");
