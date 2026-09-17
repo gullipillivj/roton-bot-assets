@@ -1,47 +1,51 @@
-// ✅ RoTon Bot Frontend Controller (V12 Exact HTML Binding Sync)
-function logToPanel(msg) {
-  const panel = document.getElementById("logPanel");
-  if (panel) {
-    panel.innerText += "\n" + msg;
-    panel.scrollTop = panel.scrollHeight;
-  } else {
-    console.log(msg);
+document.addEventListener("DOMContentLoaded", () => {
+  // ✅ RoTon Bot Frontend Controller (V12 Exact HTML Binding Sync)
+  function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    if (panel) {
+      panel.innerText += "\n" + msg;
+      panel.scrollTop = panel.scrollHeight;
+    } else {
+      console.log(msg);
+    }
   }
-}
-window.logToPanel = logToPanel;
+  window.logToPanel = logToPanel;
 
-logToPanel("main_prod.txt loaded successfully");
+  logToPanel("main_prod.txt loaded successfully");
 
-function getQueryParams() {
-  try {
-    const url = new URL(window.location.href);
-    const params = url.searchParams;
-    return {
-      userid: params.get("userid") || "unknown",
-      wallet: params.get("wallet") || null,
-      walletname: params.get("walletname") || "unknown"
-    };
-  } catch (err) {
-    logToPanel(`❌ URL parsing error: ${err.message}`);
-    return { userid: "unknown", wallet: null, walletname: "unknown" };
+  function getQueryParams() {
+    try {
+      const url = new URL(window.location.href);
+      const params = url.searchParams;
+      return {
+        userid: params.get("userid") || "unknown",
+        wallet: params.get("wallet") || null,
+        walletname: params.get("walletname") || "unknown"
+      };
+    } catch (err) {
+      logToPanel(`❌ URL parsing error: ${err.message}`);
+      return { userid: "unknown", wallet: null, walletname: "unknown" };
+    }
   }
-}
 
-// ✅ Parse URL params first
-const q = getQueryParams();
-window.USER_ID = q.userid;
-window.USER_ADDR = q.wallet;
-window.WALLET_NAME = q.walletname;
-const API_BASE = window.location.origin;
+  // ✅ Parse URL params first
+  const q = getQueryParams();
+  window.USER_ID = q.userid;
+  window.USER_ADDR = q.wallet;
+  window.WALLET_NAME = q.walletname;
+  const API_BASE = window.location.origin;
 
-// ✅ Inject parsed values directly into labels
-document.getElementById("currentUserLabel").innerText = "Current User: " + window.USER_ID;
-document.getElementById("currentWalletLabel").innerText = "Wallet Address: " + window.USER_ADDR;
-document.getElementById("currentWalletName").innerText = "Wallet Name: " + window.WALLET_NAME;
+  // ✅ Inject parsed values directly into labels
+  document.getElementById("currentUserLabel").innerText = "Current User: " + window.USER_ID;
+  document.getElementById("currentWalletLabel").innerText = "Wallet Address: " + window.USER_ADDR;
+  document.getElementById("currentWalletName").innerText = "Wallet Name: " + window.WALLET_NAME;
 
-logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
+  logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
 
-window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+  window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+});
+
+
 // ✅ FIXED: Maps correctly to your specific HTML select element values
 function getSelectedToken() {
   const el = document.getElementById("tokenSelect");
