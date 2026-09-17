@@ -12,26 +12,29 @@ function logToPanel(msg) {
 
 
 //run swap
+// ✅ runSwap (frontend delegates router choice to backend)
 async function runSwap(userAddr, bnbAmount, tokenAddress) {
   try {
-    const res = await fetch(`https://roton.store/prodbot/swap`, {
+    const res = await fetch(`${API_BASE}/prodbot/swap`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         userid: window.USER_ID,
-        router: "0x10ED43C718714eb63d5aA57B78B54704E256024E",
-        tokenIn: window.WBNB_TOKEN_ADDRESS,       // input token (BNB wrapped)
-        tokenOut: tokenAddress,                   // output token
-        amountIn: Math.floor(bnbAmount * 1e18),   // convert to wei
-        amountOutMin: 0,                          // set slippage minOut if needed
-        dstChainId: null,
-        recipient: userAddr
+        from_token: window.WBNB_TOKEN_ADDRESS,     // input token (BNB wrapped)
+        to_token: tokenAddress,                   // output token
+        amount: Math.floor(bnbAmount * 1e18),     // convert to wei
+        wallet: userAddr                          // recipient wallet
       })
     });
 
     const data = await res.json();
-    if (data.status === "success") {
-      logToPanel(`✅ Swap executed successfully. TxHash=${data.tx_hash}`);
+    if (data.status === "ok") {
+      logToPanel(`✅ Swap prepared: ${JSON.stringify(data)}`);
+      // 🔑 Next step: execute transaction with MetaMask
+      // window.ethereum.request({
+      //   method: "eth_sendTransaction",
+      //   params: [ { from: userAddr, to: V12_ADDR, data: data.swap_call } ]
+      // });
       return data;
     } else {
       logToPanel(`❌ Swap failed: ${data.message}`);
@@ -42,5 +45,6 @@ async function runSwap(userAddr, bnbAmount, tokenAddress) {
     return { status: "error", message: err.message };
   }
 }
+
 
 window.runSwap = runSwap;
