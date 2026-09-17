@@ -11,40 +11,68 @@ function logToPanel(msg) {
 } logToPanel;
 
 
-//run swap
+
 // ✅ runSwap (frontend delegates router choice to backend)
-async function runSwap(userAddr, bnbAmount, tokenAddress) {
+// ✅ runSwap (USDT -> Selected Token)
+async function runSwap(userAddr, usdtAmount, tokenAddress) {
   try {
+
+    const USDT_ADDRESS =
+      "0x55d398326f99059fF775485246999027B3197955";
+
+    const amountWei =
+      Math.floor(usdtAmount * 1e18).toString();
+
     const res = await fetch(`${API_BASE}/prodbot/swap`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
-        userid: window.USER_ID,
-        from_token: window.WBNB_TOKEN_ADDRESS,     // input token (BNB wrapped)
-        to_token: tokenAddress,                   // output token
-        amount: Math.floor(bnbAmount * 1e18),     // convert to wei
-        wallet: userAddr                          // recipient wallet
+        from_token: USDT_ADDRESS,
+        to_token: tokenAddress,
+        amount: amountWei
       })
     });
 
     const data = await res.json();
-    if (data.status === "ok") {
-      logToPanel(`✅ Swap prepared: ${JSON.stringify(data)}`);
-      // 🔑 Next step: execute transaction with MetaMask
-      // window.ethereum.request({
-      //   method: "eth_sendTransaction",
-      //   params: [ { from: userAddr, to: V12_ADDR, data: data.swap_call } ]
-      // });
-      return data;
-    } else {
+
+    if (data.status !== "ok") {
       logToPanel(`❌ Swap failed: ${data.message}`);
       return data;
     }
+
+    logToPanel(
+      `✅ Swap prepared: ${tokenAddress}`
+    );
+
+    const txHash = await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: userAddr,
+        to: data.contract,
+        data: data.swap_call
+      }]
+    });
+
+    logToPanel(`🎉 Swap submitted: ${txHash}`);
+
+    return {
+      status: "ok",
+      tx_hash: txHash
+    };
+
   } catch (err) {
-    logToPanel(`[SWAP ERROR] ${err.message}`);
-    return { status: "error", message: err.message };
+
+    logToPanel(`❌ Swap Error: ${err.message}`);
+
+    return {
+      status: "error",
+      message: err.message
+    };
   }
 }
+
 
 
 window.runSwap = runSwap;
