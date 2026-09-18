@@ -52,6 +52,10 @@ function getSelectedToken() {
   return "USDT";
 }
 
+//deposit button 
+// ========================================================
+// 🚀 DEPOSIT BUTTON MULTI-STEP BLOCKCHAIN PIPELINE ENGINE
+// ========================================================
 const depBtn = document.getElementById("depositBtn");
 if (depBtn) {
   depBtn.onclick = async function () {
@@ -75,18 +79,35 @@ if (depBtn) {
         const usdt = "0x55d398326f99059fF775485246999027B3197955";
         const v12 = "0x1854170353ea89672638F9fa5acB477c45523871";
 
-        // Step 1: ERC20 Allowance Approval
+        // ==========================================
+        // STEP 1/3: ERC20 ALLOWANCE APPROVAL
+        // ==========================================
         logToPanel("⏳ Step 1/3: Requesting USDT allowance allocation approval via MetaMask...");
         const approveData = "0x095ea7b3" + v12.replace("0x", "").padStart(64, "0") + BigInt(amount).toString(16).padStart(64, "0");
 
-        await window.ethereum.request({
+        const txHash1 = await window.ethereum.request({
           method: "eth_sendTransaction",
           params: [{ from: wallet, to: usdt, data: approveData }]
         });
-        logToPanel("✅ Step 1/3 Complete: USDT allowance approved successfully.");
+        logToPanel(`📡 Step 1 broadcasted! Hash: ${txHash1}. Waiting for block confirmation...`);
 
-        // Step 2: Contract Commission Verification Call
-        logToPanel("⏳ Step 2/3: Compiling on-chain contract commission parameters...");
+        // ⏱️ Wait for Step 1 block confirmation
+        let receipt1 = null;
+        while (receipt1 === null) {
+          await new Promise(r => setTimeout(r, 2000)); // sleep 2 seconds
+          try {
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            receipt1 = await provider.getTransactionReceipt(txHash1);
+          } catch (e) {
+            console.log("Awaiting block registry sync...");
+          }
+        }
+        logToPanel("✅ Step 1/3 Complete: USDT allowance is securely mined on-chain.");
+
+        // ==========================================
+        // STEP 2/3: SMART CONTRACT COMMISSION PHASE
+        // ==========================================
+        logToPanel("⏳ Step 2/3: Compiling contract commission metrics from backend...");
         const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -96,13 +117,32 @@ if (depBtn) {
 
         if (commission.status !== "ok") throw new Error(commission.message);
 
-        await window.ethereum.request({
+        logToPanel("🚀 Prompting MetaMask for Step 2/3 (Commission Payment)...");
+        const txHash2 = await window.ethereum.request({
           method: "eth_sendTransaction",
-          params: [{ from: wallet, to: commission.contract, data: commission.txdata }]
+          params: [{ 
+            from: wallet, 
+            to: commission.contract, 
+            data: commission.txdata,
+            gas: "0x3D090" // 250,000 gas limit override
+          }]
         });
-        logToPanel("✅ Step 2/3 Complete: Contract contract commission logged.");
+        logToPanel(`📡 Step 2 broadcasted! Hash: ${txHash2}. Waiting for block confirmation...`);
 
-        // Step 3: Capital Deposit Execution Call
+        // ⏱️ Wait for Step 2 block confirmation
+        let receipt2 = null;
+        while (receipt2 === null) {
+          await new Promise(r => setTimeout(r, 2000));
+          try {
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            receipt2 = await provider.getTransactionReceipt(txHash2);
+          } catch (e) {}
+        }
+        logToPanel("✅ Step 2/3 Complete: Contract commission processed successfully.");
+
+        // ==========================================
+        // STEP 3/3: FINAL TRADING CAPITAL DEPOSIT
+        // ==========================================
         logToPanel("⏳ Step 3/3: Deploying trading capital allocation to contract memory...");
         const c2 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
           method: "POST",
@@ -113,11 +153,18 @@ if (depBtn) {
 
         if (trading.status !== "ok") throw new Error(trading.message);
 
-        await window.ethereum.request({
+        logToPanel("🚀 Prompting MetaMask for Step 3/3 (Capital Pool Deposit)...");
+        const txHash3 = await window.ethereum.request({
           method: "eth_sendTransaction",
-          params: [{ from: wallet, to: trading.contract, data: trading.txdata }]
+          params: [{ 
+            from: wallet, 
+            to: trading.contract, 
+            data: trading.txdata,
+            gas: "0x3D090" 
+          }]
         });
-        logToPanel("🎉 Step 3/3 Complete: Capital pool deposit finalized successfully!");
+        logToPanel(`🎉 Step 3/3 Submitted! Broadcast Hash: ${txHash3}`);
+        logToPanel("🚀 Multi-step pipeline finished processing! Your trading account will update shortly.");
 
       } else if (token === "BNB") {
         logToPanel("⏳ Transmitting native gas reserves directly to V13 vault...");
@@ -136,6 +183,7 @@ if (depBtn) {
     }
   };
 }
+
 
 initializeLabels();
 
