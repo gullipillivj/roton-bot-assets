@@ -1,310 +1,144 @@
-document.addEventListener("DOMContentLoaded", () => {
-  // ✅ RoTon Bot Frontend Controller (V12 Exact HTML Binding Sync)
-  function logToPanel(msg) {
-    const panel = document.getElementById("logPanel");
-    if (panel) {
-      panel.innerText += "\n" + msg;
-      panel.scrollTop = panel.scrollHeight;
-    } else {
-      console.log(msg);
-    }
+// ✅ RoTon Bot Frontend Controller (V12 Pipeline Integration)
+function logToPanel(msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.innerText += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
   }
-  window.logToPanel = logToPanel;
+}
+window.logToPanel = logToPanel;
 
-  logToPanel("main_prod.txt loaded successfully");
+window.API_BASE = window.location.origin; 
+window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
-  function getQueryParams() {
-    try {
-      const url = new URL(window.location.href);
-      const params = url.searchParams;
-      return {
-        userid: params.get("userid") || "unknown",
-        wallet: params.get("wallet") || null,
-        walletname: params.get("walletname") || "unknown"
-      };
-    } catch (err) {
-      logToPanel(`❌ URL parsing error: ${err.message}`);
-      return { userid: "unknown", wallet: null, walletname: "unknown" };
-    }
+function getQueryParams() {
+  try {
+    const url = new URL(window.location.href);
+    const params = url.searchParams;
+    return {
+      userid: params.get("userid") || "unknown",
+      wallet: params.get("wallet") || null,
+      walletname: params.get("walletname") || "unknown"
+    };
+  } catch (err) {
+    return { userid: "unknown", wallet: null, walletname: "unknown" };
   }
+}
 
-  // ✅ Parse URL params first
-  const q = getQueryParams();
-  window.USER_ID = q.userid;
-  window.USER_ADDR = q.wallet;
-  window.WALLET_NAME = q.walletname;
-  const API_BASE = window.location.origin;
+const q = getQueryParams();
+window.USER_ID = q.userid;
+window.USER_ADDR = q.wallet;
+window.WALLET_NAME = q.walletname;
 
-  // ✅ Inject parsed values directly into labels
-  document.getElementById("currentUserLabel").innerText = "Current User: " + window.USER_ID;
-  document.getElementById("currentWalletLabel").innerText = "Wallet Address: " + window.USER_ADDR;
-  document.getElementById("currentWalletName").innerText = "Wallet Name: " + window.WALLET_NAME;
+function initializeLabels() {
+  const userLabel = document.getElementById("currentUserLabel");
+  const walletLabel = document.getElementById("currentWalletLabel");
+  const nameLabel = document.getElementById("currentWalletName");
 
-  logToPanel(`🔍 URL parsed — userid=${window.USER_ID}, wallet=${window.USER_ADDR}, walletname=${window.WALLET_NAME}`);
+  if (userLabel) userLabel.innerText = "Current User: " + window.USER_ID;
+  if (walletLabel) walletLabel.innerText = "Wallet Address: " + window.USER_ADDR;
+  if (nameLabel) nameLabel.innerText = "Wallet Name: " + window.WALLET_NAME;
+}
 
-  window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
-});
-
-
-// ✅ FIXED: Maps correctly to your specific HTML select element values
 function getSelectedToken() {
   const el = document.getElementById("tokenSelect");
   if (!el) return "USDT";
-  
   const val = el.value.toLowerCase();
-  // Check if it is the explicit USDT address hash from your HTML option
-  if (val === "0x55d398326f99059ff775485246999027b3197955") return "USDT";
+  if (val === "0x55d398326f99059ff775485246999027b3197955" || val === "usdt") return "USDT";
   if (val === "bnb") return "BNB";
   if (val === "eth") return "ETH";
   return "USDT";
 }
 
-async function syncBalanceFromFund() {
-  const runtimeUserAddress = window.USER_ADDR || q.wallet;
-  if (!runtimeUserAddress || runtimeUserAddress === "{wallet}") return 1000;
-  try {
-    const res = await fetch(`${API_BASE}/prodbot/balance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: String(runtimeUserAddress), token: "0x55d398326f99059fF775485246999027B3197955" })
-    });
-    const data = await res.json();
-    if (data.status === "ok") {
-      window.SolidarityFundBalance = parseFloat(data.balance) || 1000; 
-      return window.SolidarityFundBalance;
-    }
-  } catch (err) {
-    console.log(`Balance sync notice: ${err.message}`);
-  }
-  return 1000; 
-}
-window.syncBalanceFromFund = syncBalanceFromFund;
-// ==========================================
-// 🚀 METAMASK POPUP TRIGGER INTEGRATION
-// ==========================================
-
 const depBtn = document.getElementById("depositBtn");
-
 if (depBtn) {
+  depBtn.onclick = async function () {
+    const token = getSelectedToken();
+    const amountInput = document.getElementById("depositAmount");
+    const rawAmt = parseFloat(amountInput?.value || 0);
 
-    depBtn.onclick = async function () {
+    if (isNaN(rawAmt) || rawAmt <= 0) {
+      return logToPanel("❌ Action Halted: Enter a valid positive deposit amount.");
+    }
 
-        const token = getSelectedToken();
+    const amount = BigInt(Math.floor(rawAmt * 1e18)).toString();
+    const wallet = window.USER_ADDR;
 
-        const amountInput =
-            document.getElementById("depositAmount");
+    if (!wallet || wallet === "{wallet}") {
+      return logToPanel("❌ Action Halted: Connect Web3 Wallet First.");
+    }
 
-        const rawAmt =
-            parseFloat(amountInput?.value || 0);
+    try {
+      if (token === "USDT") {
+        const usdt = "0x55d398326f99059fF775485246999027B3197955";
+        const v12 = "0x1854170353ea89672638F9fa5acB477c45523871";
 
-        if (isNaN(rawAmt) || rawAmt <= 0) {
+        // Step 1: ERC20 Allowance Approval
+        logToPanel("⏳ Step 1/3: Requesting USDT allowance allocation approval via MetaMask...");
+        const approveData = "0x095ea7b3" + v12.replace("0x", "").padStart(64, "0") + BigInt(amount).toString(16).padStart(64, "0");
 
-            logToPanel(
-                "❌ Enter a valid deposit amount."
-            );
+        await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ from: wallet, to: usdt, data: approveData }]
+        });
+        logToPanel("✅ Step 1/3 Complete: USDT allowance approved successfully.");
 
-            return;
-        }
+        // Step 2: Contract Commission Verification Call
+        logToPanel("⏳ Step 2/3: Compiling on-chain contract commission parameters...");
+        const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: amount, tradingPhase: false })
+        });
+        const commission = await c1.json();
 
-        const amount =
-            BigInt(
-                Math.floor(rawAmt * 1e18)
-            ).toString();
+        if (commission.status !== "ok") throw new Error(commission.message);
 
-        const wallet =
-            window.USER_ADDR;
+        await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ from: wallet, to: commission.contract, data: commission.txdata }]
+        });
+        logToPanel("✅ Step 2/3 Complete: Contract contract commission logged.");
 
-        if (!wallet) {
+        // Step 3: Capital Deposit Execution Call
+        logToPanel("⏳ Step 3/3: Deploying trading capital allocation to contract memory...");
+        const c2 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: amount, tradingPhase: true })
+        });
+        const trading = await c2.json();
 
-            logToPanel(
-                "❌ Connect Wallet First"
-            );
+        if (trading.status !== "ok") throw new Error(trading.message);
 
-            return;
-        }
+        await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ from: wallet, to: trading.contract, data: trading.txdata }]
+        });
+        logToPanel("🎉 Step 3/3 Complete: Capital pool deposit finalized successfully!");
 
-        try {
-
-            // ==========================
-            // USDT → V12
-            // ==========================
-
-            if (token === "USDT") {
-
-                const usdt =
-                    "0x55d398326f99059fF775485246999027B3197955";
-
-                const v12 =
-                    "0x1854170353ea89672638F9fa5acB477c45523871";
-
-                logToPanel(
-                    "⏳ Approving USDT..."
-                );
-
-                const approveData =
-                    "0x095ea7b3" +
-                    v12.replace("0x", "")
-                       .padStart(64, "0") +
-                    BigInt(amount)
-                       .toString(16)
-                       .padStart(64, "0");
-
-                await window.ethereum.request({
-                    method: "eth_sendTransaction",
-                    params: [{
-                        from: wallet,
-                        to: usdt,
-                        data: approveData
-                    }]
-                });
-
-                logToPanel(
-                    "✅ USDT approved"
-                );
-
-                // Commission payment
-
-                const c1 =
-                    await fetch(
-                        `${window.API_BASE}/prodbot/deposit/usdt/commission`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-                            body: JSON.stringify({
-                                amount: amount
-                            })
-                        }
-                    );
-
-                const commission =
-                    await c1.json();
-
-                await window.ethereum.request({
-                    method: "eth_sendTransaction",
-                    params: [{
-                        from: wallet,
-                        to: commission.contract,
-                        data: commission.txdata
-                    }]
-                });
-
-                logToPanel(
-                    "✅ Commission processed"
-                );
-
-                // Trading Deposit
-
-                const c2 =
-                    await fetch(
-                        `${window.API_BASE}/prodbot/deposit/usdt/trading`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-                            body: JSON.stringify({
-                                amount: amount
-                            })
-                        }
-                    );
-
-                const trading =
-                    await c2.json();
-
-                await window.ethereum.request({
-                    method: "eth_sendTransaction",
-                    params: [{
-                        from: wallet,
-                        to: trading.contract,
-                        data: trading.txdata
-                    }]
-                });
-
-                logToPanel(
-                    "🎉 Trading deposit complete"
-                );
-            }
-
-            // ==========================
-            // BNB → V13
-            // ==========================
-
-            else if (token === "BNB") {
-
-                await window.ethereum.request({
-                    method: "eth_sendTransaction",
-                    params: [{
-                        from: wallet,
-                        to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
-                        value:
-                            "0x" +
-                            BigInt(amount).toString(16)
-                    }]
-                });
-
-                logToPanel(
-                    "✅ BNB deposited to V13"
-                );
-            }
-
-            // ==========================
-            // ETH → V13
-            // ==========================
-
-            else if (token === "ETH") {
-
-                const ethDeposit =
-                    await fetch(
-                        `${window.API_BASE}/prodbot/deposit/eth`,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-                            body: JSON.stringify({
-                                amount: amount
-                            })
-                        }
-                    );
-
-                const ethData =
-                    await ethDeposit.json();
-
-                await window.ethereum.request({
-                    method: "eth_sendTransaction",
-                    params: [{
-                        from: wallet,
-                        to: ethData.contract,
-                        data: ethData.txdata
-                    }]
-                });
-
-                logToPanel(
-                    "✅ ETH deposited to V13"
-                );
-            }
-
-        } catch (err) {
-
-            logToPanel(
-                `❌ Deposit Error: ${err.message}`
-            );
-
-            console.error(err);
-        }
-    };
-
+      } else if (token === "BNB") {
+        logToPanel("⏳ Transmitting native gas reserves directly to V13 vault...");
+        await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{
+            from: wallet,
+            to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
+            value: "0x" + BigInt(amount).toString(16)
+          }]
+        });
+        logToPanel("✅ BNB gas asset deposited to V13.");
+      }
+    } catch (err) {
+      logToPanel(`❌ Execution Error: ${err.message}`);
+    }
+  };
 }
 
+initializeLabels();
 
-
-
-//✅ Connect Wallet Click Target
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
@@ -312,7 +146,6 @@ if (connBtn) {
       try {
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
         window.USER_ADDR = String(accounts[0]).toLowerCase(); 
-        
         const label = document.getElementById("currentWalletLabel");
         if (label) label.innerText = window.USER_ADDR;
         logToPanel(`✅ Wallet linked: ${window.USER_ADDR}`);
@@ -320,12 +153,11 @@ if (connBtn) {
         logToPanel(`❌ Connection error: ${err.message}`);
       }
     } else {
-      logToPanel("❌ MetaMask provider extension framework not detected.");
+      logToPanel("❌ MetaMask extension framework not detected.");
     }
   };
 }
 
-// Start Trading Simulation Hook
 const strtBtn = document.getElementById("startBtn");
 if (strtBtn) {
   strtBtn.onclick = function() {
@@ -338,7 +170,6 @@ if (strtBtn) {
   };
 }
 
-// Stop Bot Safety Hook
 const stpBtn = document.getElementById("stopBtn");
 if (stpBtn) {
   stpBtn.onclick = function() {
