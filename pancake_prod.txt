@@ -13,17 +13,27 @@ function logToPanel(msg) {
 
 
 // ✅ runSwap (frontend delegates router choice to backend)
-// ✅ runSwap (USDT -> Selected Token)
+// ✅ Synchronized runSwap Execution Framework (USDT -> Selected Asset Target)
 async function runSwap(userAddr, usdtAmount, tokenAddress) {
   try {
+    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
 
-    const USDT_ADDRESS =
-      "0x55d398326f99059fF775485246999027B3197955";
+    if (!userAddr || userAddr === "{wallet}") {
+      logToPanel("❌ Swap Aborted: Web3 execution identity is invalid or disconnected.");
+      return { status: "error", message: "Invalid user wallet configuration" };
+    }
 
-    const amountWei =
-      Math.floor(usdtAmount * 1e18).toString();
+    if (!tokenAddress) {
+      logToPanel("❌ Swap Aborted: Target destination token address missing.");
+      return { status: "error", message: "Target token undefined" };
+    }
 
-    const res = await fetch(`${API_BASE}/prodbot/swap`, {
+    // Convert raw simulation inputs into standard decimal notation
+    const amountWei = BigInt(Math.floor(parseFloat(usdtAmount) * 1e18)).toString();
+
+    logToPanel(`⏳ Transmitting swap data to server: ${usdtAmount} USDT -> ${tokenAddress}`);
+
+    const res = await fetch(`${window.API_BASE}/prodbot/swap`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -35,27 +45,31 @@ async function runSwap(userAddr, usdtAmount, tokenAddress) {
       })
     });
 
+    if (!res.ok) {
+      throw new Error(`Server returned HTTP network error status code ${res.status}`);
+    }
+
     const data = await res.json();
 
     if (data.status !== "ok") {
-      logToPanel(`❌ Swap failed: ${data.message}`);
+      logToPanel(`❌ Swap Pipeline Processing Error: ${data.message}`);
       return data;
     }
 
-    logToPanel(
-      `✅ Swap prepared: ${tokenAddress}`
-    );
+    logToPanel(`📡 Swap verified on server! Prompting MetaMask for contract execution signatures...`);
 
+    // Execute transaction payload against V12 Engine smart contract architecture
     const txHash = await window.ethereum.request({
       method: "eth_sendTransaction",
       params: [{
         from: userAddr,
-        to: data.contract,
-        data: data.swap_call
+        to: data.contract, // Resolves safely to V12_ADDR
+        data: data.swap_call,
+        gas: "0x5B8D8" // 375,000 gas limit override to protect complex cross-pool path processing
       }]
     });
 
-    logToPanel(`🎉 Swap submitted: ${txHash}`);
+    logToPanel(`🎉 Automation Swap Dispatched Successfully! Hash: ${txHash}`);
 
     return {
       status: "ok",
@@ -63,16 +77,12 @@ async function runSwap(userAddr, usdtAmount, tokenAddress) {
     };
 
   } catch (err) {
-
-    logToPanel(`❌ Swap Error: ${err.message}`);
-
+    logToPanel(`❌ Swap Engine Interface Error: ${err.message}`);
     return {
       status: "error",
       message: err.message
     };
   }
 }
-
-
 
 window.runSwap = runSwap;
