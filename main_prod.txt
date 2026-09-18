@@ -67,9 +67,14 @@ if (depBtn) {
       return logToPanel("❌ Action Halted: Enter a valid positive deposit amount.");
     }
 
-    const amount = BigInt(Math.floor(rawAmt * 1e18)).toString();
-    const wallet = window.USER_ADDR;
+    // Convert core user input to base units (18 decimals)
+    const principalAmount = BigInt(Math.floor(rawAmt * 1e18));
+    // Calculate commission buffer local check (0.04% matching Solidity logic)
+    const commissionBuffer = (principalAmount * 4n) / 10000n;
+    // Total allowance needed to survive both contract transfers seamlessly
+    const totalAllowance = principalAmount + commissionBuffer;
 
+    const wallet = window.USER_ADDR;
     if (!wallet || wallet === "{wallet}") {
       return logToPanel("❌ Action Halted: Connect Web3 Wallet First.");
     }
@@ -79,70 +84,72 @@ if (depBtn) {
         const usdt = "0x55d398326f99059fF775485246999027B3197955";
         const v12 = "0x1854170353ea89672638F9fa5acB477c45523871";
 
-        // ==========================================
-        // STEP 1/3: ERC20 ALLOWANCE APPROVAL
-        // ==========================================
-        logToPanel("⏳ Step 1/3: Prompting MetaMask for USDT allowance approval...");
-        const approveData = "0x095ea7b3" + v12.replace("0x", "").padStart(64, "0") + BigInt(amount).toString(16).padStart(64, "0");
+        // =========================================================
+        // STEP 1/3: ERC20 ALLOWANCE APPROVAL (Total = Capital + Fee)
+        // =========================================================
+        logToPanel("⏳ Step 1/3: Requesting total USDT approval allowance via MetaMask...");
+        const approveData = "0x095ea7b3" + 
+                            v12.replace("0x", "").padStart(64, "0") + 
+                            totalAllowance.toString(16).padStart(64, "0");
 
         const txHash1 = await window.ethereum.request({
           method: "eth_sendTransaction",
           params: [{ from: wallet, to: usdt, data: approveData }]
         });
-        logToPanel(`📡 Step 1 Broadcasted! Hash: ${txHash1}`);
+        logToPanel(`📡 Step 1 Broadcasted! Hash: ${txHash1}. Initiating pipeline transitions...`);
 
-        // ==========================================
-        // STEP 2/3: SMART CONTRACT COMMISSION PHASE
-        // ==========================================
-        logToPanel("⏳ Step 2/3: Fetching commission data from backend...");
+        // =========================================================
+        // STEP 2/3: SMART CONTRACT COMMISSION FEE COLLECTION
+        // =========================================================
+        logToPanel("⏳ Step 2/3: Fetching commission data metrics from ecosystem backend...");
         const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: amount, tradingPhase: false })
+          body: JSON.stringify({ amount: principalAmount.toString(), tradingPhase: false })
         });
         
-        if (!c1.ok) throw new Error(`Backend Error ${c1.status} during Commission phase.`);
-        const commission = await c1.json();
-        if (commission.status !== "ok") throw new Error(commission.message);
+        if (!c1.ok) throw new Error(`Backend Error ${c1.status} inside commission setup.`);
+        const commissionPay = await c1.json();
+        if (commissionPay.status !== "ok") throw new Error(commissionPay.message);
 
-        logToPanel("🚀 Prompting MetaMask for Step 2/3 (Commission Payment)...");
+        logToPanel("🚀 Prompting MetaMask for Step 2/3 (Process Commission)...");
         const txHash2 = await window.ethereum.request({
           method: "eth_sendTransaction",
           params: [{ 
             from: wallet, 
-            to: commission.contract, 
-            data: commission.txdata,
-            gas: "0x3D090" // 250,000 gas limit override
+            to: commissionPay.contract, 
+            data: commissionPay.txdata,
+            gas: "0x493E0" // Upgraded gas limit to 300,000 to prevent out-of-gas contract failures
           }]
         });
         logToPanel(`📡 Step 2 Broadcasted! Hash: ${txHash2}`);
 
-        // ==========================================
+        // =========================================================
         // STEP 3/3: FINAL TRADING CAPITAL DEPOSIT
-        // ==========================================
-        logToPanel("⏳ Step 3/3: Fetching trading capital metrics from backend...");
+        // =========================================================
+        logToPanel("⏳ Step 3/3: Fetching final trading layout variables...");
         const c2 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: amount, tradingPhase: true })
+          body: JSON.stringify({ amount: principalAmount.toString(), tradingPhase: true })
         });
         
-        if (!c2.ok) throw new Error(`Backend Error ${c2.status} during Trading phase.`);
-        const trading = await c2.json();
-        if (trading.status !== "ok") throw new Error(trading.message);
+        if (!c2.ok) throw new Error(`Backend Error ${c2.status} inside trading structure setup.`);
+        const tradingPay = await c2.json();
+        if (tradingPay.status !== "ok") throw new Error(tradingPay.message);
 
-        logToPanel("🚀 Prompting MetaMask for Step 3/3 (Capital Pool Deposit)...");
+        logToPanel("🚀 Prompting MetaMask for Step 3/3 (Process Capital Deposit)...");
         const txHash3 = await window.ethereum.request({
           method: "eth_sendTransaction",
           params: [{ 
             from: wallet, 
-            to: trading.contract, 
-            data: trading.txdata,
-            gas: "0x3D090" 
+            to: tradingPay.contract, 
+            data: tradingPay.txdata,
+            gas: "0x493E0" 
           }]
         });
-        logToPanel(`🎉 Step 3/3 Broadcasted! Hash: ${txHash3}`);
-        logToPanel("🚀 All transactions have been successfully pushed to MetaMask queue!");
+        logToPanel(`🎉 Step 3/3 Submitted! Capital Deposit Hash: ${txHash3}`);
+        logToPanel("🚀 Complete pipeline successfully offloaded to MetaMask execution queue!");
 
       } else if (token === "BNB") {
         logToPanel("⏳ Transmitting native gas reserves directly to V13 vault...");
@@ -150,17 +157,18 @@ if (depBtn) {
           method: "eth_sendTransaction",
           params: [{
             from: wallet,
-            to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
-            value: "0x" + BigInt(amount).toString(16)
+            to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5", // Matches V13 Gas Reserve Address
+            value: "0x" + principalAmount.toString(16)
           }]
         });
-        logToPanel(`✅ BNB gas asset deposited. Hash: ${txHashBnb}`);
+        logToPanel(`✅ Native BNB gas vault transaction dispatched: ${txHashBnb}`);
       }
     } catch (err) {
-      logToPanel(`❌ Execution Error: ${err.message}`);
+      logToPanel(`❌ Execution Engine Failure: ${err.message}`);
     }
   };
 }
+
 
 
 initializeLabels();
