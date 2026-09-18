@@ -82,59 +82,53 @@ if (depBtn) {
         // ==========================================
         // STEP 1/3: ERC20 ALLOWANCE APPROVAL
         // ==========================================
-        logToPanel("⏳ Step 1/3: Requesting USDT allowance allocation approval via MetaMask...");
+        logToPanel("⏳ Step 1/3: Prompting MetaMask for USDT allowance approval...");
         const approveData = "0x095ea7b3" + v12.replace("0x", "").padStart(64, "0") + BigInt(amount).toString(16).padStart(64, "0");
 
         const txHash1 = await window.ethereum.request({
           method: "eth_sendTransaction",
           params: [{ from: wallet, to: usdt, data: approveData }]
         });
-        logToPanel(`📡 Step 1 broadcasted! Hash: ${txHash1}. Waiting for block confirmation...`);
+        logToPanel(`📡 Step 1 Broadcasted! Hash: ${txHash1}`);
 
-        // ⏱️ Wait for Step 1 block confirmation
-        let receipt1 = null;
-        while (receipt1 === null) {
-          await new Promise(r => setTimeout(r, 2000)); // sleep 2 seconds
-          try {
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            receipt1 = await provider.getTransactionReceipt(txHash1);
-          } catch (e) {
-            console.log("Awaiting block registry sync...");
-          }
-        }
-        logToPanel("✅ Step 1/3 Complete: USDT allowance is securely mined on-chain.");
+        // ==========================================
+        // STEP 2/3: SMART CONTRACT COMMISSION PHASE
+        // ==========================================
+        logToPanel("⏳ Step 2/3: Fetching commission data from backend...");
+        const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: amount, tradingPhase: false })
+        });
+        
+        if (!c1.ok) throw new Error(`Backend Error ${c1.status} during Commission phase.`);
+        const commission = await c1.json();
+        if (commission.status !== "ok") throw new Error(commission.message);
 
-     // ==========================================
-// STEP 2/3: SMART CONTRACT COMMISSION PHASE
-// ==========================================
-logToPanel("⏳ Step 2/3: Compiling contract commission metrics from backend...");
-const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ amount: amount, tradingPhase: false })
-});
-
-// Check if the response was successful before parsing JSON
-if (!c1.ok) {
-  const errorText = await c1.text();
-  console.error("Server returned non-OK status:", c1.status, errorText);
-  throw new Error(`Server returned status code ${c1.status}. Check backend terminal console logs.`);
-}
-
-const commission = await c1.json();
-if (commission.status !== "ok") throw new Error(commission.message);
+        logToPanel("🚀 Prompting MetaMask for Step 2/3 (Commission Payment)...");
+        const txHash2 = await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ 
+            from: wallet, 
+            to: commission.contract, 
+            data: commission.txdata,
+            gas: "0x3D090" // 250,000 gas limit override
+          }]
+        });
+        logToPanel(`📡 Step 2 Broadcasted! Hash: ${txHash2}`);
 
         // ==========================================
         // STEP 3/3: FINAL TRADING CAPITAL DEPOSIT
         // ==========================================
-        logToPanel("⏳ Step 3/3: Deploying trading capital allocation to contract memory...");
+        logToPanel("⏳ Step 3/3: Fetching trading capital metrics from backend...");
         const c2 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ amount: amount, tradingPhase: true })
         });
+        
+        if (!c2.ok) throw new Error(`Backend Error ${c2.status} during Trading phase.`);
         const trading = await c2.json();
-
         if (trading.status !== "ok") throw new Error(trading.message);
 
         logToPanel("🚀 Prompting MetaMask for Step 3/3 (Capital Pool Deposit)...");
@@ -147,12 +141,12 @@ if (commission.status !== "ok") throw new Error(commission.message);
             gas: "0x3D090" 
           }]
         });
-        logToPanel(`🎉 Step 3/3 Submitted! Broadcast Hash: ${txHash3}`);
-        logToPanel("🚀 Multi-step pipeline finished processing! Your trading account will update shortly.");
+        logToPanel(`🎉 Step 3/3 Broadcasted! Hash: ${txHash3}`);
+        logToPanel("🚀 All transactions have been successfully pushed to MetaMask queue!");
 
       } else if (token === "BNB") {
         logToPanel("⏳ Transmitting native gas reserves directly to V13 vault...");
-        await window.ethereum.request({
+        const txHashBnb = await window.ethereum.request({
           method: "eth_sendTransaction",
           params: [{
             from: wallet,
@@ -160,7 +154,7 @@ if (commission.status !== "ok") throw new Error(commission.message);
             value: "0x" + BigInt(amount).toString(16)
           }]
         });
-        logToPanel("✅ BNB gas asset deposited to V13.");
+        logToPanel(`✅ BNB gas asset deposited. Hash: ${txHashBnb}`);
       }
     } catch (err) {
       logToPanel(`❌ Execution Error: ${err.message}`);
