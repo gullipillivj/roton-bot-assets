@@ -79,140 +79,232 @@ async function syncBalanceFromFund() {
   return 1000; 
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
-
 // ==========================================
 // 🚀 METAMASK POPUP TRIGGER INTEGRATION
 // ==========================================
-depBtn.onclick = async function () {
 
-    const token = getSelectedToken();
+const depBtn = document.getElementById("depositBtn");
 
-    const rawAmt =
-        parseFloat(
-            document.getElementById("depositAmount").value
-        );
+if (depBtn) {
 
-    const amount =
-        BigInt(
-            Math.floor(rawAmt * 1e18)
-        ).toString();
+    depBtn.onclick = async function () {
 
-    const wallet =
-        window.USER_ADDR;
+        const token = getSelectedToken();
 
-    if (!wallet) {
-        logToPanel("Connect Wallet First");
-        return;
-    }
+        const amountInput =
+            document.getElementById("depositAmount");
 
-    try {
+        const rawAmt =
+            parseFloat(amountInput?.value || 0);
 
-        if (token === "USDT") {
-
-            const usdt =
-                "0x55d398326f99059fF775485246999027B3197955";
-
-            const v12 =
-                "0x1854170353ea89672638F9fa5acB477c45523871";
-
-            const approveData =
-                "0x095ea7b3" +
-                v12.replace("0x","").padStart(64,"0") +
-                BigInt(amount).toString(16).padStart(64,"0");
-
-            await ethereum.request({
-                method: "eth_sendTransaction",
-                params: [{
-                    from: wallet,
-                    to: usdt,
-                    data: approveData
-                }]
-            });
-
-            logToPanel("USDT approved");
-
-            const c1 = await fetch("/prodbot/deposit/usdt/commission",{
-                method:"POST",
-                headers:{
-                    "Content-Type":"application/json"
-                },
-                body:JSON.stringify({
-                    amount:amount
-                })
-            });
-
-            const commission =
-                await c1.json();
-
-            await ethereum.request({
-                method:"eth_sendTransaction",
-                params:[{
-                    from:wallet,
-                    to:commission.contract,
-                    data:commission.txdata
-                }]
-            });
-
-            logToPanel("Commission paid");
-
-            const c2 = await fetch("/prodbot/deposit/usdt/trading",{
-                method:"POST",
-                headers:{
-                    "Content-Type":"application/json"
-                },
-                body:JSON.stringify({
-                    amount:amount
-                })
-            });
-
-            const trading =
-                await c2.json();
-
-            await ethereum.request({
-                method:"eth_sendTransaction",
-                params:[{
-                    from:wallet,
-                    to:trading.contract,
-                    data:trading.txdata
-                }]
-            });
-
-            logToPanel("Trading deposit complete");
-        }
-
-        else if (token === "BNB") {
-
-            await ethereum.request({
-                method:"eth_sendTransaction",
-                params:[{
-                    from:wallet,
-                    to:"0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
-                    value:"0x" + BigInt(amount).toString(16)
-                }]
-            });
-
-            logToPanel("BNB deposited to V13");
-        }
-
-        else if (token === "ETH") {
+        if (isNaN(rawAmt) || rawAmt <= 0) {
 
             logToPanel(
-                "Approve ETH token then call depositToken()"
+                "❌ Enter a valid deposit amount."
             );
+
+            return;
         }
 
-    } catch(err) {
+        const amount =
+            BigInt(
+                Math.floor(rawAmt * 1e18)
+            ).toString();
 
-        logToPanel(
-            "Deposit Error: " + err.message
-        );
+        const wallet =
+            window.USER_ADDR;
 
-    }
-};
+        if (!wallet) {
+
+            logToPanel(
+                "❌ Connect Wallet First"
+            );
+
+            return;
+        }
+
+        try {
+
+            // ==========================
+            // USDT → V12
+            // ==========================
+
+            if (token === "USDT") {
+
+                const usdt =
+                    "0x55d398326f99059fF775485246999027B3197955";
+
+                const v12 =
+                    "0x1854170353ea89672638F9fa5acB477c45523871";
+
+                logToPanel(
+                    "⏳ Approving USDT..."
+                );
+
+                const approveData =
+                    "0x095ea7b3" +
+                    v12.replace("0x", "")
+                       .padStart(64, "0") +
+                    BigInt(amount)
+                       .toString(16)
+                       .padStart(64, "0");
+
+                await window.ethereum.request({
+                    method: "eth_sendTransaction",
+                    params: [{
+                        from: wallet,
+                        to: usdt,
+                        data: approveData
+                    }]
+                });
+
+                logToPanel(
+                    "✅ USDT approved"
+                );
+
+                // Commission payment
+
+                const c1 =
+                    await fetch(
+                        `${window.API_BASE}/prodbot/deposit/usdt/commission`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+                            body: JSON.stringify({
+                                amount: amount
+                            })
+                        }
+                    );
+
+                const commission =
+                    await c1.json();
+
+                await window.ethereum.request({
+                    method: "eth_sendTransaction",
+                    params: [{
+                        from: wallet,
+                        to: commission.contract,
+                        data: commission.txdata
+                    }]
+                });
+
+                logToPanel(
+                    "✅ Commission processed"
+                );
+
+                // Trading Deposit
+
+                const c2 =
+                    await fetch(
+                        `${window.API_BASE}/prodbot/deposit/usdt/trading`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+                            body: JSON.stringify({
+                                amount: amount
+                            })
+                        }
+                    );
+
+                const trading =
+                    await c2.json();
+
+                await window.ethereum.request({
+                    method: "eth_sendTransaction",
+                    params: [{
+                        from: wallet,
+                        to: trading.contract,
+                        data: trading.txdata
+                    }]
+                });
+
+                logToPanel(
+                    "🎉 Trading deposit complete"
+                );
+            }
+
+            // ==========================
+            // BNB → V13
+            // ==========================
+
+            else if (token === "BNB") {
+
+                await window.ethereum.request({
+                    method: "eth_sendTransaction",
+                    params: [{
+                        from: wallet,
+                        to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
+                        value:
+                            "0x" +
+                            BigInt(amount).toString(16)
+                    }]
+                });
+
+                logToPanel(
+                    "✅ BNB deposited to V13"
+                );
+            }
+
+            // ==========================
+            // ETH → V13
+            // ==========================
+
+            else if (token === "ETH") {
+
+                const ethDeposit =
+                    await fetch(
+                        `${window.API_BASE}/prodbot/deposit/eth`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+                            body: JSON.stringify({
+                                amount: amount
+                            })
+                        }
+                    );
+
+                const ethData =
+                    await ethDeposit.json();
+
+                await window.ethereum.request({
+                    method: "eth_sendTransaction",
+                    params: [{
+                        from: wallet,
+                        to: ethData.contract,
+                        data: ethData.txdata
+                    }]
+                });
+
+                logToPanel(
+                    "✅ ETH deposited to V13"
+                );
+            }
+
+        } catch (err) {
+
+            logToPanel(
+                `❌ Deposit Error: ${err.message}`
+            );
+
+            console.error(err);
+        }
+    };
+
+}
 
 
 
-// Connect Wallet Click Target
+
+//✅ Connect Wallet Click Target
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
