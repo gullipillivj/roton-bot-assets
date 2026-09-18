@@ -1,4 +1,4 @@
-// ✅ RoTon Bot Frontend Controller (V12 Web3JS Compliant Sync - Part 1)
+// ✅ RoTon Bot Frontend Controller (V12 Pipeline Integration)
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -10,15 +10,8 @@ function logToPanel(msg) {
 }
 window.logToPanel = logToPanel;
 
-logToPanel("main_prod.txt loaded successfully");
-
 window.API_BASE = window.location.origin; 
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
-
-// Initialize standard web3 object using window.ethereum provider if available
-if (typeof window.ethereum !== "undefined" && typeof Web3 !== "undefined") {
-    window.web3 = new Web3(window.ethereum);
-}
 
 function getQueryParams() {
   try {
@@ -59,27 +52,10 @@ function getSelectedToken() {
   return "USDT";
 }
 
-async function syncBalanceFromFund() {
-  if (!window.USER_ADDR) return 0;
-  try {
-    const res = await fetch(`${window.API_BASE}/prodbot/balance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ user: String(window.USER_ADDR), token: "0x55d398326f99059fF775485246999027B3197955" })
-    });
-    const data = await res.json();
-    if (data.status === "ok") {
-      window.SolidarityFundBalance = parseFloat(data.balance) || 0; 
-      return window.SolidarityFundBalance;
-    }
-  } catch (err) {
-    console.log(`Balance sync notice: ${err.message}`);
-  }
-  return 0; 
-}
-window.syncBalanceFromFund = syncBalanceFromFund;
-
-// ✅ RoTon Bot Frontend Controller (V12 Web3JS Compliant Sync - Part 2)
+//deposit button 
+// ========================================================
+// 🚀 DEPOSIT BUTTON MULTI-STEP BLOCKCHAIN PIPELINE ENGINE
+// ========================================================
 const depBtn = document.getElementById("depositBtn");
 if (depBtn) {
   depBtn.onclick = async function () {
@@ -103,10 +79,6 @@ if (depBtn) {
         const usdt = "0x55d398326f99059fF775485246999027B3197955";
         const v12 = "0x1854170353ea89672638F9fa5acB477c45523871";
 
-        if (!window.web3 && typeof Web3 !== "undefined") {
-            window.web3 = new Web3(window.ethereum);
-        }
-
         // ==========================================
         // STEP 1/3: ERC20 ALLOWANCE APPROVAL
         // ==========================================
@@ -119,17 +91,15 @@ if (depBtn) {
         });
         logToPanel(`📡 Step 1 broadcasted! Hash: ${txHash1}. Waiting for block confirmation...`);
 
+        // ⏱️ Wait for Step 1 block confirmation
         let receipt1 = null;
         while (receipt1 === null) {
-          await new Promise(r => setTimeout(r, 2000)); 
+          await new Promise(r => setTimeout(r, 2000)); // sleep 2 seconds
           try {
-            if (window.web3) {
-                receipt1 = await window.web3.eth.getTransactionReceipt(txHash1);
-            } else {
-                break;
-            }
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            receipt1 = await provider.getTransactionReceipt(txHash1);
           } catch (e) {
-            console.log("Awaiting block mining update...");
+            console.log("Awaiting block registry sync...");
           }
         }
         logToPanel("✅ Step 1/3 Complete: USDT allowance is securely mined on-chain.");
@@ -154,20 +124,18 @@ if (depBtn) {
             from: wallet, 
             to: commission.contract, 
             data: commission.txdata,
-            gas: "0x3D090" 
+            gas: "0x3D090" // 250,000 gas limit override
           }]
         });
         logToPanel(`📡 Step 2 broadcasted! Hash: ${txHash2}. Waiting for block confirmation...`);
 
+        // ⏱️ Wait for Step 2 block confirmation
         let receipt2 = null;
         while (receipt2 === null) {
           await new Promise(r => setTimeout(r, 2000));
           try {
-            if (window.web3) {
-                receipt2 = await window.web3.eth.getTransactionReceipt(txHash2);
-            } else {
-                break;
-            }
+            const provider = new ethers.providers.Web3Provider(window.ethereum);
+            receipt2 = await provider.getTransactionReceipt(txHash2);
           } catch (e) {}
         }
         logToPanel("✅ Step 2/3 Complete: Contract commission processed successfully.");
@@ -216,6 +184,7 @@ if (depBtn) {
   };
 }
 
+
 initializeLabels();
 
 const connBtn = document.getElementById("connectwalletBtn");
@@ -228,9 +197,6 @@ if (connBtn) {
         const label = document.getElementById("currentWalletLabel");
         if (label) label.innerText = window.USER_ADDR;
         logToPanel(`✅ Wallet linked: ${window.USER_ADDR}`);
-        if (!window.web3 && typeof Web3 !== "undefined") {
-            window.web3 = new Web3(window.ethereum);
-        }
       } catch (err) {
         logToPanel(`❌ Connection error: ${err.message}`);
       }
