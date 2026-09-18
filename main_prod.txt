@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.USER_ID = q.userid;
   window.USER_ADDR = q.wallet;
   window.WALLET_NAME = q.walletname;
-  const API_BASE = window.location.origin;
+  window.API_BASE = window.location.origin;
 
   // ✅ Inject parsed values directly into labels
   document.getElementById("currentUserLabel").innerText = "Current User: " + window.USER_ID;
