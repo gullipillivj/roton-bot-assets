@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.USER_ID = q.userid;
   window.USER_ADDR = q.wallet;
   window.WALLET_NAME = q.walletname;
-  window.API_BASE = window.location.origin;
+  const API_BASE = window.location.origin;
 
   // ✅ Inject parsed values directly into labels
   document.getElementById("currentUserLabel").innerText = "Current User: " + window.USER_ID;
@@ -79,14 +79,8 @@ async function syncBalanceFromFund() {
   return 1000; 
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
-
-
 // ==========================================
 // 🚀 METAMASK POPUP TRIGGER INTEGRATION
-// ==========================================
-
-c// ==========================================
-// 🚀 DEPOSIT BUTTON
 // ==========================================
 
 const depBtn = document.getElementById("depositBtn");
@@ -97,10 +91,11 @@ if (depBtn) {
 
         const token = getSelectedToken();
 
+        const amountInput =
+            document.getElementById("depositAmount");
+
         const rawAmt =
-            parseFloat(
-                document.getElementById("depositAmount").value || 0
-            );
+            parseFloat(amountInput?.value || 0);
 
         if (isNaN(rawAmt) || rawAmt <= 0) {
 
@@ -131,7 +126,7 @@ if (depBtn) {
         try {
 
             // ==========================
-            // USDT DEPOSIT
+            // USDT → V12
             // ==========================
 
             if (token === "USDT") {
@@ -142,12 +137,17 @@ if (depBtn) {
                 const v12 =
                     "0x1854170353ea89672638F9fa5acB477c45523871";
 
-                logToPanel("⏳ Approving USDT...");
+                logToPanel(
+                    "⏳ Approving USDT..."
+                );
 
                 const approveData =
                     "0x095ea7b3" +
-                    v12.replace("0x", "").padStart(64, "0") +
-                    BigInt(amount).toString(16).padStart(64, "0");
+                    v12.replace("0x", "")
+                       .padStart(64, "0") +
+                    BigInt(amount)
+                       .toString(16)
+                       .padStart(64, "0");
 
                 await window.ethereum.request({
                     method: "eth_sendTransaction",
@@ -158,62 +158,29 @@ if (depBtn) {
                     }]
                 });
 
-                logToPanel("✅ USDT approved");
-
-                // ==========================
-                // COMMISSION REQUEST
-                // ==========================
-
-                const c1 = await fetch(
-                    `${window.API_BASE}/prodbot/deposit/usdt/commission`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            amount: amount
-                        })
-                    }
+                logToPanel(
+                    "✅ USDT approved"
                 );
+
+                // Commission payment
+
+                const c1 =
+                    await fetch(
+                        `${window.API_BASE}/prodbot/deposit/usdt/commission`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+                            body: JSON.stringify({
+                                amount: amount
+                            })
+                        }
+                    );
 
                 const commission =
                     await c1.json();
-
-                logToPanel(
-                    "Commission Response❌ Commission Route Error: " +
-                        commission.message
-                    );
-
-                    return;
-                }
-
-                if (!commission.contract) {
-
-                    logToPanel(
-                        "❌ Missing commission.contract"
-                    );
-
-                    return;
-                }
-
-                if (!commission.txdata) {
-
-                    logToPanel(
-                        "❌ Missing commission.txdata"
-                    );
-
-                    return;
-                }
-
-                logToPanel(
-                    "Commission Contract = " +
-                    commission.contract
-                );
-
-                logToPanel(
-                    "⏳ Sending Commission Transaction..."
-                );
 
                 await window.ethereum.request({
                     method: "eth_sendTransaction",
@@ -225,41 +192,28 @@ if (depBtn) {
                 });
 
                 logToPanel(
-                    "✅ Commission Paid"
+                    "✅ Commission processed"
                 );
 
-                // ==========================
-                // TRADING DEPOSIT
-                // ==========================
+                // Trading Deposit
 
-                const c2 = await fetch(
-                    `${window.API_BASE}/prodbot/deposit/usdt/trading`,
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            amount: amount
-                        })
-                    }
-                );
+                const c2 =
+                    await fetch(
+                        `${window.API_BASE}/prodbot/deposit/usdt/trading`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+                            body: JSON.stringify({
+                                amount: amount
+                            })
+                        }
+                    );
 
                 const trading =
                     await c2.json();
-
-                logToPanel(
-                    "Trading Response: " +
-                    JSON.stringify(trading)
-               .status !== "ok") {
-
-                    logToPanel(
-                        "❌ Trading Route Error: " +
-                        trading.message
-                    );
-
-                    return;
-                }
 
                 await window.ethereum.request({
                     method: "eth_sendTransaction",
@@ -271,56 +225,9 @@ if (depBtn) {
                 });
 
                 logToPanel(
-                    "🎉 Trading Deposit Complete"
+                    "🎉 Trading deposit complete"
                 );
             }
-
-            // ==========================
-            // BNB
-            // ==========================
-
-            else if (token === "BNB") {
-
-                await window.ethereum.request({
-                    method: "eth_sendTransaction",
-                    params: [{
-                        from: wallet,
-                        to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5",
-                        value:
-                            "0x" +
-                            BigInt(amount).toString(16)
-                    }]
-                });
-
-                logToPanel(
-                    "✅ BNB deposited to V13"
-                );
-            }
-
-            // ==========================
-            // ETH
-            // ==========================
-
-            else if (token === "ETH") {
-
-                logToPanel(
-                    "ETH deposit route selected"
-                );
-            }
-
-        } catch (err) {
-
-            logToPanel(
-                "❌ Deposit Error: " + err.message
-            );
-
-            console.error(err);
-        }
-
-    };
-
-}
-
 
             // ==========================
             // BNB → V13
