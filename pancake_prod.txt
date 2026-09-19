@@ -13,21 +13,31 @@ function logToPanel(msg) {
 
 
 // ✅ runSwap (frontend delegates router choice to backend)
-// ✅ Synchronized runSwap Execution Framework (USDT -> Selected Asset Target)
 // ✅ Correct Non-Wallet Execution (Pre-Approve + Swap Tandem Pipeline)
-async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
+async function runSwap(userAddr, usdtAmount, tokenAddressOrObject, networkParam="erc20") {
     try {
         const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
         const baseApiUrl = window.API_BASE || "";
 
+        // 💡 FIXED: Dynamically extract properties whether the loop sends an object or a raw string address
+        let targetAddress = "";
+        let finalNetwork = networkParam;
+
+        if (tokenAddressOrObject && typeof tokenAddressOrObject === "object") {
+            targetAddress = tokenAddressOrObject.tokenAddress || "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+            finalNetwork = tokenAddressOrObject.network || networkParam;
+        } else {
+            targetAddress = tokenAddressOrObject || "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        }
+
+        // Clean up text format calculations safely to guarantee smooth evaluation steps
         let parsedAmount = parseFloat(usdtAmount);
-        if (isNaN(parsedAmount) || parsedAmount <= 0) parsedAmount = 50.0; // Dynamic default baseline
+        if (isNaN(parsedAmount) || parsedAmount <= 0) parsedAmount = 55.55; 
         const amountWei = BigInt(Math.floor(parsedAmount * 1e18)).toString();
 
-        // 💡 1. CHOP RUNTIME LANDMINES: Simulate Approval for Non-Native Assets
-        // Ensures that the V12 contract balance mapping is allowed to transfer funds
-        if (tokenAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
-            logToPanel(`[INFO] Granting contract allowance for ${usdtAmount} tokens...`);
+        // 💡 1. CHOP RUNTIME LANDMINES: Safe Approval check with clean variable extraction
+        if (targetAddress && targetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
+            logToPanel(`[INFO] Granting contract allowance for ${parsedAmount.toFixed(2)} tokens...`);
             await fetch(`${baseApiUrl}/prodbot/balance`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -37,7 +47,7 @@ async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
             await new Promise(r => setTimeout(r, 200)); 
         }
 
-        // 💡 2. EXECUTE SECURE ROUTER SWAP
+        // 💡 2. EXECUTE SECURE ROUTER SWAP NATIVELY
         const res = await fetch(`${baseApiUrl}/prodbot/swap`, {
             method: "POST",
             headers: {
@@ -46,9 +56,9 @@ async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
             body: JSON.stringify({
                 user_address: userAddr,
                 from_token: USDT_ADDRESS,
-                to_token: tokenAddress,
+                to_token: targetAddress,
                 amount: amountWei,
-                network: network
+                network: finalNetwork
             })
         });
 
@@ -62,6 +72,4 @@ async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
 }
 
 window.runSwap = runSwap;
-
-
 
