@@ -167,7 +167,7 @@ async function startSimulation(totalCycles) {
 
         if (i < totalCycles) {
             logToPanel("[COOLDOWN] Cooling down execution pipeline contexts before scanning next asset target...");
-            for (let countdown = 10; countdown > 0; countdown--) {
+            for (let countdown = 90; countdown > 0; countdown--) {
                 if (!window.isBotRunning) break;
                 if (countdown % 5 === 0) setStatus(`WAITING (${countdown}s)`);
                 await blockDelay(1000);
