@@ -13,15 +13,13 @@ function logToPanel(msg) {
 
 window.logToPanel = logToPanel;
 
-// ✅ Free public CORS Proxy wrapper to prevent NetworkErrors in browsers
+// ✅ Clean, reliable public CORS Proxy definition
 const CORS_PROXY = "https://allorigins.win";
 
-// ✅ Proxied Binance APIs
+// ✅ Proxied Binance endpoints with fixed dynamic parameter wrapping
 const BINANCE_INFO = CORS_PROXY + encodeURIComponent("https://binance.com");
-const BINANCE_TICKER = "https://binance.com"; // We will append symbol dynamically below
+const BINANCE_TICKER = "https://binance.com"; 
 const BINANCE_KLINES = "https://binance.com";
-
-// Proxied Binance Web3 API Search Endpoint
 const BINANCE_WEB3_BASE = "https://binance.com";
 
 // ✅ Binance pair list
@@ -34,7 +32,6 @@ async function getBinancePairs() {
       .map(s => s.symbol);
   } catch (e) {
     logToPanel(`Binance pair load failed: ${e.message}`);
-    // Safe fallbacks to keep the simulation loop alive if the network hits a block
     return ["BTCUSDT", "ETHUSDT", "BNBUSDT"];
   }
 }
@@ -62,37 +59,38 @@ async function getBinanceHistory(symbol, interval = "1h", limit = 200) {
     const proxiedUrl = CORS_PROXY + encodeURIComponent(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
     const res = await fetch(proxiedUrl);
     const klines = await res.json();
-    return klines.map(k => parseFloat(k[4])); // Fixed: Added index [4] back to parse closing price array properly
+    return klines.map(k => parseFloat(k[4])); // Pulls correct index for candle close price
   } catch (e) {
     return [];
   }
 }
 
-// ✅ Native Binance Web3 Token Contract Lookup
+// ✅ Native Binance Web3 Token Contract Lookup (With Native Asset Filters)
 async function getTokenAddress(symbol) {
   try {
-    const baseAsset = symbol.replace("USDT", "");
+    const baseAsset = symbol.replace("USDT", "").toUpperCase();
     
-    // Encapsulate Web3 endpoint inside the CORS proxy layer
+    // 💡 FIXED: Native Gas Assets bypass to prevent empty responses or pipeline crashes
+    if (baseAsset === "BNB" || baseAsset === "ETH") {
+      logToPanel(`[INFO] Native asset detected for ${baseAsset}. Assigning native router identity...`);
+      return "0x0000000000000000000000000000000000000000"; 
+    }
+
     const proxiedUrl = CORS_PROXY + encodeURIComponent(`${BINANCE_WEB3_BASE}?keyword=${baseAsset}`);
     const res = await fetch(proxiedUrl);
     const data = await res.json();
 
     if (data && data.contracts && data.contracts.length > 0) {
-      // "1" = Ethereum (ERC20), "56" = Binance Smart Chain (BEP20), "137" = Polygon
-      let targetChainId = "1"; 
+      let targetChainId = "1"; // "1" = Ethereum (ERC20), "56" = BSC (BEP20)
       if (/BNB|BUSD/.test(symbol)) targetChainId = "56";
       if (/MATIC/.test(symbol)) targetChainId = "137";
 
-      // Attempt to isolate the preferred network contract
       const matchedContract = data.contracts.find(c => c.binanceChainId === targetChainId);
-      
-      // Fallback cleanly to whatever native chain address is listed first if mismatch occurs
       return matchedContract ? matchedContract.tokenContractAddress : data.contracts[0].tokenContractAddress;
     }
     return null;
   } catch (e) {
-    logToPanel(`Binance Web3 contract lookup missing or failed for ${symbol}`);
+    logToPanel(`Binance Web3 contract lookup failed for ${symbol}: ${e.message}`);
     return null;
   }
 }
