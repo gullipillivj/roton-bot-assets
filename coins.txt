@@ -31,6 +31,25 @@ async function getBinancePairs() {
   }
 }
 
+// ✅ Fallback Fee Calculator Stub
+// Prevents the simulate_prod.txt engine from crashing when checking gas fees
+async function calculateTradeCost(symbol, amountUSD, network) {
+  // Simulate a standard decentralized transaction fee structure (e.g., 0.1% or gas units)
+  const simulatedGasFeeUSD = network === "erc20" ? 15.00 : 0.15; // Ethereum is higher gas; BSC/Polygon are low
+  const simulatedSlippage = amountUSD * 0.002; // 0.2% slippage simulation
+  
+  return {
+    status: "ok",
+    gasFeeUSD: simulatedGasFeeUSD,
+    slippageUSD: simulatedSlippage,
+    totalCostUSD: simulatedGasFeeUSD + simulatedSlippage
+  };
+}
+
+// Expose it globally to the window object so simulate_prod.txt can execute it
+window.calculateTradeCost = calculateTradeCost
+;
+
 // ✅ Binance 24hr stats
 async function getBinanceStats(symbol) {
   try {
