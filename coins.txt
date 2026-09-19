@@ -10,30 +10,28 @@ function logToPanel(msg) {
     console.log(msg);
   }
 }
-
 window.logToPanel = logToPanel;
 
-// ✅ FIXED: Correct public AllOrigins CORS Proxy endpoint layout
+// ✅ Public Free CORS Proxy (Only for basic public ticker data streams)
 const CORS_PROXY = "https://allorigins.win";
 
-// ✅ Base API Endpoints
-const BINANCE_INFO_URL = "https://binance.com";
-const BINANCE_TICKER_URL = "https://binance.com"; 
-const BINANCE_KLINES_URL = "https://binance.com";
-const BINANCE_WEB3_URL = "https://binance.com";
+const BINANCE_INFO = CORS_PROXY + encodeURIComponent("https://binance.com");
+const BINANCE_TICKER = "https://binance.com"; 
+const BINANCE_KLINES = "https://binance.com";
+
+// ✅ Python Backend URL mapping
+const BACKEND_BASE = "http://127.0.0";
 
 // ✅ Binance pair list
 async function getBinancePairs() {
   try {
-    const proxiedUrl = CORS_PROXY + encodeURIComponent(BINANCE_INFO_URL);
-    const res = await fetch(proxiedUrl);
+    const res = await fetch(BINANCE_INFO);
     const data = await res.json();
     return data.symbols
       .filter(s => s.status === "TRADING" && s.quoteAsset === "USDT")
       .map(s => s.symbol);
   } catch (e) {
     logToPanel(`Binance pair load failed: ${e.message}`);
-    // Safe fallbacks to keep the simulation loop alive if the network hits a block
     return ["BTCUSDT", "ETHUSDT", "BNBUSDT"];
   }
 }
@@ -41,7 +39,7 @@ async function getBinancePairs() {
 // ✅ Binance 24hr stats
 async function getBinanceStats(symbol) {
   try {
-    const proxiedUrl = CORS_PROXY + encodeURIComponent(`${BINANCE_TICKER_URL}?symbol=${symbol}`);
+    const proxiedUrl = CORS_PROXY + encodeURIComponent(`${BINANCE_TICKER}?symbol=${symbol}`);
     const res = await fetch(proxiedUrl);
     const d = await res.json();
     return {
@@ -58,42 +56,25 @@ async function getBinanceStats(symbol) {
 // ✅ Historical candles
 async function getBinanceHistory(symbol, interval = "1h", limit = 200) {
   try {
-    const proxiedUrl = CORS_PROXY + encodeURIComponent(`${BINANCE_KLINES_URL}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    const proxiedUrl = CORS_PROXY + encodeURIComponent(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
     const res = await fetch(proxiedUrl);
     const klines = await res.json();
-    return klines.map(k => parseFloat(k[4])); // Fixed: Correct array element lookup for closing prices
+    return klines.map(k => parseFloat(k[4]));
   } catch (e) {
     return [];
   }
 }
 
-// ✅ Native Binance Web3 Token Contract Lookup (With Native Asset Filters)
+// ✅ Token Address Extraction Routed to your Python Backend
 async function getTokenAddress(symbol) {
   try {
-    const baseAsset = symbol.replace("USDT", "").toUpperCase();
-    
-    // Native Gas Assets bypass to prevent empty responses or pipeline crashes
-    if (baseAsset === "BNB" || baseAsset === "ETH") {
-      logToPanel(`[INFO] Native asset detected for ${baseAsset}. Assigning native router identity...`);
-      return "0x0000000000000000000000000000000000000000"; 
-    }
-
-    const proxiedUrl = CORS_PROXY + encodeURIComponent(`${BINANCE_WEB3_URL}?keyword=${baseAsset}`);
-    const res = await fetch(proxiedUrl);
+    // Calls your local server endpoint to fetch the address cleanly
+    const res = await fetch(`${BACKEND_BASE}/token-address/${symbol}`);
     const data = await res.json();
-
-    if (data && data.contracts && data.contracts.length > 0) {
-      let targetChainId = "1"; // "1" = Ethereum (ERC20), "56" = BSC (BEP20)
-      if (/BNB|BUSD/.test(symbol)) targetChainId = "56";
-      if (/MATIC/.test(symbol)) targetChainId = "137";
-
-      const matchedContract = data.contracts.find(c => c.binanceChainId === targetChainId);
-      return matchedContract ? matchedContract.tokenContractAddress : data.contracts[0].tokenContractAddress;
-    }
-    return null;
+    return data.address;
   } catch (e) {
-    logToPanel(`Binance Web3 contract lookup failed for ${symbol}: ${e.message}`);
-    return null;
+    logToPanel(`Python backend lookup failed for ${symbol}: ${e.message}`);
+    return "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
   }
 }
 
