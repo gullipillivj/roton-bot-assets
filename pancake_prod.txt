@@ -14,58 +14,63 @@ function logToPanel(msg) {
 
 // ✅ runSwap (frontend delegates router choice to backend)
 // ✅ Synchronized runSwap Execution Framework (USDT -> Selected Asset Target)
-async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
+async function runSwap(userAddr, usdtAmount, tokenAddress, network = "erc20") {
 
-  try {
+    try {
 
-    const USDT_ADDRESS =
-      "0x55d398326f99059fF775485246999027B3197955";
+        const USDT_ADDRESS =
+            "0x55d398326f99059fF775485246999027B3197955";
 
-    const amountWei =
-      BigInt(Math.floor(Number(usdtAmount) * 1e18)).toString();
+        const amountWei =
+            BigInt(Math.floor(Number(usdtAmount) * 1e18)).toString();
 
-    logToPanel("STEP-1 Sending swap request");
+        logToPanel(`[SWAP] ${usdtAmount} USDT -> ${tokenAddress}`);
+        logToPanel("[SWAP] Sending request");
 
-    const res = await fetch(`${window.API_BASE}/prodbot/swap`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        from_token: USDT_ADDRESS,
-        to_token: tokenAddress,
-        amount: amountWei,
-        network: network,
-        user: userAddr
-      })
-    });
+        const res = await fetch(`${window.API_BASE}/prodbot/swap`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                user: userAddr,
+                from_token: USDT_ADDRESS,
+                to_token: tokenAddress,
+                amount: amountWei,
+                network: network
+            })
+        });
 
-    logToPanel("STEP-2 Route responded");
+        logToPanel("[SWAP] Response received");
 
-    const data = await res.json();
+        const data = await res.json();
 
-    logToPanel("STEP-3 JSON parsed");
+        logToPanel("[SWAP] JSON parsed");
 
-    if (data.status !== "ok") {
-      throw new Error(data.message);
+        if (data.status !== "ok") {
+            throw new Error(data.message || "Swap failed");
+        }
+
+        logToPanel(
+            `[SWAP SUCCESS] TX=${data.tx_hash}`
+        );
+
+        return data;
+
+    } catch (err) {
+
+        logToPanel(
+            `[SWAP ERROR] ${err.message}`
+        );
+
+        return {
+            status: "error",
+            message: err.message
+        };
     }
-
-    logToPanel(
-      `✅ Swap Submitted: ${data.tx_hash || "Backend Accepted"}`
-    );
-
-    return data;
-
-  } catch(err) {
-
-    logToPanel(`❌ ${err.message}`);
-
-    return {
-      status: "error",
-      message: err.message
-    };
-  }
 }
+
+
 
 window.runSwap = runSwap;
 
