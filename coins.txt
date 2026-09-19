@@ -2,310 +2,150 @@ logToPanel("coins.txt loaded");
 
 // ✅ Logger
 function logToPanel(msg) {
-
-  const panel =
-    document.getElementById("logPanel");
-
+  const panel = document.getElementById("logPanel");
   if (panel) {
-
     panel.innerText += "\n" + msg;
     panel.scrollTop = panel.scrollHeight;
-
   } else {
-
     console.log(msg);
-
   }
 }
 
 window.logToPanel = logToPanel;
 
 // ✅ Real Binance APIs
+const BINANCE_INFO = "https://binance.com";
+const BINANCE_TICKER = "https://binance.com";
+const BINANCE_KLINES = "https://binance.com";
 
-const BINANCE_INFO =
-  "https://api.binance.com/api/v3/exchangeInfo";
-
-const BINANCE_TICKER =
-  "https://api.binance.com/api/v3/ticker/24hr";
-
-const BINANCE_KLINES =
-  "https://api.binance.com/api/v3/klines";
+// Binance Web3 API Search Endpoint
+const BINANCE_WEB3_SEARCH = "https://binance.com";
 
 // ✅ Binance pair list
-
 async function getBinancePairs() {
-
   try {
-
-    const res =
-      await fetch(BINANCE_INFO);
-
-    const data =
-      await res.json();
-
+    const res = await fetch(BINANCE_INFO);
+    const data = await res.json();
     return data.symbols
-      .filter(
-        s =>
-          s.status === "TRADING" &&
-          s.quoteAsset === "USDT"
-      )
+      .filter(s => s.status === "TRADING" && s.quoteAsset === "USDT")
       .map(s => s.symbol);
-
   } catch (e) {
-
-    logToPanel(
-      `Binance pair load failed: ${e.message}`
-    );
-
-    return [
-      "BTCUSDT",
-      "ETHUSDT",
-      "BNBUSDT"
-    ];
+    logToPanel(`Binance pair load failed: ${e.message}`);
+    return ["BTCUSDT", "ETHUSDT", "BNBUSDT"];
   }
 }
 
 // ✅ Binance 24hr stats
-
 async function getBinanceStats(symbol) {
-
   try {
-
-    const res =
-      await fetch(
-        `${BINANCE_TICKER}?symbol=${symbol}`
-      );
-
-    const d =
-      await res.json();
-
+    const res = await fetch(`${BINANCE_TICKER}?symbol=${symbol}`);
+    const d = await res.json();
     return {
       symbol,
-      lastPrice:
-        parseFloat(d.lastPrice),
-      priceChangePercent:
-        parseFloat(d.priceChangePercent),
-      volume:
-        parseFloat(d.volume)
+      lastPrice: parseFloat(d.lastPrice),
+      priceChangePercent: parseFloat(d.priceChangePercent),
+      volume: parseFloat(d.volume)
     };
-
   } catch (e) {
-
     return null;
   }
 }
 
 // ✅ Historical candles
-
-async function getBinanceHistory(
-  symbol,
-  interval = "1h",
-  limit = 200
-) {
-
+async function getBinanceHistory(symbol, interval = "1h", limit = 200) {
   try {
-
-    const res =
-      await fetch(
-        `${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`
-      );
-
-    const klines =
-      await res.json();
-
-    return klines.map(
-      k => parseFloat(k[4])
-    );
-
+    const res = await fetch(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    const klines = await res.json();
+    return klines.map(k => parseFloat(k[4]));
   } catch (e) {
-
     return [];
   }
 }
 
-// ✅ Dynamic token lookup
-// Calls backend instead of broken ChangeNow page
-
+// ✅ Native Binance Web3 Token Contract Lookup
+// Swapped local /prodbot with native web3.binance.com endpoints
 async function getTokenAddress(symbol) {
-
   try {
+    const baseAsset = symbol.replace("USDT", "");
+    
+    // Call Binance's public Web3 decentralized token search indexing endpoint
+    const res = await fetch(`${BINANCE_WEB3_SEARCH}?keyword=${baseAsset}`);
+    const data = await res.json();
 
-    const res =
-      await fetch(
-        `${API_BASE}/prodbot/token-address?symbol=${symbol}`
-      );
+    if (data && data.contracts && data.contracts.length > 0) {
+      // Map your network naming rules directly to official chain IDs
+      // "1" = Ethereum (ERC20), "56" = Binance Smart Chain (BEP20), "137" = Polygon
+      let targetChainId = "1"; 
+      if (/BNB|BUSD/.test(symbol)) targetChainId = "56";
+      if (/MATIC/.test(symbol)) targetChainId = "137";
 
-    const data =
-      await res.json();
-
-    if (
-      data.status === "ok" &&
-      data.address
-    ) {
-
-      return data.address;
+      // Attempt to isolate the preferred network contract
+      const matchedContract = data.contracts.find(c => c.binanceChainId === targetChainId);
+      
+      // Fallback cleanly to whatever native chain address is listed first if mismatch occurs
+      return matchedContract ? matchedContract.tokenContractAddress : data.contracts[0].tokenContractAddress;
     }
-
     return null;
-
   } catch (e) {
-
-    logToPanel(
-      `Token lookup failed for ${symbol}`
-    );
-
+    logToPanel(`Binance Web3 contract lookup missing or failed for ${symbol}`);
     return null;
   }
 }
 
 // ✅ SMA Helper
-
 function movingAverage(closes, period) {
-
-  if (
-    !closes ||
-    closes.length < period
-  )
-    return null;
-
-  const slice =
-    closes.slice(-period);
-
-  return (
-    slice.reduce(
-      (a, b) => a + b,
-      0
-    ) / period
-  );
+  if (!closes || closes.length < period) return null;
+  const slice = closes.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
 }
 
 // ✅ Coin evaluation
-
 async function evaluateCoin(symbol) {
-
-  const stats =
-    await getBinanceStats(symbol);
-
-  const closes =
-    await getBinanceHistory(
-      symbol,
-      "1h",
-      200
-    );
-
-  const ma20 =
-    movingAverage(closes, 20);
-
-  const ma50 =
-    movingAverage(closes, 50);
-
-  const ma100 =
-    movingAverage(closes, 100);
-
-  const upward =
-    ma20 &&
-    ma50 &&
-    ma20 > ma50;
-
-  const tokenAddress =
-    await getTokenAddress(symbol);
+  const stats = await getBinanceStats(symbol);
+  const closes = await getBinanceHistory(symbol, "1h", 200);
+  const ma20 = movingAverage(closes, 20);
+  const ma50 = movingAverage(closes, 50);
+  const ma100 = movingAverage(closes, 100);
+  const upward = ma20 && ma50 && ma20 > ma50;
+  
+  const tokenAddress = await getTokenAddress(symbol);
 
   let network = "erc20";
-
-  if (
-    /BNB|BUSD/.test(symbol)
-  )
-    network = "bep20";
-
-  if (
-    /MATIC|AVAX|FTM/.test(symbol)
-  )
-    network = "crosschain";
+  if (/BNB|BUSD/.test(symbol)) network = "bep20";
+  if (/MATIC|AVAX|FTM/.test(symbol)) network = "crosschain";
 
   return {
     symbol,
-    lastPrice:
-      stats?.lastPrice || null,
-    change24h:
-      stats?.priceChangePercent || null,
-    volume:
-      stats?.volume || null,
+    lastPrice: stats?.lastPrice || null,
+    change24h: stats?.priceChangePercent || null,
+    volume: stats?.volume || null,
     ma20,
     ma50,
     ma100,
-    upward_trend:
-      upward,
+    upward_trend: upward,
     tokenAddress,
     network
   };
 }
 
 // ✅ Categorize
-
 async function categorizeCoins() {
+  const symbols = await getBinancePairs();
+  const results = await Promise.all(symbols.map(s => evaluateCoin(s)));
 
-  const symbols =
-    await getBinancePairs();
+  const long_term = [...results].sort((a, b) => (b.ma100 || 0) - (a.ma100 || 0)).slice(0, 10);
+  const mid_term = [...results].sort((a, b) => (b.ma50 || 0) - (a.ma50 || 0)).slice(0, 10);
+  const short_term = [...results].sort((a, b) => (b.ma20 || 0) - (a.ma20 || 0)).slice(0, 10);
 
-  const results =
-    await Promise.all(
-      symbols.map(
-        s => evaluateCoin(s)
-      )
-    );
-
-  const long_term =
-    [...results]
-      .sort(
-        (a, b) =>
-          (b.ma100 || 0) -
-          (a.ma100 || 0)
-      )
-      .slice(0, 10);
-
-  const mid_term =
-    [...results]
-      .sort(
-        (a, b) =>
-          (b.ma50 || 0) -
-          (a.ma50 || 0)
-      )
-      .slice(0, 10);
-
-  const short_term =
-    [...results]
-      .sort(
-        (a, b) =>
-          (b.ma20 || 0) -
-          (a.ma20 || 0)
-      )
-      .slice(0, 10);
-
-  return {
-    long_term,
-    mid_term,
-    short_term
-  };
+  return { long_term, mid_term, short_term };
 }
 
 // ✅ Expose
-
-window.getBinancePairs =
-  getBinancePairs;
-
-window.getBinanceStats =
-  getBinanceStats;
-
-window.getBinanceHistory =
-  getBinanceHistory;
-
-window.getTokenAddress =
-  getTokenAddress;
-
-window.evaluateCoin =
-  evaluateCoin;
-
-window.categorizeCoins =
-  categorizeCoins;
+window.getBinancePairs = getBinancePairs;
+window.getBinanceStats = getBinanceStats;
+window.getBinanceHistory = getBinanceHistory;
+window.getTokenAddress = getTokenAddress;
+window.evaluateCoin = evaluateCoin;
+window.categorizeCoins = categorizeCoins;
 
 logToPanel("coins.txt initialized");
