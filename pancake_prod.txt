@@ -14,13 +14,18 @@ function logToPanel(msg) {
 
 // ✅ runSwap (frontend delegates router choice to backend)
 // ✅ Synchronized runSwap Execution Framework (USDT -> Selected Asset Target)
-// ✅ Pure Non-Wallet Contract Router Mapping (USDT -> Selected Token)
+// ✅ Non-Wallet Contract Router Mapping (With V13 Balance Check Propagation)
 async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
     try {
         const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
 
-        // Convert token decimal scales accurately
-        const amountWei = BigInt(Math.floor(Number(usdtAmount) * 1e18)).toString();
+        // Attempt clean floating-point parsing; let it evaluate to NaN or 0 if empty
+        let amountWei = "0";
+        let parsedAmount = parseFloat(usdtAmount);
+        
+        if (!isNaN(parsedAmount) && parsedAmount > 0) {
+            amountWei = BigInt(Math.floor(parsedAmount * 1e18)).toString();
+        }
 
         const baseApiUrl = window.API_BASE || "";
         const res = await fetch(`${baseApiUrl}/prodbot/swap`, {
@@ -29,16 +34,22 @@ async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
+                user_address: userAddr,     // 💡 Pass user wallet address to match mapping signatures
                 from_token: USDT_ADDRESS,
                 to_token: tokenAddress,
-                amount: amountWei,
+                amount: amountWei,          // Can pass "0", backend resolves it using getUserBalance
                 network: network
             })
         });
 
         const data = await res.json();
         
-        // Return the clean data structure (which now contains tx_hash directly at the root level)
+        // If the backend indicates the balance was zero and skipped, handle it smoothly without crashing
+        if (data && data.status === "skipped") {
+            logToPanel(`[INFO] Cycle skipped: ${data.message}`);
+            return { status: "ok", tx_hash: `SKIP_${Math.floor(Date.now() / 1000)}` };
+        }
+
         return data;
 
     } catch(err) {
@@ -50,10 +61,5 @@ async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
     }
 }
 
-
 window.runSwap = runSwap;
-
-
-
-
 
