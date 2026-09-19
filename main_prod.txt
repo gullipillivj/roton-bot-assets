@@ -57,8 +57,6 @@ async function syncBalanceFromFund() {
 
     try {
 
-        logToPanel("[BALANCE] Sync request started");
-
         const res = await fetch(
             `${window.API_BASE}/prodbot/balance`,
             {
@@ -73,18 +71,10 @@ async function syncBalanceFromFund() {
             }
         );
 
-        if (!res.ok) {
-            throw new Error(
-                `Balance route returned ${res.status}`
-            );
-        }
-
         const data = await res.json();
 
         if (data.status !== "ok") {
-            throw new Error(
-                data.message || "Balance sync failed"
-            );
+            return null;
         }
 
         const balance =
@@ -95,28 +85,24 @@ async function syncBalanceFromFund() {
         const investBox =
             document.getElementById("investBalance");
 
-        if (investBox) {
+        if (investBox && balance > 0) {
             investBox.value = balance;
         }
-
-        logToPanel(
-            `[BALANCE] Synced: ${balance}`
-        );
 
         return balance;
 
     } catch (err) {
 
-        logToPanel(
-            `[BALANCE ERROR] ${err.message}`
+        console.error(
+            "syncBalanceFromFund:",
+            err
         );
 
         return null;
     }
 }
 
-window.syncBalanceFromFund = sync
-BalanceFromFund;
+window.syncBalanceFromFund = syncBalanceFromFund;
 
 
 //deposit button 
