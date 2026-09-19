@@ -14,7 +14,7 @@ function logToPanel(msg) {
 
 // ✅ runSwap (frontend delegates router choice to backend)
 // ✅ Synchronized runSwap Execution Framework (USDT -> Selected Asset Target)
-async function runSwap(userAddr, usdtAmount, tokenAddress, network = "erc20") {
+async function runSwap(userAddr, usdtAmount, tokenAddress, network="erc20") {
 
     try {
 
@@ -24,44 +24,25 @@ async function runSwap(userAddr, usdtAmount, tokenAddress, network = "erc20") {
         const amountWei =
             BigInt(Math.floor(Number(usdtAmount) * 1e18)).toString();
 
-        logToPanel(`[SWAP] ${usdtAmount} USDT -> ${tokenAddress}`);
-        logToPanel("[SWAP] Sending request");
-
-        const res = await fetch(`${window.API_BASE}/prodbot/swap`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                user: userAddr,
-                from_token: USDT_ADDRESS,
-                to_token: tokenAddress,
-                amount: amountWei,
-                network: network
-            })
-        });
-
-        logToPanel("[SWAP] Response received");
-
-        const data = await res.json();
-
-        logToPanel("[SWAP] JSON parsed");
-
-        if (data.status !== "ok") {
-            throw new Error(data.message || "Swap failed");
-        }
-
-        logToPanel(
-            `[SWAP SUCCESS] TX=${data.tx_hash}`
+        const res = await fetch(
+            `${window.API_BASE}/prodbot/swap`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    from_token: USDT_ADDRESS,
+                    to_token: tokenAddress,
+                    amount: amountWei,
+                    network: network
+                })
+            }
         );
 
-        return data;
+        return await res.json();
 
-    } catch (err) {
-
-        logToPanel(
-            `[SWAP ERROR] ${err.message}`
-        );
+    } catch(err) {
 
         return {
             status: "error",
@@ -70,7 +51,9 @@ async function runSwap(userAddr, usdtAmount, tokenAddress, network = "erc20") {
     }
 }
 
-
-
 window.runSwap = runSwap;
+
+
+
+
 
