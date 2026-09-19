@@ -52,6 +52,73 @@ function getSelectedToken() {
   return "USDT";
 }
 
+//balance updater
+async function syncBalanceFromFund() {
+
+    try {
+
+        logToPanel("[BALANCE] Sync request started");
+
+        const res = await fetch(
+            `${window.API_BASE}/prodbot/balance`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    user: window.USER_ADDR,
+                    token: "0x55d398326f99059fF775485246999027B3197955"
+                })
+            }
+        );
+
+        if (!res.ok) {
+            throw new Error(
+                `Balance route returned ${res.status}`
+            );
+        }
+
+        const data = await res.json();
+
+        if (data.status !== "ok") {
+            throw new Error(
+                data.message || "Balance sync failed"
+            );
+        }
+
+        const balance =
+            parseFloat(data.balance || "0");
+
+        window.SolidarityFundBalance = balance;
+
+        const investBox =
+            document.getElementById("investBalance");
+
+        if (investBox) {
+            investBox.value = balance;
+        }
+
+        logToPanel(
+            `[BALANCE] Synced: ${balance}`
+        );
+
+        return balance;
+
+    } catch (err) {
+
+        logToPanel(
+            `[BALANCE ERROR] ${err.message}`
+        );
+
+        return null;
+    }
+}
+
+window.syncBalanceFromFund = sync
+BalanceFromFund;
+
+
 //deposit button 
 // ========================================================
 // 🚀 DEPOSIT BUTTON MULTI-STEP BLOCKCHAIN PIPELINE ENGINE
