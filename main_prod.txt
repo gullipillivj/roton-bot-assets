@@ -53,56 +53,63 @@ function getSelectedToken() {
 }
 
 //balance updater
+// ========================================================
+// 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER
+// ========================================================
 async function syncBalanceFromFund() {
-
     try {
+        const baseApiUrl = window.API_BASE || window.location.origin;
+        
+        logToPanel(`⏳ Pinging balance endpoint for wallet: ${window.USER_ADDR}`);
 
-        const res = await fetch(
-            `${window.API_BASE}/prodbot/balance`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    user: window.USER_ADDR,
-                    token: "0x55d398326f99059fF775485246999027B3197955"
-                })
-            }
-        );
+        const res = await fetch(`${baseApiUrl}/prodbot/balance`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                user: window.USER_ADDR,
+                token: "0x55d398326f99059fF775485246999027B3197955" // USDT Address
+            })
+        });
 
-        const data = await res.json();
+        // ✅ Read directly as a raw base-10 text string to prevent floating-point or parsing crashes
+        const rawWeiText = await res.text();
+        const cleanWeiString = rawWeiText.trim() || "0";
 
-        if (data.status !== "ok") {
-            return null;
+        logToPanel(`[LEDGER SYNC] Received raw Wei balance string from contract: ${cleanWeiString}`);
+
+        // Update the global state variable
+        window.SolidarityFundBalance = parseFloat(cleanWeiString);
+
+        // Target both explicit control fields on the dashboard
+        const startBox = document.getElementById("startBalance");
+        const investBox = document.getElementById("investBalance");
+
+        // Force field types to 'text' to protect large uint256 strings from browser text truncations
+        if (startBox) {
+            startBox.type = "text";
+            startBox.value = cleanWeiString;
         }
 
-        const balance =
-            parseFloat(data.balance || "0");
-
-        window.SolidarityFundBalance = balance;
-
-        const investBox =
-            document.getElementById("investBalance");
-
-        if (investBox && balance > 0) {
-            investBox.value = balance;
+        if (investBox) {
+            investBox.type = "text";
+            investBox.value = cleanWeiString;
         }
 
-        return balance;
+        return window.SolidarityFundBalance;
 
     } catch (err) {
-
-        console.error(
-            "syncBalanceFromFund:",
-            err
-        );
-
+        logToPanel(`❌ Balance Sync Error: ${err.message}`);
+        console.error("syncBalanceFromFund critical pipeline crash:", err);
         return null;
     }
 }
 
+// Re-expose to the global window environment securely
 window.syncBalanceFromFund = syncBalanceFromFund;
+
+
 
 
 //deposit button 
