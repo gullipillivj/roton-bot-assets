@@ -105,7 +105,15 @@ async function initDashboardPipeline() {
       logToPanel("💡 System Ready: Please connect your Web3 Wallet to initialize account state maps.");
   }
 }
-initDashboardPipeline();
+// ✅ FIXED: Safely handled within an immediately invoked async function expression
+(async () => {
+    try {
+        await initDashboardPipeline();
+    } catch (e) {
+        console.error("Dashboard initialization pipeline error:", e);
+    }
+})();
+
 // ========================================================
 // 📱 SECTION 2: STANDALONE RPC MODAL CONNECTION MANAGER
 // ========================================================
@@ -141,7 +149,11 @@ async function initializeStandaloneRpcModules() {
         console.error("❌ RPC module assembly failed:", err);
     }
 }
-initializeStandaloneRpcModules();
+// ✅ FIXED: Wrapped cleanly in a secure execution enclosure block
+(async () => {
+    await initializeStandaloneRpcModules();
+})();
+
 
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
