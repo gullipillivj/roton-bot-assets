@@ -42,6 +42,24 @@ function initializeLabels() {
   if (nameLabel) nameLabel.innerText = "Wallet Name: " + window.WALLET_NAME;
 }
 
+// ✅ AUTOMATED PAGE LOAD INITIALIZATION SYNC
+async function initDashboardPipeline() {
+  initializeLabels();
+  
+  // If a wallet address is pre-loaded via URL parameters, query the node instantly
+  if (window.USER_ADDR && window.USER_ADDR !== "{wallet}" && window.USER_ADDR !== "null") {
+      logToPanel("🔄 Auto-fetching account metrics on page load...");
+      await syncBalanceFromFund();
+  } else {
+      logToPanel("💡 System Ready: Please connect your Web3 Wallet to initialize account state maps.");
+  }
+}
+
+// Replace your final initializeLabels() line at the bottom with:
+initDashboardPipeline()
+;
+
+
 function getSelectedToken() {
   const el = document.getElementById("tokenSelect");
   if (!el) return "USDT";
