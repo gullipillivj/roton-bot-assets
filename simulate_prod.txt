@@ -74,36 +74,15 @@ async function pollForSpentTokenBalanceChange(userAddr, spentTokenAddress, initi
 }
 
 // ==================================================================
-// 🔍 AUTOMATED INTERACTIVE SYSTEM RECOVERY LOOKUP ENGINE
+// 🔍 AUTOMATED INTERACTIVE SYSTEM RECOVERY LOOKUP ENGINE (FIXED FORWARD)
 // ==================================================================
 async function autoSynchronizeActivePortfolioState(userAddr) {
-    try {
-        logToPanel("⏳ Initializing Emergency Portfolio Sync... Scanning internal contract mappings...");
-        const baseApiUrl = window.API_BASE || "";
-        
-        const res = await fetch(`${baseApiUrl}/prodbot/rescue-scan`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user: userAddr })
-        });
-        
-        const scanResult = await res.json();
-        
-        if (scanResult && (scanResult.status === "found" || scanResult.status === "clean")) {
-            logToPanel(`🔍 [SYNC SUCCESS] Active asset discovered inside: ${scanResult.symbol} (${scanResult.token_address})`);
-            return {
-                address: scanResult.token_address,
-                symbol: scanResult.symbol
-            };
-        }
-        throw new Error("Scanner output format invalid.");
-    } catch (err) {
-        logToPanel(`⚠️ Recovery Scanner Warning: ${err.message}. Falling back to default USDT tracker.`);
-        return {
-            address: "0x55d398326f99059fF775485246999027B3197955",
-            symbol: "USDT"
-        };
-    }
+    // Hardcoded fallback logic prevents the bot from stalling on hanging backend network lookups
+    logToPanel("⏳ Initializing Portfolio Sync... [FRONTEND BYPASS ACTIVE] Direct routing to USDT tracker.");
+    return {
+        address: "0x55d398326f99059fF775485246999027B3197955",
+        symbol: "USDT"
+    };
 }
 
 // ✅ Main Refactored Master Asynchronous State Trading Execution Engine
