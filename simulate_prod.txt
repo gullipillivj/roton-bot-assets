@@ -1,5 +1,6 @@
-logToPanel("simulate_prod.txt loaded (Loop Engine Ready)");
-// ✅ Global logger
+logToPanel("simulate_prod.txt loaded (Dynamic State Tracker Engine Online)");
+
+// ✅ Global logger alignment
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -13,6 +14,7 @@ window.logToPanel = logToPanel;
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
+// ✅ Extracts valid randomized coin targets from the coins evaluation module
 async function pickRandomCoin() {
     try {
         if (typeof window.getBinancePairs === "function") {
@@ -21,8 +23,8 @@ async function pickRandomCoin() {
                 return pairs[Math.floor(Math.random() * pairs.length)].replace("USDT", "");
             }
         }
-        return "BTC"; 
-    } catch (e) { return "BTC"; }
+        return "BNB"; 
+    } catch (e) { return "BNB"; }
 }
 
 // ✅ Status updater
@@ -36,7 +38,6 @@ function setStatus(msg) {
 }
 window.setStatus = setStatus;
 
-
 // ✅ Stop Trading 
 function stopBot() {
     window.isBotRunning = false;
@@ -45,133 +46,176 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
-// ✅ RR fallback swap
-async function swapRR(amount) {
-  try {
-    const resp = await window.runSwap({
-      router: "0x10ED43C718714eb63d5aA57B78B54704E256024E", // Pancake router
-      tokenIn: "0xba67186fd454D0256a0D3744783538bE08C58feD", // RR token 1
-      tokenOut: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", // RR token 2
-      amountIn: amount,
-      amountOutMin: 0
-    });
-    if (resp && resp.tx_hash) {
-      logToPanel(`[RR_FALLBACK] 🔄 RR swap executed — TxHash=${resp.tx_hash}`);
+// 🔄 Helper function to check the uneditable V12 Contract mapping balance
+async function fetchLiveContractBalance(user, token) {
+    try {
+        const baseApiUrl = window.API_BASE || "";
+        const res = await fetch(`${baseApiUrl}/prodbot/balance`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: user, token: token })
+        });
+        const data = await res.json();
+        return data.balance || "0";
+    } catch (err) {
+        console.error("Balance retrieval failed", err);
+        return "0";
     }
-  } catch (err) {
-    logToPanel(`[RR_FALLBACK ERROR] ${err.message}`);
-  }
-  return "CONTINUE";
 }
 
-
-
-async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-  logToPanel(`[INFO] — Cycle ${cycle}/${totalCycles} started`);
-  setStatus(`RUNNING cycle ${cycle}/${totalCycles}`);
-
-  const syncedBalance = await syncBalanceFromFund();
-  if (syncedBalance === null) {
-    logToPanel("[WARN] Could not sync balance; RR fallback triggered");
-    return await swapRR(0);
-  }
-
-  let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-  if (tradingBalance <= 0) {
-    logToPanel("[INFO] Trading balance is zero; RR fallback triggered");
-    return await swapRR(0);
-  }
-
-  const allocationUSD = tradingBalance / Math.max(1, totalCycles - (cycle - 1));
-
-  const coinBase = await pickRandomCoin();
-  const targetSymbol = `${coinBase}USDT`;
-
-  // ✅ Pull full coin info (address + network)
-  const coinInfo = await window.evaluateCoin(targetSymbol);
-  if (!coinInfo || !coinInfo.tokenAddress) {
-    logToPanel(`[WARN] Token address for ${coinBase} not found; RR fallback triggered`);
-    return await swapRR(allocationUSD);
-  }
-
-  logToPanel(`[INFO] Selected ${targetSymbol} — Network=${coinInfo.network}`);
-
-  const stats = await window.getBinanceStats(targetSymbol);
-  if (!stats || !stats.lastPrice) {
-    logToPanel("[WARN] Market stats unavailable; RR fallback triggered");
-    return await swapRR(allocationUSD);
-  }
-
-  let feeCalc;
-  try {
-    feeCalc = await window.calculateTradeCost(targetSymbol, allocationUSD, coinInfo.network);
-  } catch (feeErr) {
-    logToPanel(`[WARN] Fee check failed: ${feeErr.message} — RR fallback triggered`);
-    return await swapRR(allocationUSD);
-  }
-
-  const beforeBalance = window.SolidarityFundBalance || tradingBalance;
-  try {
-    let swapResp;
-
-    // ✅ Route based on network type
-    if (coinInfo.network === "erc20") {
-      swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, coinInfo.tokenAddress);
-    } else if (coinInfo.network === "bep20") {
-      swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, coinInfo.tokenAddress);
-    } else if (coinInfo.network === "crosschain") {
-      swapResp = await window.runSwap(window.USER_ADDR, allocationUSD, coinInfo.tokenAddress);
+// ⏳ The Reactive State Polling Loop Hook
+async function pollForSpentTokenBalanceChange(userAddr, spentTokenAddress, initialValue, maxTimeoutSeconds) {
+    const checkIntervalMs = 4000; // Poll contract storage every 4 seconds
+    const maxAttempts = (maxTimeoutSeconds * 1000) / checkIntervalMs;
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (!window.isBotRunning) return false;
+        await blockDelay(checkIntervalMs);
+        
+        let currentLiveBalance = await fetchLiveContractBalance(userAddr, spentTokenAddress);
+        
+        // When the balance of the token we just spent drops or changes, the swap was mined!
+        if (BigInt(currentLiveBalance) !== BigInt(initialValue)) {
+            logToPanel(`[POLLING] Balance shift verified! Spent token balance updated from ${initialValue} Wei.`);
+            return true;
+        }
+        
+        if ((attempt + 1) % 3 === 0) {
+            setStatus(`POLLING (${maxTimeoutSeconds - Math.floor((attempt * checkIntervalMs)/1000)}s left)`);
+        }
     }
-
-    if (swapResp && swapResp.tx_hash) {
-      logToPanel(`🎉 Swap executed — TxHash=${swapResp.tx_hash}`);
-    } else {
-      logToPanel("[ERROR] Swap failed — RR fallback triggered");
-      return await swapRR(allocationUSD);
-    }
-
-    await syncBalanceFromFund();
-    const afterBalance = window.SolidarityFundBalance || beforeBalance;
-    const profitDelta = afterBalance - beforeBalance;
-
-    window.cumulativePnL = (window.cumulativePnL || 0) + profitDelta;
-    updateChart(afterBalance, window.cumulativePnL);
-
-  } catch (err) {
-    logToPanel(`[ERROR] Swap execution failed: ${err.message} — RR fallback triggered`);
-    return await swapRR(allocationUSD);
-  }
-
-  const totalChangePct = (window.cumulativePnL / tradingBalance) * 100;
-  if (totalChangePct >= profitTargetPct) return "STOP_PROFIT";
-  if (totalChangePct <= -stopLossPct) return "STOP_LOSS";
-
-  return "CONTINUE";
+    return false; // Timed out
 }
 
-async function startSimulation(totalCycles) {
+// ✅ Main Execution State Controller Pipeline
+async function startSimulation(totalCycles = 10) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
     window.cumulativePnL = 0;
 
-    logToPanel(`[BOT INITIALIZATION] Booting automation pipeline script engine for ${totalCycles} trade iterations.`);
+    logToPanel(`[BOT INITIALIZATION] Booting Dynamic State Tracker Engine for ${totalCycles} trade iterations.`);
 
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
+    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
+    
+    // 💡 STATE POINTERS: Initialize tracking engine starting strictly with your deposited USDT
+    let currentlyHeldTokenAddress = USDT_ADDRESS;
+    let currentlyHeldTokenSymbol = "USDT";
+
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
 
-        const stateSignal = await simulateCycle(i, totalCycles, pTarget, sLoss);
-        if (stateSignal === "STOP_PROFIT" || stateSignal === "STOP_LOSS" || stateSignal === "SKIP") break;
+        logToPanel(`[INFO] — Cycle ${i}/${totalCycles} started`);
+        setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
-        if (i < totalCycles) {
-            logToPanel("[COOLDOWN] Cooling down execution pipeline contexts before scanning next asset target...");
-            for (let countdown = 20; countdown > 0; countdown--) {
-                if (!window.isBotRunning) break;
-                if (countdown % 5 === 0) setStatus(`WAITING (${countdown}s)`);
-                await blockDelay(1000);
+        // 1. Query the live active virtual balance of the token we are currently holding
+        let spentTokenInitialBalance = await fetchLiveContractBalance(window.USER_ADDR, currentlyHeldTokenAddress);
+        logToPanel(`[STATUS] Current Portfolio Asset: ${currentlyHeldTokenSymbol} (Balance: ${spentTokenInitialBalance} Wei)`);
+
+        if (BigInt(spentTokenInitialBalance) <= 0n) {
+            logToPanel(`❌ Pipeline Halted: Balance for ${currentlyHeldTokenSymbol} is 0. Cannot swap.`);
+            break;
+        }
+
+        // 2. Determine target outbound tokens based on execution index position
+        let targetTokenSymbol = "";
+        let targetTokenAddress = "";
+        let networkParam = "bep20";
+
+        if (i === totalCycles) {
+            // 💡 THE 10TH CYCLE FINAL EXIT RULE: Force swap strictly back to your baseline USDT
+            targetTokenSymbol = "USDT";
+            targetTokenAddress = USDT_ADDRESS;
+            logToPanel(`[EXIT STRATEGY] Cycle 10 reached. Forcing portfolio liquidation back to USDT framework.`);
+        } else {
+            // Cycles 1-9: Select dynamic asset candidates out of coins.txt processing structures
+            const coinBase = await pickRandomCoin();
+            targetTokenSymbol = `${coinBase}`;
+            const targetSymbolPair = `${coinBase}USDT`;
+            
+            // Extract technical attributes from your tokens utility map
+            const coinInfo = await window.evaluateCoin(targetSymbolPair);
+            targetTokenAddress = coinInfo?.tokenAddress || "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+            networkParam = coinInfo?.network || "bep20";
+        }
+
+        // Prevent redundant identical self-swaps if loop selects the same asset twice in a row
+        if (targetTokenAddress.toLowerCase() === currentlyHeldTokenAddress.toLowerCase()) {
+            logToPanel(`[INFO] Selected identical asset ${targetTokenSymbol}. Auto-skipping to prevent redundant routing logs.`);
+            continue;
+        }
+
+        logToPanel(`[INFO] Processing Route: Swap ${currentlyHeldTokenSymbol} ➡️ ${targetTokenSymbol}`);
+
+        // 3. Request low-level byte parameters from local proxy endpoint
+        try {
+            const baseApiUrl = window.API_BASE || "";
+            const res = await fetch(`${baseApiUrl}/prodbot/swap`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_address: window.USER_ADDR,
+                    from_token: currentlyHeldTokenAddress, // Dynamic source token input
+                    to_token: targetTokenAddress,          // Dynamic destination token output
+                    amount: spentTokenInitialBalance,      // Sweeps total active mapping capacity
+                    network: networkParam
+                })
+            });
+
+            const backendData = await res.json();
+
+            if (backendData && backendData.status === "ok") {
+                logToPanel(`[INFO] Prompting secure browser signature from your active Web3 wallet layout...`);
+
+                // Dispatch transaction natively as the true logged-in user wallet address
+                const txHash = await window.ethereum.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: window.USER_ADDR,
+                        to: backendData.to_contract,
+                        data: backendData.compiled_data,
+                        value: '0x0'
+                    }],
+                });
+
+                logToPanel(`📡 Transaction broadcasted to miners! Hash identity: ${txHash}`);
+                logToPanel(`⏳ Freezing timer loop. Polling contract mapping database for state modification...`);
+
+                // 4. 🚀 THE REACTIVE FREEZE CHECK: Hold index until the spent token balance drops/changes
+                const txCleared = await pollForSpentTokenBalanceChange(
+                    window.USER_ADDR, 
+                    currentlyHeldTokenAddress, 
+                    spentTokenInitialBalance, 
+                    120
+                );
+
+                if (txCleared) {
+                    logToPanel(`✅ State modification cleared by blockchain miners!`);
+                    
+                    // 💡 UPDATE STATE ARRAYS: Shift portfolio tracking pointers to the newly acquired token
+                    currentlyHeldTokenAddress = targetTokenAddress;
+                    currentlyHeldTokenSymbol = targetTokenSymbol;
+                } else {
+                    logToPanel(`❌ Execution Timeout: Block confirmation state failed to alter. Halted pipeline.`);
+                    break;
+                }
+
+            } else {
+                logToPanel(`❌ Backend Error: Compiled calldata string compilation failed or skipped.`);
+                break;
             }
+
+        } catch (err) {
+            logToPanel(`❌ Pipeline Exception Encountered: ${err.message}`);
+            break;
+        }
+
+        // Brief delay loop buffer breathing threshold before advancing cycle context mapping
+        if (i < totalCycles) {
+            logToPanel("[COOLDOWN] Restoring operational loops frameworks for next iteration scan...");
+            await blockDelay(3000);
         }
     }
 
@@ -181,4 +225,3 @@ async function startSimulation(totalCycles) {
 }
 
 window.startSimulation = startSimulation;
-window.simulateCycle = simulateCycle;
