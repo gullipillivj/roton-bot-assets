@@ -43,6 +43,7 @@ async function pickRandomCoin() {
 }
 
 // 📊 BALANCES SYNC: FORCES EXACT UINT256 STRINGS DIRECTLY TO YOUR UI CONTROLS
+// Open Section 1 of simulate_prod.txt and update fetchLiveContractBalance to read text():
 async function fetchLiveContractBalance(user, token) {
     try {
         const baseApiUrl = window.API_BASE || "";
@@ -51,27 +52,33 @@ async function fetchLiveContractBalance(user, token) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ user: user, token: token })
         });
-        const data = await res.json();
-        const rawWeiString = data.balance ? String(data.balance) : "0";
+        
+        // ✅ CHANGED: Read direct response content as a text string instead of .json()
+        const rawWeiString = await res.text();
+        const verifiedNumberString = rawWeiString.trim() || "0";
 
-        // Inject the absolute numeric string cleanly to avoid floating-point math issues
+        // Push values smoothly down to input structures without numeric padding conflicts
         const investInput = document.getElementById("investBalance");
         const startInput = document.getElementById("startBalance");
         
         if (investInput) {
             investInput.type = "text"; 
-            investInput.value = rawWeiString;
+            investInput.value = verifiedNumberString;
         }
         if (startInput) {
             startInput.type = "text";
-            startInput.value = rawWeiString;
+            startInput.value = verifiedNumberString;
         }
-        return rawWeiString;
+        return verifiedNumberString;
     } catch (err) {
         return "0";
     }
 }
 window.fetchLiveContractBalance = fetchLiveContractBalance;
+
+
+
+
 // ==================================================================
 // SECTION 2: BLOCKCHAIN POLLING & MAIN TRADE ROUTING ENGINE
 // ==================================================================
