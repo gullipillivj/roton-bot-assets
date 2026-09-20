@@ -100,24 +100,20 @@ async function evaluateCoin(symbol) {
 
 // ✅ 3. Return Clean Balanced Buckets of 10 (Total 30)
 async function categorizeCoins() {
-  logToPanel("🔎 Scanning blockchain market data for trend confirmation array...");
-  const symbols = await getBinancePairs();
-  
-  // Throttle queries to avoid Binance connection block bans (Scan first 25 assets dynamically)
-  const poolSubset = symbols.slice(0, 25); 
-  const results = await Promise.all(poolSubset.map(s => evaluateCoin(s)));
-
-  // Filter out any potential zero address leakage fields before populating the matrix
-  const cleanResults = results.filter(c => c.tokenAddress && c.tokenAddress !== "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-
-  const long_term = [...cleanResults].sort((a, b) => b.ma100 - a.ma100).slice(0, 10);
-  const mid_term = [...cleanResults].sort((a, b) => b.ma50 - a.ma50).slice(0, 10);
-  const short_term = [...cleanResults].sort((a, b) => b.ma20 - a.ma20).slice(0, 10);
-
-  logToPanel(`📈 Top Trend Buckets Generated: 10 Long, 10 Mid, 10 Short (Total: ${long_term.length + mid_term.length + short_term.length})`);
-
-  return { long_term, mid_term, short_term };
+  logToPanel("🔎 Requesting live market trend arrays from VPS backend...");
+  try {
+      const baseApiUrl = window.API_BASE || window.location.origin;
+      const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
+      return await res.json();
+  } catch (err) {
+      console.error("Endpoint backup triggered:", err);
+      const fallback = [{ symbol: "CAKE", tokenAddress: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82", network: "bep20", change24h: 1.0, ma20: 1, ma50: 1, ma100: 1 }];
+      return { long_term: fallback, mid_term: fallback, short_term: fallback };
+  }
 }
+window.categorizeCoins = categorizeCoins;
+
+
 
 window.getBinancePairs = getBinancePairs;
 window.evaluateCoin = evaluateCoin;
