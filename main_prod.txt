@@ -271,3 +271,51 @@ if (stpBtn) {
     if (typeof window.stopBot === "function") window.stopBot();
   };
 }
+
+// ==================================================================
+// 📊 MISSING DESKTOP BALANCES DATA CONTROLLER LOOKUP ENFORCER
+// ==================================================================
+async function updateUIBalanceControl(user, token) {
+    try {
+        const baseApiUrl = window.API_BASE || window.location.origin;
+        
+        // Safety switch verification to protect from uninitialized web3 wallet queries
+        if (!user || user === "{wallet}" || user === "null") {
+            console.warn("[UI SYSTEM] Balance tracking called without an active user session.");
+            return "0";
+        }
+
+        const res = await fetch(`${baseApiUrl}/prodbot/balance`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: user, token: token })
+        });
+        
+        const rawWeiText = await res.text();
+        const cleanWeiString = rawWeiText.trim() || "0";
+
+        // Inject data accurately into active DOM text fields
+        const startInputBox = document.getElementById("startBalance");
+        const investInputBox = document.getElementById("investBalance");
+        
+        if (startInputBox) {
+            startInputBox.type = "text";
+            startInputBox.value = cleanWeiString;
+        }
+        if (investInputBox) {
+            investInputBox.type = "text";
+            investInputBox.value = cleanWeiString;
+        }
+
+        return cleanWeiString;
+    } catch (err) {
+        console.error("❌ Critical runtime exception inside updateUIBalanceControl:", err);
+        return "0";
+    }
+}
+
+// ✅ EXPOSE TO THE GLOBAL RUNTIME CONTAINER ENGINE 
+window.updateUIBalanceControl = updateUIBalanceControl;
+
+
+
