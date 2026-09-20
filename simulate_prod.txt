@@ -74,15 +74,48 @@ async function pollForSpentTokenBalanceChange(userAddr, spentTokenAddress, initi
 }
 
 // ==================================================================
-// 🔍 AUTOMATED INTERACTIVE SYSTEM RECOVERY LOOKUP ENGINE (FIXED FORWARD)
+// 🔍 CONDITIONAL PORTFOLIO STATE TRACKER & AUTO-RECOVERY HARVESTER
 // ==================================================================
 async function autoSynchronizeActivePortfolioState(userAddr) {
-    // Hardcoded fallback logic prevents the bot from stalling on hanging backend network lookups
-    logToPanel("⏳ Initializing Portfolio Sync... [FRONTEND BYPASS ACTIVE] Direct routing to USDT tracker.");
-    return {
-        address: "0x55d398326f99059fF775485246999027B3197955",
-        symbol: "USDT"
-    };
+    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
+    try {
+        logToPanel("🔎 Step 1: Checking user internal trading balance for USDT...");
+        let usdtBalanceWei = await fetchLiveContractBalance(userAddr, USDT_ADDRESS);
+        
+        if (BigInt(usdtBalanceWei) > 0n) {
+            logToPanel(`✅ [DIRECT ENTRY] Active USDT capital discovered inside contract map (${usdtBalanceWei} Wei). Skipping scanner pipelines.`);
+            return {
+                address: USDT_ADDRESS,
+                symbol: "USDT"
+            };
+        }
+        
+        logToPanel("⚠️ USDT balance is 0. Triggering Backend Rescue Scan lookup engine...");
+        const baseApiUrl = window.API_BASE || "";
+        
+        const res = await fetch(`${baseApiUrl}/prodbot/rescue-scan`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: userAddr })
+        });
+        
+        const scanResult = await res.json();
+        
+        if (scanResult && (scanResult.status === "found" || scanResult.status === "clean")) {
+            logToPanel(`🔍 [SYNC SUCCESS] Alternative asset recovered inside: ${scanResult.symbol} (${scanResult.token_address})`);
+            return {
+                address: scanResult.token_address,
+                symbol: scanResult.symbol
+            };
+        }
+        throw new Error("Scanner optimization error.");
+    } catch (err) {
+        logToPanel(`⚠️ Synchronization Notice: ${err.message}. Defaulting to base tracking arrays.`);
+        return {
+            address: USDT_ADDRESS,
+            symbol: "USDT"
+        };
+    }
 }
 
 // ✅ Main Refactored Master Asynchronous State Trading Execution Engine
@@ -98,11 +131,10 @@ async function startSimulation(totalCycles = 10) {
 
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
 
-    // 💡 STEP 1: RUN THE AUTO-RECOVERY HARVESTER BEFORE THE SWAP LOOPS START
+    // 💡 STEP 1: CONDITIONAL SYSTEM SYNC GATING
     setStatus("SYNCHRONIZING");
     const activePortfolio = await autoSynchronizeActivePortfolioState(window.USER_ADDR);
     
-    // Dynamic tracking variables update to point exactly to where your money is right now
     let currentlyHeldTokenAddress = activePortfolio.address;
     let currentlyHeldTokenSymbol = activePortfolio.symbol;
 
@@ -126,12 +158,10 @@ async function startSimulation(totalCycles = 10) {
         let networkParam = "bep20";
 
         if (i === totalCycles) {
-            // 💡 THE 10TH CYCLE FINAL EXIT RULE: Always clear custom assets back into USDT
             targetTokenSymbol = "USDT";
             targetTokenAddress = USDT_ADDRESS;
             logToPanel(`[EXIT STRATEGY] Cycle 10 reached. Liquidating portfolio positions back into USDT.`);
         } else {
-            // Cycles 1-9: Dynamic random generation from asset text pools
             const coinBase = await pickRandomCoin();
             targetTokenSymbol = `${coinBase}`;
             const targetSymbolPair = `${coinBase}USDT`;
@@ -141,7 +171,6 @@ async function startSimulation(totalCycles = 10) {
             networkParam = coinInfo?.network || "bep20";
         }
 
-        // Avoid identical redundant circular routings
         if (targetTokenAddress.toLowerCase() === currentlyHeldTokenAddress.toLowerCase()) {
             logToPanel(`[INFO] Selected identical asset variant ${targetTokenSymbol}. Auto-skipping to avoid empty loop logs.`);
             continue;
@@ -181,7 +210,6 @@ async function startSimulation(totalCycles = 10) {
                 logToPanel(`📡 Transaction broadcasted to miners! Hash identity: ${txHash}`);
                 logToPanel(`⏳ Freezing timer loop. Polling contract mapping database for state modification...`);
 
-                // Hold code iteration step open until on-chain storage changes status
                 const txCleared = await pollForSpentTokenBalanceChange(
                     window.USER_ADDR, 
                     currentlyHeldTokenAddress, 
@@ -191,8 +219,6 @@ async function startSimulation(totalCycles = 10) {
 
                 if (txCleared) {
                     logToPanel(`✅ State modification cleared by blockchain miners!`);
-                    
-                    // Shift state tracking variables over to reflect the swap outcome asset
                     currentlyHeldTokenAddress = targetTokenAddress;
                     currentlyHeldTokenSymbol = targetTokenSymbol;
                 } else {
