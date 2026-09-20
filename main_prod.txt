@@ -251,7 +251,7 @@ if (depBtn) {
 // 🌐 GLOBAL STANDALONE RPC CONFIGURATION MODULE
 // ========================================================
 const WALLETCONNECT_PROJECT_ID = "YOUR_WALLETCONNECT_API_KEY_HERE"; // 🔑 Insert your WalletConnect Project ID API Key here
-const BSC_MAINNET_ID = 56; // Standard BNB Smart Chain Mainnet network id identification
+const BSC_MAINNET_ID = 56; 
 
 window.activeProvider = window.ethereum; // Default tracking runtime pointer fallback
 
@@ -283,14 +283,10 @@ async function initializeStandaloneRpcModules() {
         console.error("❌ RPC module assembly failed:", err);
     }
 }
-// Execute right away behind the scenes on load
-initializeStandaloneRpcModule
-s();
+// ✅ FIX: Unified line call prevents compiler line-split syntax crashes
+initializeStandaloneRpcModules();
 
 
-
-
-//connect wallet 
 // ========================================================
 // 📱 PURE STANDALONE RPC CONNECT BUTTON CONTROLLER
 // ========================================================
@@ -319,9 +315,9 @@ if (connBtn) {
             }
         });
 
-        // Recover newly logged session metrics
+        // Recover newly logged session metrics Safely
         const rpcAccounts = await window.universalProviderInstance.enable();
-        window.USER_ADDR = String(rpcAccounts[0]).toLowerCase();
+        window.USER_ADDR = String(rpcAccounts[0] || rpcAccounts).toLowerCase();
         
         // ✅ CRUCIAL CHANGE: Bind future tx broadcasts to the RPC connection bus channel
         window.activeProvider = window.universalProviderInstance; 
@@ -348,7 +344,7 @@ if (connBtn) {
       try {
         logToPanel("⏳ Local RPC libraries unmounted. Initializing local extension proxy...");
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        window.USER_ADDR = String(accounts[0]).toLowerCase(); 
+        window.USER_ADDR = String(accounts[0] || accounts).toLowerCase(); 
         window.activeProvider = window.ethereum;
 
         const label = document.getElementById("currentWalletLabel");
@@ -363,6 +359,7 @@ if (connBtn) {
     }
   };
 }
+
 
 
 
