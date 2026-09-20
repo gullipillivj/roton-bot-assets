@@ -249,8 +249,8 @@ if (depBtn) {
 
 
 
-initializeLabels();
 
+//connect wallet 
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
@@ -270,6 +270,7 @@ if (connBtn) {
   };
 }
 
+//start trading 
 const strtBtn = document.getElementById("startBtn");
 if (strtBtn) {
   strtBtn.onclick = function() {
@@ -282,6 +283,7 @@ if (strtBtn) {
   };
 }
 
+//stop Trading 
 const stpBtn = document.getElementById("stopBtn");
 if (stpBtn) {
   stpBtn.onclick = function() {
