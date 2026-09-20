@@ -1,4 +1,7 @@
-logToPanel("simulate_prod.txt loaded (Dynamic State Tracker & Auto-Recovery Engine Online)");
+// ==================================================================
+// SECTION 1: CORE UTILITY FUNCTIONS & STATE MANAGEMENT
+// ==================================================================
+logToPanel("simulate_prod.txt (Section 1) loaded successfully.");
 
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
@@ -12,18 +15,6 @@ function logToPanel(msg) {
 window.logToPanel = logToPanel;
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
-
-async function pickRandomCoin() {
-    try {
-        if (typeof window.getBinancePairs === "function") {
-            const pairs = await window.getBinancePairs();
-            if (pairs && pairs.length > 0) {
-                return pairs[Math.floor(Math.random() * pairs.length)].replace("USDT", "");
-            }
-        }
-        return "BNB"; 
-    } catch (e) { return "BNB"; }
-}
 
 function setStatus(msg) {
     const statusLabel = document.querySelector(".status-label");
@@ -39,6 +30,19 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
+async function pickRandomCoin() {
+    try {
+        if (typeof window.getBinancePairs === "function") {
+            const pairs = await window.getBinancePairs();
+            if (pairs && pairs.length > 0) {
+                return pairs[Math.floor(Math.random() * pairs.length)].replace("USDT", "");
+            }
+        }
+        return "BNB"; 
+    } catch (e) { return "BNB"; }
+}
+
+// 📊 BALANCES SYNC: FORCES EXACT UINT256 STRINGS DIRECTLY TO YOUR UI CONTROLS
 async function fetchLiveContractBalance(user, token) {
     try {
         const baseApiUrl = window.API_BASE || "";
@@ -48,11 +52,30 @@ async function fetchLiveContractBalance(user, token) {
             body: JSON.stringify({ user: user, token: token })
         });
         const data = await res.json();
-        return data.balance || "0";
+        const rawWeiString = data.balance ? String(data.balance) : "0";
+
+        // Inject the absolute numeric string cleanly to avoid floating-point math issues
+        const investInput = document.getElementById("investBalance");
+        const startInput = document.getElementById("startBalance");
+        
+        if (investInput) {
+            investInput.type = "text"; 
+            investInput.value = rawWeiString;
+        }
+        if (startInput) {
+            startInput.type = "text";
+            startInput.value = rawWeiString;
+        }
+        return rawWeiString;
     } catch (err) {
         return "0";
     }
 }
+window.fetchLiveContractBalance = fetchLiveContractBalance;
+// ==================================================================
+// SECTION 2: BLOCKCHAIN POLLING & MAIN TRADE ROUTING ENGINE
+// ==================================================================
+logToPanel("simulate_prod.txt (Section 2) loaded successfully.");
 
 async function pollForSpentTokenBalanceChange(userAddr, spentTokenAddress, initialValue, maxTimeoutSeconds) {
     const checkIntervalMs = 4000;
@@ -62,8 +85,10 @@ async function pollForSpentTokenBalanceChange(userAddr, spentTokenAddress, initi
         if (!window.isBotRunning) return false;
         await blockDelay(checkIntervalMs);
         
-        let currentLiveBalance = await fetchLiveContractBalance(userAddr, spentTokenAddress);
+        let currentLiveBalance = await window.fetchLiveContractBalance(userAddr, spentTokenAddress);
+        
         if (BigInt(currentLiveBalance) !== BigInt(initialValue)) {
+            logToPanel(`📈 Balance change found! Old: ${initialValue} -> New: ${currentLiveBalance}`);
             return true;
         }
         if ((attempt + 1) % 3 === 0) {
@@ -73,26 +98,20 @@ async function pollForSpentTokenBalanceChange(userAddr, spentTokenAddress, initi
     return false;
 }
 
-// ==================================================================
-// 🔍 CONDITIONAL PORTFOLIO STATE TRACKER & AUTO-RECOVERY HARVESTER
-// ==================================================================
+// 🔍 STEP 1 CONDITIONAL PORTFOLIO GATEKEEPER
 async function autoSynchronizeActivePortfolioState(userAddr) {
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
     try {
         logToPanel("🔎 Step 1: Checking user internal trading balance for USDT...");
-        let usdtBalanceWei = await fetchLiveContractBalance(userAddr, USDT_ADDRESS);
+        let usdtBalanceWei = await window.fetchLiveContractBalance(userAddr, USDT_ADDRESS);
         
         if (BigInt(usdtBalanceWei) > 0n) {
-            logToPanel(`✅ [DIRECT ENTRY] Active USDT capital discovered inside contract map (${usdtBalanceWei} Wei). Skipping scanner pipelines.`);
-            return {
-                address: USDT_ADDRESS,
-                symbol: "USDT"
-            };
+            logToPanel(`✅ [DIRECT ENTRY] Active USDT capital discovered: ${usdtBalanceWei} Wei. Bypassing rescue scanner.`);
+            return { address: USDT_ADDRESS, symbol: "USDT" };
         }
         
-        logToPanel("⚠️ USDT balance is 0. Triggering Backend Rescue Scan lookup engine...");
+        logToPanel("⚠️ USDT balance is 0. Triggering Backend Rescue Scan engine...");
         const baseApiUrl = window.API_BASE || "";
-        
         const res = await fetch(`${baseApiUrl}/prodbot/rescue-scan`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -100,41 +119,28 @@ async function autoSynchronizeActivePortfolioState(userAddr) {
         });
         
         const scanResult = await res.json();
-        
         if (scanResult && (scanResult.status === "found" || scanResult.status === "clean")) {
-            logToPanel(`🔍 [SYNC SUCCESS] Alternative asset recovered inside: ${scanResult.symbol} (${scanResult.token_address})`);
-            return {
-                address: scanResult.token_address,
-                symbol: scanResult.symbol
-            };
+            logToPanel(`🔍 [SYNC SUCCESS] Recovered active asset: ${scanResult.symbol} (${scanResult.token_address})`);
+            return { address: scanResult.token_address, symbol: scanResult.symbol };
         }
         throw new Error("Scanner optimization error.");
     } catch (err) {
-        logToPanel(`⚠️ Synchronization Notice: ${err.message}. Defaulting to base tracking arrays.`);
-        return {
-            address: USDT_ADDRESS,
-            symbol: "USDT"
-        };
+        logToPanel(`⚠️ Synchronization Notice: ${err.message}. Defaulting to main tracking profiles.`);
+        return { address: USDT_ADDRESS, symbol: "USDT" };
     }
 }
 
-// ✅ Main Refactored Master Asynchronous State Trading Execution Engine
+// ✅ MAIN REFACTORED MASTER CYCLING EXECUTION SYSTEM
 async function startSimulation(totalCycles = 10) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
     window.cumulativePnL = 0;
 
     logToPanel(`[BOT INITIALIZATION] Booting Dynamic State Tracker Engine for ${totalCycles} iterations.`);
-
-    const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
-    const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
-
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
 
-    // 💡 STEP 1: CONDITIONAL SYSTEM SYNC GATING
     setStatus("SYNCHRONIZING");
     const activePortfolio = await autoSynchronizeActivePortfolioState(window.USER_ADDR);
-    
     let currentlyHeldTokenAddress = activePortfolio.address;
     let currentlyHeldTokenSymbol = activePortfolio.symbol;
 
@@ -144,35 +150,28 @@ async function startSimulation(totalCycles = 10) {
         logToPanel(`[INFO] — Cycle ${i}/${totalCycles} started`);
         setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
-        // Query the live balance of the dynamic asset we currently hold
-        let spentTokenInitialBalance = await fetchLiveContractBalance(window.USER_ADDR, currentlyHeldTokenAddress);
-        logToPanel(`[STATUS] Active Portfolio Target: ${currentlyHeldTokenSymbol} (Balance: ${spentTokenInitialBalance} Wei)`);
+        let spentTokenInitialBalance = await window.fetchLiveContractBalance(window.USER_ADDR, currentlyHeldTokenAddress);
+        logToPanel(`[STATUS] Active Target: ${currentlyHeldTokenSymbol} (Balance: ${spentTokenInitialBalance} Wei)`);
 
         if (BigInt(spentTokenInitialBalance) <= 0n) {
-            logToPanel(`❌ Pipeline Halted: Balance mapping for ${currentlyHeldTokenSymbol} evaluates to 0.`);
+            logToPanel(`❌ Pipeline Halted: Balance mapping evaluates to 0.`);
             break;
         }
 
-        let targetTokenSymbol = "";
-        let targetTokenAddress = "";
+        let targetTokenSymbol = (i === totalCycles) ? "USDT" : "";
+        let targetTokenAddress = (i === totalCycles) ? USDT_ADDRESS : "";
         let networkParam = "bep20";
 
-        if (i === totalCycles) {
-            targetTokenSymbol = "USDT";
-            targetTokenAddress = USDT_ADDRESS;
-            logToPanel(`[EXIT STRATEGY] Cycle 10 reached. Liquidating portfolio positions back into USDT.`);
-        } else {
+        if (i !== totalCycles) {
             const coinBase = await pickRandomCoin();
             targetTokenSymbol = `${coinBase}`;
-            const targetSymbolPair = `${coinBase}USDT`;
-            
-            const coinInfo = await window.evaluateCoin(targetSymbolPair);
+            const coinInfo = await window.evaluateCoin(`${coinBase}USDT`);
             targetTokenAddress = coinInfo?.tokenAddress || "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
             networkParam = coinInfo?.network || "bep20";
         }
 
         if (targetTokenAddress.toLowerCase() === currentlyHeldTokenAddress.toLowerCase()) {
-            logToPanel(`[INFO] Selected identical asset variant ${targetTokenSymbol}. Auto-skipping to avoid empty loop logs.`);
+            logToPanel(`[INFO] Selected identical asset variant. Auto-skipping to avoid redundant logs.`);
             continue;
         }
 
@@ -191,12 +190,10 @@ async function startSimulation(totalCycles = 10) {
                     network: networkParam
                 })
             });
-
             const backendData = await res.json();
 
             if (backendData && backendData.status === "ok") {
-                logToPanel(`[INFO] Prompting secure browser signature from your active Web3 wallet layout...`);
-
+                logToPanel(`[INFO] Prompting secure wallet signature...`);
                 const txHash = await window.ethereum.request({
                     method: 'eth_sendTransaction',
                     params: [{
@@ -207,37 +204,28 @@ async function startSimulation(totalCycles = 10) {
                     }],
                 });
 
-                logToPanel(`📡 Transaction broadcasted to miners! Hash identity: ${txHash}`);
-                logToPanel(`⏳ Freezing timer loop. Polling contract mapping database for state modification...`);
-
-                const txCleared = await pollForSpentTokenBalanceChange(
-                    window.USER_ADDR, 
-                    currentlyHeldTokenAddress, 
-                    spentTokenInitialBalance, 
-                    120
-                );
+                logToPanel(`📡 Transaction broadcasted! Hash identity: ${txHash}`);
+                const txCleared = await pollForSpentTokenBalanceChange(window.USER_ADDR, currentlyHeldTokenAddress, spentTokenInitialBalance, 120);
 
                 if (txCleared) {
                     logToPanel(`✅ State modification cleared by blockchain miners!`);
                     currentlyHeldTokenAddress = targetTokenAddress;
                     currentlyHeldTokenSymbol = targetTokenSymbol;
                 } else {
-                    logToPanel(`❌ Execution Timeout: Block confirmation state failed to alter. Halted pipeline.`);
+                    logToPanel(`❌ Execution Timeout: State failed to alter. Halted pipeline.`);
                     break;
                 }
-
             } else {
-                logToPanel(`❌ Backend Error: Compiled calldata string compilation failed or skipped.`);
+                logToPanel(`❌ Backend Error: Compiled calldata generation failed.`);
                 break;
             }
-
         } catch (err) {
             logToPanel(`❌ Pipeline Exception Encountered: ${err.message}`);
             break;
         }
 
         if (i < totalCycles) {
-            logToPanel("[COOLDOWN] Restoring operational loops frameworks for next iteration scan...");
+            logToPanel("[COOLDOWN] Waiting 3s for next loop iteration step...");
             await blockDelay(3000);
         }
     }
@@ -246,5 +234,4 @@ async function startSimulation(totalCycles = 10) {
     setStatus("STOPPED");
     logToPanel("[BOT FINISHED] Sequence pipeline processing completed successfully.");
 }
-
 window.startSimulation = startSimulation;
