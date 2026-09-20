@@ -106,3 +106,108 @@ async function initDashboardPipeline() {
   }
 }
 initDashboardPipeline();
+
+// ========================================================
+// 📱 SECTION 2: STANDALONE RPC MODAL CONNECTION MANAGER
+// ========================================================
+// UPGRADED: Verified public infrastructure gateway cluster key
+const WALLETCONNECT_PROJECT_ID = "889b70de54ab5ff9a399f921f016d999"; 
+const BSC_MAINNET_ID = 56; 
+
+// Track the globally active signing provider instance dynamically
+window.activeProvider = null; 
+
+async function initializeStandaloneRpcModules() {
+    try {
+        if (typeof window.WalletConnectUniversalProvider !== "undefined" && typeof window.WalletConnectModalStandalone !== "undefined") {
+            
+            window.universalProviderInstance = await window.WalletConnectUniversalProvider.UniversalProvider.init({
+                projectId: WALLETCONNECT_PROJECT_ID,
+                metadata: {
+                    name: "RoTon Volume Bot",
+                    description: "Ecosystem Liquidity Circulation Optimization Engine",
+                    url: window.location.origin,
+                    icons: ["https://walletconnect.org"]
+                }
+            });
+
+            window.web3ModalInstance = new window.WalletConnectModalStandalone.WalletConnectModal({
+                projectId: WALLETCONNECT_PROJECT_ID,
+                walletConnectVersion: 2,
+                themeMode: "dark"
+            });
+            console.log("🚀 [RPC ENGINE] WalletConnect standalone modules initialized successfully.");
+        }
+    } catch (err) {
+        console.error("❌ RPC module assembly failed:", err);
+    }
+}
+initializeStandaloneRpcModules();
+
+const connBtn = document.getElementById("connectwalletBtn");
+if (connBtn) {
+  connBtn.onclick = async function() {
+    
+    // STEP 1: PRIORITIZE THE UNIVERSAL QR MODAL PORTAL FOR PURE RPC LINKS
+    if (window.universalProviderInstance && window.web3ModalInstance) {
+      try {
+        logToPanel("⏳ Launching secure RPC handshake bridge modal...");
+        
+        window.universalProviderInstance.on("display_uri", (uri) => {
+            window.web3ModalInstance.openModal({ uri });
+        });
+
+        await window.universalProviderInstance.connect({
+            namespaces: {
+                eip155: {
+                    methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData"],
+                    chains: [`eip155:${BSC_MAINNET_ID}`],
+                    events: ["chainChanged", "accountsChanged"]
+                }
+            }
+        });
+
+        const rpcAccounts = await window.universalProviderInstance.enable();
+        const detectedAddr = Array.isArray(rpcAccounts) ? rpcAccounts[0] : rpcAccounts;
+        window.USER_ADDR = String(detectedAddr || rpcAccounts).toLowerCase();
+        
+        // BIND FUTURE OPERATIONS SECURELY TO THE DYNAMIC INTERFACE CHANNEL
+        window.activeProvider = window.universalProviderInstance; 
+
+        window.web3ModalInstance.closeModal();
+        
+        const label = document.getElementById("currentWalletLabel");
+        if (label) label.innerText = "Wallet Address: " + window.USER_ADDR;
+        logToPanel(`✅ Account synced via WalletConnect RPC: ${window.USER_ADDR}`);
+        
+        await syncBalanceFromFund(); 
+        return;
+        
+      } catch (modalErr) {
+        if (window.web3ModalInstance) window.web3ModalInstance.closeModal();
+        logToPanel(`⚠️ RPC Handshake closed: ${modalErr.message}`);
+        return;
+      }
+    }
+
+    // STEP 2: LOCAL EXTENSION FALLBACK RUNTIME (Only loads if CDN script modules break)
+    if (typeof window.ethereum !== "undefined") {
+      try {
+        logToPanel("⏳ Local RPC libraries unmounted. Initializing local extension proxy...");
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        window.USER_ADDR = String(accounts[0] || accounts).toLowerCase(); 
+        window.activeProvider = window.ethereum;
+
+        const label = document.getElementById("currentWalletLabel");
+        if (label) label.innerText = "Wallet Address: " + window.USER_ADDR;
+        logToPanel(`✅ Linked via extension fallback: ${window.USER_ADDR}`);
+        await syncBalanceFromFund();
+      } catch (err) {
+        logToPanel(`❌ Local proxy error: ${err.message}`);
+      }
+    } else {
+      logToPanel("❌ System Error: Standalone RPC providers and local extension wrappers are both unreachable.");
+    }
+  };
+}
+
