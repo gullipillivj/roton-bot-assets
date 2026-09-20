@@ -250,7 +250,7 @@ if (depBtn) {
 // ========================================================
 // 🌐 GLOBAL STANDALONE RPC CONFIGURATION MODULE
 // ========================================================
-const WALLETCONNECT_PROJECT_ID = "YOUR_WALLETCONNECT_API_KEY_HERE"; // 🔑 Insert your WalletConnect Project ID API Key here
+const WALLETCONNECT_PROJECT_ID = "wcp_jOCXF42FcXDtmB-dtujYerJevScgtunu"; // 🔑 Insert your WalletConnect Project ID API Key here
 const BSC_MAINNET_ID = 56; 
 
 window.activeProvider = window.ethereum; // Default tracking runtime pointer fallback
