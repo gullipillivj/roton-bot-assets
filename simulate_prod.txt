@@ -1,5 +1,33 @@
-logToPanel("simulate_prod.txt (Container 2) loaded successfully with RR-Circulation Engine.");
+// ==================================================================
+// 🎛️ FRONTEND ADAPTER COMPATIBILITY PATCH
+// ==================================================================
+logToPanel("simulate_prod.txt loaded successfully with RR-Circulation Engine.");
 
+// Fallback status helper to prevent unhandled script crashes
+window.setStatus = function(statusText) {
+    console.log(`[STATUS UPDATE]: ${statusText}`);
+    logToPanel(`[STATUS]: ${statusText}`);
+};
+
+// Connects the simulation balance loop directly to your working backend ledger sync
+window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
+    try {
+        // Fires the backend fetch request to /prodbot/balance defined in your frontend lifecycle
+        const balanceWei = await window.syncBalanceFromFund();
+        if (balanceWei !== null && balanceWei !== undefined) {
+            // Converts numeric float/integer string back to standard string format safely
+            return BigInt(Math.floor(balanceWei)).toString();
+        }
+        return "0";
+    } catch (err) {
+        console.error("Adapter dynamic balance lookup error:", err);
+        return "0";
+    }
+};
+
+// ==================================================================
+// 🚀 PRODUCTION SIMULATION RUNNER ENGINE
+// ==================================================================
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
 async function startSimulation(totalCycles = 10) {
@@ -23,6 +51,7 @@ async function startSimulation(totalCycles = 10) {
         logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
         window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
+        // Now maps cleanly to window.syncBalanceFromFund instead of throwing a TypeError
         let initialFieldText = await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
         logToPanel(`[STATUS] Active Internal Balance: ${initialFieldText} base units`);
 
@@ -152,4 +181,6 @@ async function startSimulation(totalCycles = 10) {
     window.setStatus("STOPPED");
     logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
+
+// Attach directly to global environment pipeline context
 window.startSimulation = startSimulation;
