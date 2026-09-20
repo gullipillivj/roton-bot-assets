@@ -251,24 +251,76 @@ if (depBtn) {
 
 
 //connect wallet 
+// ========================================================
+// 🔌 UNIFIED WALLET LINKING & BALANCES SYNCHRONIZER
+// ========================================================
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
+    // 🖥️ SCENARIO A: Standard Browser Extension Detected (MetaMask / Trust Extension)
     if (typeof window.ethereum !== "undefined") {
       try {
+        logToPanel("⏳ Initializing browser extension account request...");
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        
+        // Standardize the active public wallet address parameter
         window.USER_ADDR = String(accounts[0]).toLowerCase(); 
+        window.activeProvider = window.ethereum; // Map active runtime tracking pointer
+
         const label = document.getElementById("currentWalletLabel");
         if (label) label.innerText = window.USER_ADDR;
-        logToPanel(`✅ Wallet linked: ${window.USER_ADDR}`);
+        logToPanel(`✅ Wallet linked successfully: ${window.USER_ADDR}`);
+
+        // 📊 CRUCIAL ADVANCEMENT: Instantly update text fields on connection so they are never blank
+        logToPanel("⏳ Synchronizing virtual trading account balances with contract ledger...");
+        await syncBalanceFromFund(); 
+
       } catch (err) {
         logToPanel(`❌ Connection error: ${err.message}`);
       }
+    } 
+    // 📱 SCENARIO B: Fallback to WalletConnect Engine for Mobile / Core Wallets
+    else if (window.universalProviderInstance && window.web3ModalInstance) {
+      try {
+        logToPanel("⏳ Extension missing. Launching safe WalletConnect bridge modal...");
+        
+        window.universalProviderInstance.on("display_uri", (uri) => {
+            window.web3ModalInstance.openModal({ uri });
+        });
+
+        await window.universalProviderInstance.connect({
+            namespaces: {
+                eip155: {
+                    methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData"],
+                    chains: ["eip155:56"], // BSC Mainnet Identification Namespace
+                    events: ["chainChanged", "accountsChanged"]
+                }
+            }
+        });
+
+        const mobileAccounts = await window.universalProviderInstance.enable();
+        window.USER_ADDR = String(mobileAccounts[0]).toLowerCase();
+        window.activeProvider = window.universalProviderInstance; // Set pointer to mobile pipeline
+
+        window.web3ModalInstance.closeModal();
+        
+        const label = document.getElementById("currentWalletLabel");
+        if (label) label.innerText = window.USER_ADDR;
+        logToPanel(`✅ Mobile Wallet linked via WalletConnect: ${window.USER_ADDR}`);
+        
+        // Populates inputs instantly following mobile sync confirmation
+        await syncBalanceFromFund(); 
+      } catch (modalErr) {
+        if (window.web3ModalInstance) window.web3ModalInstance.closeModal();
+        logToPanel(`❌ WalletConnect failed: ${modalErr.message}`);
+      }
     } else {
-      logToPanel("❌ MetaMask extension framework not detected.");
+      logToPanel("❌ MetaMask browser extension or WalletConnect library context not found.");
     }
   };
 }
+
+
 
 //start trading 
 const strtBtn = document.getElementById("startBtn");
