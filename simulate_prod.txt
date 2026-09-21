@@ -307,3 +307,6 @@ async function startSimulation(totalCycles = 10) {
 
     window.isBotRunning = false;
     window.setStatus("STOPPED");
+logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
+}
+window.startSimulation = startSimulation;
