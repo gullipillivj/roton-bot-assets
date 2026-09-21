@@ -95,6 +95,7 @@ function initDashboardPipeline() {
 // RESTORED ORIGINAL SYNCHRONOUS RUNTIME METHOD
 initDashboardPipeline();
 
+
 // ========================================================
 // 📱 WALLET INTERFACE IMPLEMENTATION (SAFE & ISOLATED)
 // ========================================================
@@ -115,6 +116,12 @@ if (connBtn) {
         if (label) label.innerText = window.USER_ADDR;
         logToPanel("✅ Connected: " + window.USER_ADDR);
         await syncBalanceFromFund();
+
+        // 🟢 CHOSEN INTEGRATION PLACE: Triggers background clock updates instantly upon wallet connection success
+        if (typeof window.initLiveBalanceClock === "function") {
+            window.initLiveBalanceClock();
+        }
+        
       } catch (err) {
         logToPanel("❌ Connection error: " + err.message);
       }
@@ -123,6 +130,8 @@ if (connBtn) {
     }
   };
 }
+
+
 
 // ========================================================
 // 🚀 DEPOSIT & TRADING LIFE-RINGS
