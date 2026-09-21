@@ -8,7 +8,6 @@ window.setStatus = function(statusText) {
     logToPanel(`[STATUS]: ${statusText}`);
 };
 
-// 💎 FIXED: Now dynamically targets the exact token address needed for the cycle step
 window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
@@ -19,7 +18,7 @@ window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 user: userAddr,
-                token: tokenAddress // Passed the correct current asset address dynamically!
+                token: tokenAddress
             })
         });
 
@@ -27,7 +26,6 @@ window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
         const cleanWeiString = rawWeiText.trim() || "0";
         logToPanel("[LEDGER SYNC] Custom asset balance loaded: " + cleanWeiString);
 
-        // Update display text elements natively
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
         if (startBox) { startBox.value = cleanWeiString; }
@@ -44,7 +42,7 @@ window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
 };
 
 // ==================================================================
-// 🚀 PRODUCTION SIMULATION RUNNER ENGINE
+// 🚀 OPTIMIZED SELECTION PRODUCTION SIMULATION RUNNER ENGINE
 // ==================================================================
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
@@ -72,8 +70,21 @@ async function startSimulation(totalCycles = 10) {
         logToPanel(`[STATUS] Active Internal Balance: ${initialFieldText} base units`);
 
         if (BigInt(initialFieldText) <= 0n) {
-            logToPanel(`❌ Pipeline Halted: Display balance textbox evaluates to 0.`);
-            break;
+            logToPanel(`⚠️ Current token balance evaluates to 0.`);
+            if (currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
+                logToPanel(`🔄 Trade validation missed on-chain. Falling back to primary USDT layer.`);
+                currentAssetAddress = USDT_ADDRESS;
+                currentAssetSymbol = "USDT";
+                initialFieldText = await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
+                
+                if (BigInt(initialFieldText) <= 0n) {
+                    logToPanel(`❌ Pipeline Halted: Base USDT balance also evaluates to 0.`);
+                    break;
+                }
+            } else {
+                logToPanel(`❌ Pipeline Halted: Terminal balance depletion.`);
+                break;
+            }
         }
 
         let targetSymbol = "USDT";
@@ -82,44 +93,52 @@ async function startSimulation(totalCycles = 10) {
         let executeMarketSwap = false;
 
         if (i !== totalCycles) {
+            // 📊 1. FETCH AND COMBINE MOMENTUM ARRAYS
             const buckets = await window.categorizeCoins();
             const fullPool = [...buckets.long_term, ...buckets.mid_term, ...buckets.short_term];
 
             let highestProfitableCandidate = null;
-            const estimatedGasOverheadUSD = 0.25;
+            const floatBalance = parseFloat(initialFieldText) / 1e18; 
+
+            // 💸 2. ADJUSTED SELECTION MATH FOR AGGRESSIVE CAPTURE
+            // Scales down gas restrictions for low-balance test transactions
+            const baselineGasCost = 0.25;
+            const adjustedGasOverheadUSD = floatBalance < 5.0 ? 0.001 : baselineGasCost;
+
+            // Sort pool so highest gaining 24h momentum assets are checked first
+            fullPool.sort((a, b) => (b.change24h || 0) - (a.change24h || 0));
 
             for (let candidate of fullPool) {
                 if (candidate.symbol === "BNB" || candidate.symbol === "ETH" || candidate.symbol === "USDT") {
-                    continue;
+                    continue; 
                 }
 
                 const trendAccelerationFactor = candidate.change24h > 0 ? (candidate.change24h * 0.05) : 0.5;
-                const floatBalance = parseFloat(initialFieldText) / 1e18; 
                 const projectedGrossProfitUSD = floatBalance * (trendAccelerationFactor / 100);
 
-                if (projectedGrossProfitUSD > estimatedGasOverheadUSD) {
+                if (projectedGrossProfitUSD > adjustedGasOverheadUSD) {
                     highestProfitableCandidate = candidate;
                     break; 
                 }
             }
 
+            // 🔄 3. ROUTING ASSIGNMENTS
             if (highestProfitableCandidate) {
                 targetSymbol = highestProfitableCandidate.symbol;
                 targetAddress = highestProfitableCandidate.tokenAddress;
-                targetNetwork = highestProfitableCandidate.network;
+                targetNetwork = highestProfitableCandidate.network || "bep20";
                 executeMarketSwap = true;
-                logToPanel(`🎯 Market Yield Verified: Selecting ${targetSymbol} to execute arbitrage swap.`);
+                logToPanel(`🎯 Market Yield Verified: Selecting ${targetSymbol} (${highestProfitableCandidate.change24h}% 24h) to execute arbitrage swap.`);
             } else {
                 executeMarketSwap = true;
-                
                 if (currentAssetAddress.toLowerCase() === RR_BNB_ADDR.toLowerCase()) {
                     targetSymbol = "RR-ETH";
                     targetAddress = RR_ETH_ADDR;
-                    logToPanel(`🔁 [ECOSYSTEM INJECTION] Market yields low. Routing volume from RR-BNB ➡️ RR-ETH for circulation.`);
+                    logToPanel(`🔁 [ECOSYSTEM INJECTION] Market metrics low. Routing volume from RR-BNB ➡️ RR-ETH for circulation.`);
                 } else {
                     targetSymbol = "RR-BNB";
                     targetAddress = RR_BNB_ADDR;
-                    logToPanel(`🔁 [ECOSYSTEM INJECTION] Market yields low. Routing volume ➡️ ${targetSymbol} for circulation.`);
+                    logToPanel(`🔁 [ECOSYSTEM INJECTION] Market metrics low. Routing volume ➡️ RR-BNB for circulation.`);
                 }
             }
         }
@@ -164,10 +183,15 @@ async function startSimulation(totalCycles = 10) {
 
                 await blockDelay(12000);
                 
-                await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
-                currentAssetAddress = targetAddress;
-                currentAssetSymbol = targetSymbol;
-                logToPanel(`✅ Cycle step complete. Advancing loop pipeline records.`);
+                const postBalance = await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
+                
+                if (BigInt(postBalance) > 0n) {
+                    currentAssetAddress = targetAddress;
+                    currentAssetSymbol = targetSymbol;
+                    logToPanel(`✅ Cycle step complete. Target asset confirmed on-chain.`);
+                } else {
+                    logToPanel(`⚠️ Target balance returned 0. On-chain trade skipped/bypassed. Retaining current layout.`);
+                }
 
             } else {
                 logToPanel(`❌ Error: Could not generate swap payload. Reason: ${txPayload.message || "Unknown"}`);
