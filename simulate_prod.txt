@@ -107,6 +107,10 @@ async function startSimulation(totalCycles = 10) {
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
     const RR_BNB_ADDR = "0xba67186fd454D0256a0D3744783538bE08C58feD";
     const RR_ETH_ADDR = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
+    
+    // 🟢 DEFINE BACKUP PORTFOLIO TOKENS TO AUTOMATICALLY SCAN
+    const VENUS_XVS_ADDRESS = "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902"; // Standard BSC Venus Address
+    const WBNB_ADDRESS = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
@@ -124,24 +128,46 @@ async function startSimulation(totalCycles = 10) {
 
         logToPanel(`[GROUNDED] Contract Verified State: Holding ${currentAssetSymbol} (${initialFieldText} base units)`);
 
-        // DYNAMIC SYNC GATEWAY: Check active asset first before checking alternative liquidity paths
+        // DYNAMIC SYNC GATEWAY: Resolve balance or scan alternatives if initial tracking target returns empty
         if (BigInt(initialFieldText) <= 0n) {
             logToPanel(`⚠️ Contract storage slot empty for ${currentAssetSymbol}. Synchronizing connected wallet state...`);
             initialFieldText = await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
             
-            // If the wallet balance for the active asset is also 0, fallback to scan the core USDT balance
-            if (BigInt(initialFieldText) <= 0n && currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
-                logToPanel(`⚠️ Asset profile ${currentAssetSymbol} empty in wallet. Falling back to verify USDT balance...`);
-                currentAssetAddress = USDT_ADDRESS;
-                currentAssetSymbol = "USDT";
-                initialFieldText = await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
+            // 🟢 INTELLIGENT PORTFOLIO SCANNER: If tracked asset is 0, systematically search alternative profiles
+            if (BigInt(initialFieldText) <= 0n) {
+                const scannerProfiles = [
+                    { symbol: "XVS", address: VENUS_XVS_ADDRESS },
+                    { symbol: "BNB", address: WBNB_ADDRESS },
+                    { symbol: "USDT", address: USDT_ADDRESS }
+                ];
+                
+                for (let profile of scannerProfiles) {
+                    // Skip checking if it was the one we already queried
+                    if (profile.address.toLowerCase() === currentAssetAddress.toLowerCase()) continue;
+                    
+                    logToPanel(`🔎 Searching alternative asset wallet balances: Checking ${profile.symbol}...`);
+                    let balanceCheck = await window.updateUIBalanceControl(window.USER_ADDR, profile.address);
+                    
+                    if (BigInt(balanceCheck) > 0n) {
+                        currentAssetAddress = profile.address;
+                        currentAssetSymbol = profile.symbol;
+                        initialFieldText = balanceCheck;
+                        logToPanel(`✅ Capital Found! Switched active baseline token focus to ${currentAssetSymbol}.`);
+                        break;
+                    }
+                }
             }
 
             // Total depletion confirmation gate
             if (BigInt(initialFieldText) <= 0n) {
-                logToPanel(`❌ Pipeline Halted: Verified total depletion across all asset profiles.`);
+                logToPanel(`❌ Pipeline Halted: Verified total depletion across all scanned asset profiles.`);
                 break;
             }
+        }
+
+        // 🟢 UPDATE HUMAN READABLE USD BOX: Triggers updates on every loop pass once balance is validated
+        if (BigInt(initialFieldText) > 0n) {
+            await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
         }
 
         let targetSymbol = "USDT";
@@ -170,7 +196,6 @@ async function startSimulation(totalCycles = 10) {
                     continue; 
                 }
 
-                // If currently holding this specific token address, skip it to evaluate rotational alternatives
                 if (candidate.tokenAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
                     continue;
                 }
@@ -191,7 +216,6 @@ async function startSimulation(totalCycles = 10) {
                 targetNetwork = highestProfitableCandidate.network || "bep20";
                 logToPanel(`🎯 Market Yield Verified: Selecting ${targetSymbol} for rotational execution.`);
             } else {
-                // Return assets back to USDT stability layer if holding a market token and momentum slows down
                 if (currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
                     targetSymbol = "USDT";
                     targetAddress = USDT_ADDRESS;
@@ -255,7 +279,6 @@ async function startSimulation(totalCycles = 10) {
                 logToPanel(`⏳ Pausing engine for transaction settlement...`);
                 await blockDelay(12000);
                 
-                // Explicit post-execution sync confirmation lookup step
                 await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
             } else {
                 logToPanel(`❌ Error: Could not generate swap payload. Reason: ${txPayload.message || "Unknown"}`);
