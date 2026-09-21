@@ -76,12 +76,20 @@ async function startSimulation(totalCycles = 10) {
 
         logToPanel(`[GROUNDED] Contract Verified State: Holding ${currentAssetSymbol} (${initialFieldText} base units)`);
 
-        // Check if contract storage evaluates to 0, then look up standard wallet values
+        // DYNAMIC SYNC GATEWAY: Check active asset first before checking alternative liquidity paths
         if (BigInt(initialFieldText) <= 0n) {
-            logToPanel(`⚠️ Contract storage slot is empty. Synchronizing standard wallet asset states...`);
-            currentAssetAddress = USDT_ADDRESS;
-            currentAssetSymbol = "USDT";
+            logToPanel(`⚠️ Contract storage slot empty for ${currentAssetSymbol}. Synchronizing connected wallet state...`);
             initialFieldText = await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
+            
+            // If the wallet balance for the active asset is also 0, fallback to scan the core USDT balance
+            if (BigInt(initialFieldText) <= 0n && currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
+                logToPanel(`⚠️ Asset profile ${currentAssetSymbol} empty in wallet. Falling back to verify USDT balance...`);
+                currentAssetAddress = USDT_ADDRESS;
+                currentAssetSymbol = "USDT";
+                initialFieldText = await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
+            }
+
+            // Total depletion confirmation gate
             if (BigInt(initialFieldText) <= 0n) {
                 logToPanel(`❌ Pipeline Halted: Verified total depletion across all asset profiles.`);
                 break;
