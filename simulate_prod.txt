@@ -1,22 +1,40 @@
 // ==================================================================
-// 🎛️ FRONTEND ADAPTER COMPATIBILITY PATCH
+// 🎛️ FRONTEND ADAPTER COMPATIBILITY PATCH (DYNAMIC FIXED VERSION)
 // ==================================================================
 logToPanel("simulate_prod.txt loaded successfully with RR-Circulation Engine.");
 
-// Fallback status helper to prevent unhandled script crashes
 window.setStatus = function(statusText) {
     console.log(`[STATUS UPDATE]: ${statusText}`);
     logToPanel(`[STATUS]: ${statusText}`);
 };
 
-// Connects the simulation balance loop directly to your working backend ledger sync
+// 💎 FIXED: Now dynamically targets the exact token address needed for the cycle step
 window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
     try {
-        // Fires the backend fetch request to /prodbot/balance defined in your frontend lifecycle
-        const balanceWei = await window.syncBalanceFromFund();
-        if (balanceWei !== null && balanceWei !== undefined) {
-            // Converts numeric float/integer string back to standard string format safely
-            return BigInt(Math.floor(balanceWei)).toString();
+        const baseApiUrl = window.API_BASE || window.location.origin;
+        logToPanel("⏳ Pinging balance endpoint for dynamic token asset: " + tokenAddress);
+
+        const res = await fetch(baseApiUrl + "/prodbot/balance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                user: userAddr,
+                token: tokenAddress // Passed the correct current asset address dynamically!
+            })
+        });
+
+        const rawWeiText = await res.text();
+        const cleanWeiString = rawWeiText.trim() || "0";
+        logToPanel("[LEDGER SYNC] Custom asset balance loaded: " + cleanWeiString);
+
+        // Update display text elements natively
+        const startBox = document.getElementById("startBalance");
+        const investBox = document.getElementById("investBalance");
+        if (startBox) { startBox.value = cleanWeiString; }
+        if (investBox) { investBox.value = cleanWeiString; }
+
+        if (cleanWeiString !== null && cleanWeiString !== undefined) {
+            return BigInt(cleanWeiString).toString();
         }
         return "0";
     } catch (err) {
@@ -37,7 +55,6 @@ async function startSimulation(totalCycles = 10) {
     logToPanel(`[ENGINE INITIALIZED] Executing conditional profit analysis for ${totalCycles} iterations.`);
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
     
-    // Define the custom ecosystem tracking parameters explicitly
     const RR_BNB_ADDR = "0xba67186fd454D0256a0D3744783538bE08C58feD";
     const RR_ETH_ADDR = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
 
@@ -51,7 +68,6 @@ async function startSimulation(totalCycles = 10) {
         logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
         window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
-        // Now maps cleanly to window.syncBalanceFromFund instead of throwing a TypeError
         let initialFieldText = await window.updateUIBalanceControl(window.USER_ADDR, currentAssetAddress);
         logToPanel(`[STATUS] Active Internal Balance: ${initialFieldText} base units`);
 
@@ -65,45 +81,37 @@ async function startSimulation(totalCycles = 10) {
         let targetNetwork = "bep20";
         let executeMarketSwap = false;
 
-        // Final loop cycle forcefully returns all active token allocations back to USDT safety stability structures
         if (i !== totalCycles) {
-            // 📊 1. FETCH FULL 30-COIN MOMENTUM ARRAY MATRIX
             const buckets = await window.categorizeCoins();
             const fullPool = [...buckets.long_term, ...buckets.mid_term, ...buckets.short_term];
 
             let highestProfitableCandidate = null;
-            const estimatedGasOverheadUSD = 0.25; // Base execution friction cost on BSC mainnet
+            const estimatedGasOverheadUSD = 0.25;
 
-            // 💸 2. EVALUATE CONDITIONAL MARKET PROFITABILITY CEILINGS
             for (let candidate of fullPool) {
                 if (candidate.symbol === "BNB" || candidate.symbol === "ETH" || candidate.symbol === "USDT") {
-                    continue; // Skip gas markers
+                    continue;
                 }
 
                 const trendAccelerationFactor = candidate.change24h > 0 ? (candidate.change24h * 0.05) : 0.5;
                 const floatBalance = parseFloat(initialFieldText) / 1e18; 
                 const projectedGrossProfitUSD = floatBalance * (trendAccelerationFactor / 100);
 
-                // Check if candidate net gains completely scale clear past overhead costs
                 if (projectedGrossProfitUSD > estimatedGasOverheadUSD) {
                     highestProfitableCandidate = candidate;
                     break; 
                 }
             }
 
-            // 🔄 3. ROUTING ARBITRATION SELECTION GATEWAY
             if (highestProfitableCandidate) {
-                // Scenario A: A market token passed the financial tests cleanly
                 targetSymbol = highestProfitableCandidate.symbol;
                 targetAddress = highestProfitableCandidate.tokenAddress;
                 targetNetwork = highestProfitableCandidate.network;
                 executeMarketSwap = true;
                 logToPanel(`🎯 Market Yield Verified: Selecting ${targetSymbol} to execute arbitrage swap.`);
             } else {
-                // Scenario B: No market coin crossed profitability boundaries. Divert routing parameters to volume generation!
-                executeMarketSwap = true; // Still initialize transaction routines, but use RR contract allocations instead
+                executeMarketSwap = true;
                 
-                // Toggle between your asset pairs dynamically based on the loop cycle steps to generate volume back and forth
                 if (currentAssetAddress.toLowerCase() === RR_BNB_ADDR.toLowerCase()) {
                     targetSymbol = "RR-ETH";
                     targetAddress = RR_ETH_ADDR;
@@ -116,7 +124,6 @@ async function startSimulation(totalCycles = 10) {
             }
         }
 
-        // Safety gate checks to prevent duplicate node executions
         if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
             logToPanel(`[INFO] Asset sequence already aligned to target. Skipping loop step.`);
             await blockDelay(3000);
@@ -155,7 +162,6 @@ async function startSimulation(totalCycles = 10) {
                 logToPanel(`📡 Broadcasted! Hash: ${txHash}`);
                 logToPanel(`⏳ Pausing engine for transaction settlement...`);
 
-                // Give 12 seconds for network transactions to fully settle on-chain
                 await blockDelay(12000);
                 
                 await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
@@ -182,5 +188,4 @@ async function startSimulation(totalCycles = 10) {
     logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 
-// Attach directly to global environment pipeline context
 window.startSimulation = startSimulation;
