@@ -44,32 +44,73 @@ function initializeLabels() {
   if (nameLabel) nameLabel.innerText = "Wallet Name: " + window.WALLET_NAME;
 }
 
-// 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER
+// 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
 async function syncBalanceFromFund() {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
-        logToPanel("⏳ Pinging balance endpoint for wallet: " + window.USER_ADDR);
+        if (!window.USER_ADDR) return null;
 
+        logToPanel("🔎 Querying active smart contract storage slot map...");
+        
+        // 🟢 STEP 1: Query what token address is actually sitting inside the contract slot
+        let targetTokenAddr = "0x55d398326f99059fF775485246999027B3197955"; // Default fallback
+        try {
+            const assetRes = await fetch(`${baseApiUrl}/prodbot/active-asset`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user: window.USER_ADDR })
+            });
+            const stateRecord = await assetRes.json();
+            if (stateRecord && stateRecord.confirmed_address && stateRecord.confirmed_address !== "0x0000000000000000000000000000000000000000") {
+                targetTokenAddr = stateRecord.confirmed_address;
+            }
+        } catch (assetErr) {
+            console.error("Slot mapping query failed:", assetErr);
+        }
+
+        // 🟢 STEP 2: Enforce non-BNB constraint verification rules
+        const cleanTokenStr = targetTokenAddr.toLowerCase();
+        if (cleanTokenStr === "bnb" || cleanTokenStr === window.WBNB_TOKEN_ADDRESS.toLowerCase() || cleanTokenStr === "0x0000000000000000000000000000000000000000") {
+            logToPanel("⚠️ Contract slot empty or pointing to native gas. Shifting focus to search custom non-BNB assets...");
+            targetTokenAddr = "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902"; // Redirect straight to Venus (XVS) layer
+        }
+
+        logToPanel(`⏳ Pinging balance endpoint for wallet: ${window.USER_ADDR} (Asset: ${targetTokenAddr})`);
         const res = await fetch(baseApiUrl + "/prodbot/balance", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 user: window.USER_ADDR,
-                token: "0x55d398326f99059fF775485246999027B3197955"
+                token: targetTokenAddr
             })
         });
 
         const rawWeiText = await res.text();
-        const cleanWeiString = rawWeiText.trim() || "0";
-        logToPanel("[LEDGER SYNC] Balance loaded: " + cleanWeiString);
+        let cleanWeiString = rawWeiText.trim() || "0";
 
+        // 🟢 STEP 3: Fallback Verification: If Venus also checks out as 0, pull core USDT status checks
+        if (BigInt(cleanWeiString) <= 0n && targetTokenAddr.toLowerCase() !== "0x55d398326f99059ff775485246999027b3197955") {
+            targetTokenAddr = "0x55d398326f99059fF775485246999027B3197955";
+            logToPanel(`🔎 Target empty. Checking alternative portfolio layer: USDT...`);
+            const fallbackRes = await fetch(baseApiUrl + "/prodbot/balance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user: window.USER_ADDR, token: targetTokenAddr })
+            });
+            const fallbackRawText = await fallbackRes.text();
+            cleanWeiString = fallbackRawText.trim() || "0";
+        }
+
+        logToPanel("[LEDGER SYNC] Balance loaded: " + cleanWeiString);
         window.SolidarityFundBalance = parseFloat(cleanWeiString);
 
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
+        const usdBox = document.getElementById("usd");
 
         if (startBox) { startBox.type = "text"; startBox.value = cleanWeiString; }
         if (investBox) { investBox.type = "text"; investBox.value = cleanWeiString; }
+        if (usdBox) { usdBox.value = (parseFloat(cleanWeiString) / 1e18).toFixed(4); }
 
         return window.SolidarityFundBalance;
     } catch (err) {
@@ -85,16 +126,13 @@ function initDashboardPipeline() {
   
   if (window.USER_ADDR && window.USER_ADDR !== "{wallet}" && window.USER_ADDR !== "null") {
       logToPanel("🔄 Auto-fetching account metrics on page load...");
-      // Fires the promise in the background without using naked "await" tokens
       syncBalanceFromFund();
   } else {
       logToPanel("💡 System Ready: Please connect your Web3 Wallet to initialize account state maps.");
   }
 }
 
-// RESTORED ORIGINAL SYNCHRONOUS RUNTIME METHOD
 initDashboardPipeline();
-
 
 // ========================================================
 // 📱 WALLET INTERFACE IMPLEMENTATION (SAFE & ISOLATED)
@@ -104,7 +142,6 @@ window.activeProvider = window.ethereum;
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
-    // Falls back to direct browser injection safely
     if (typeof window.ethereum !== "undefined") {
       try {
         logToPanel("⏳ Connecting local extension provider...");
@@ -117,7 +154,7 @@ if (connBtn) {
         logToPanel("✅ Connected: " + window.USER_ADDR);
         await syncBalanceFromFund();
 
-        // 🟢 CHOSEN INTEGRATION PLACE: Triggers background clock updates instantly upon wallet connection success
+        // Triggers background clock updates instantly upon wallet connection success
         if (typeof window.initLiveBalanceClock === "function") {
             window.initLiveBalanceClock();
         }
@@ -130,8 +167,6 @@ if (connBtn) {
     }
   };
 }
-
-
 
 // ========================================================
 // 🚀 DEPOSIT & TRADING LIFE-RINGS
