@@ -88,7 +88,6 @@ window.initLiveBalanceClock = function() {
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
-
 // ==================================================================
 // 🚀 SECTION 2: MULTI-ROUTE OMNICHAIN LOOP ENHANCEMENT (PART A)
 // ==================================================================
@@ -99,8 +98,11 @@ async function startSimulation(totalCycles = 10) {
     logToPanel(`[LIVE ENGINE INITIALIZED] Launching cross-chain loop matrices via velocity radar.`);
     const baseApiUrl = window.API_BASE || window.location.origin;
 
-    let currentAssetAddress = "";
-    let currentAssetSymbol = "";
+    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
+    const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
+
+    let currentAssetAddress = USDT_ADDRESS;
+    let currentAssetSymbol = "USDT";
     let runningBalanceWeiLock = "0";
 
     // 🟢 INITIAL NETWORK RECOVERY HOOKS
@@ -134,7 +136,7 @@ async function startSimulation(totalCycles = 10) {
 
     if (!currentAssetAddress) {
         const activeState = await window.discoverActiveOnChainAsset(window.USER_ADDR);
-        currentAssetAddress = activeState.confirmed_address || "0x55d398326f99059fF775485246999027B3197955";
+        currentAssetAddress = activeState.confirmed_address || USDT_ADDRESS;
         currentAssetSymbol = activeState.confirmed_symbol || "USDT";
         runningBalanceWeiLock = activeState.confirmed_balance_wei || "0";
     }
@@ -164,8 +166,8 @@ async function startSimulation(totalCycles = 10) {
 
         let targetSymbol = "";
         let targetAddress = "";
-        let targetNetworkMode = "bep20"; // Fallback default routing indicator
-        let targetChainOrigin = "";
+        let targetNetworkMode = "bep20"; 
+        let targetChainOrigin = "bsc";
 
         try {
             const dynamicMarket = await categorizeCoins();
@@ -174,18 +176,23 @@ async function startSimulation(totalCycles = 10) {
             if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
             if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
 
-            let baselineAsset = (combinedPool.length > 0) ? combinedPool[combinedPool.length - 1] : null;
-            let stableAddress = baselineAsset ? baselineAsset.tokenAddress : "0x55d398326f99059fF775485246999027B3197955";
-            let stableSymbol = baselineAsset ? baselineAsset.symbol : "USDT";
+            // 🟢 SAFELY IDENTIFY STABILITY BASELINE EXIT TARGETS
+            let baselineAsset = (combinedPool && combinedPool.length > 0) ? combinedPool[combinedPool.length - 1] : null;
+            let stableAddress = (baselineAsset && baselineAsset.tokenAddress) ? baselineAsset.tokenAddress : USDT_ADDRESS;
+            let stableSymbol = (baselineAsset && baselineAsset.symbol) ? baselineAsset.symbol : "USDT";
+
+            // Enforce clean fallback assignment structures if types are missing
+            let stableNetwork = (baselineAsset && baselineAsset.network) ? baselineAsset.network : "bep20";
+            let stableChain = (baselineAsset && baselineAsset.chainOrigin) ? baselineAsset.chainOrigin : "bsc";
 
             if (currentAssetAddress.toLowerCase() !== stableAddress.toLowerCase()) {
                 targetSymbol = stableSymbol;
                 targetAddress = stableAddress;
-                targetNetworkMode = baselineAsset ? baselineAsset.network : "bep20";
-                targetChainOrigin = baselineAsset ? baselineAsset.chainOrigin : "bsc";
+                targetNetworkMode = stableNetwork;
+                targetChainOrigin = stableChain;
                 logToPanel(`⚖️ Rotational Check: Re-routing ${currentAssetSymbol} back to ${targetSymbol} stability layer.`);
             } else {
-                logToPanel(`⚖️ Velocity Engine Active: Filtering global breakout pools...`);
+                logToPanel(`⚖️ Velocity Engine Active: Filtering dynamic horizon vectors for maximum speed...`);
                 let bestCandidate = null;
                 let peakVelocityRecorded = -999999;
                 let uniqueTracker = new Set();
@@ -207,26 +214,24 @@ async function startSimulation(totalCycles = 10) {
                     targetChainOrigin = bestCandidate.chainOrigin || "bsc";
                     logToPanel(`🔥 [MOMENTUM CHOICE] Selected ${targetSymbol} on [${targetChainOrigin.toUpperCase()}] at +${bestCandidate.change24h}% velocity.`);
                 } else {
-                    let fallbackAsset = (combinedPool.length > 1) ? combinedPool[1] : combinedPool[0];
-                    targetSymbol = fallbackAsset ? fallbackAsset.symbol : "CAKE";
-                    targetAddress = fallbackAsset ? fallbackAsset.tokenAddress : "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
-                    targetNetworkMode = fallbackAsset ? fallbackAsset.network : "bep20";
-                    targetChainOrigin = fallbackAsset ? fallbackAsset.chainOrigin : "bsc";
+                    targetSymbol = "CAKE";
+                    targetAddress = CAKE_ADDRESS;
+                    targetNetworkMode = "bep20";
+                    targetChainOrigin = "bsc";
                 }
             }
         } catch (marketErr) {
-            console.error("Market scanning extraction dropped:", marketErr);
+            console.error("Market routing calculation dropped:", marketErr);
             break;
         }
 
         // 🟢 ZERO-GAS OVERLAP PROTECTION CHECK
-        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
-            logToPanel(`🛡️ [GAS PROTECTION] Already aligned to target (${targetSymbol}). Skipping contract swap execution.`);
+        if (targetAddress && currentAssetAddress && targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
+            logToPanel(`🛡️ [GAS PROTECTION] Asset sequence already aligned to target (${targetSymbol}). Skipping contract transaction to prevent fee burn.`);
             await blockDelay(5000);
             continue;
         }
 
-        // Forward strict payload characteristics down into Part B runtime router forks
         let executionState = await window.executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol, targetNetworkMode, targetChainOrigin);
         if (!executionState || !executionState.success) break;
 
@@ -238,9 +243,11 @@ async function startSimulation(totalCycles = 10) {
 
     window.isBotRunning = false;
     window.setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Omnichain pipeline run complete.");
+    logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 window.startSimulation = startSimulation;
+
+
 
 // ==================================================================
 // 🚀 SECTION 2: MULTI-ROUTE OMNICHAIN LOOP ENHANCEMENT (PART B)
