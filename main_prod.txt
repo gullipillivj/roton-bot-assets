@@ -46,6 +46,7 @@ function initializeLabels() {
 
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DATABASE TOKEN SLOT MATCHING
+// 📊 OPTIMIZED FAST DUAL-TOKEN PORTFOLIO SYNCHRONIZER
 async function syncBalanceFromFund() {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
@@ -56,8 +57,10 @@ async function syncBalanceFromFund() {
 
         logToPanel(`🔎 Querying clients.db tokens map tracking for User ID: ${window.USER_ID}...`);
         
-        // 🟢 STEP 1: Query database tokens table record mapping for current active session user
-        let targetTokenAddr = "0x55d398326f99059fF775485246999027B3197955"; // Strict safe standard default
+        let currentToken = "0x55d398326f99059fF775485246999027B3197955"; // Safe default (USDT)
+        let lastToken = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";    // Safe default (CAKE)
+        
+        // 🟢 STEP 1: Quick fetch targeting the DB token layout entries
         try {
             const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
                 method: "POST",
@@ -65,70 +68,78 @@ async function syncBalanceFromFund() {
                 body: JSON.stringify({ userid: window.USER_ID })
             });
             const dbRecord = await tokenDbRes.json();
-            if (dbRecord && dbRecord.status === "ok" && dbRecord.currenttoken) {
-                targetTokenAddr = dbRecord.currenttoken;
-                logToPanel(`✅ Database Active Reference verified: ${targetTokenAddr}`);
-            } else {
-                logToPanel(`💡 No custom layout found in database. Relying on baseline default asset values.`);
+            if (dbRecord && dbRecord.status === "ok") {
+                if (dbRecord.currenttoken) currentToken = dbRecord.currenttoken;
+                if (dbRecord.lasttoken) lastToken = dbRecord.lasttoken;
             }
         } catch (dbErr) {
-            console.error("Database structural tokens check failed:", dbErr);
+            console.error("Database reading breakdown:", dbErr);
         }
 
-        // 🟢 STEP 2: Enforce non-BNB constraint verification rules mapping
-        const cleanTokenStr = targetTokenAddr.toLowerCase();
-        if (cleanTokenStr === "bnb" || cleanTokenStr === window.WBNB_TOKEN_ADDRESS.toLowerCase() || cleanTokenStr === "0x0000000000000000000000000000000000000000") {
-            logToPanel("⚠️ Token target matches gas layers. Diverting to alternate custom non-BNB assets...");
-            targetTokenAddr = "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902"; // Redirect straight to Venus layer tracking
-        }
+        logToPanel(`💡 DB Reference Targets -> [Current: ${currentToken}] | [Last: ${lastToken}]`);
 
-        logToPanel(`⏳ Pinging live balance endpoint for wallet: ${window.USER_ADDR} (Asset: ${targetTokenAddr})`);
-        const res = await fetch(baseApiUrl + "/prodbot/balance", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                user: window.USER_ADDR,
-                token: targetTokenAddr
-            })
-        });
-
-        const rawWeiText = await res.text();
-        let cleanWeiString = rawWeiText.trim() || "0";
-
-        // 🟢 STEP 3: Fallback Verification Check
-        if (BigInt(cleanWeiString) <= 0n && targetTokenAddr.toLowerCase() !== "0x55d398326f99059ff775485246999027b3197955") {
-            targetTokenAddr = "0x55d398326f99059fF775485246999027B3197955";
-            logToPanel(`🔎 Target empty. Checking alternative portfolio layer: USDT...`);
-            const fallbackRes = await fetch(baseApiUrl + "/prodbot/balance", {
+        // Helper shortcut function to clear empty RPC strings
+        const queryBalance = async (tokenAddr) => {
+            const res = await fetch(baseApiUrl + "/prodbot/balance", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user: window.USER_ADDR, token: targetTokenAddr })
+                body: JSON.stringify({ user: window.USER_ADDR, token: tokenAddr })
             });
-            const fallbackRawText = await fallbackRes.text();
-            cleanWeiString = fallbackRawText.trim() || "0";
+            const text = await res.text();
+            return text.trim() || "0";
+        };
+
+        // 🟢 STEP 2: Fire instantaneous parallel queries for both targets
+        logToPanel("⏳ Executing high-speed dual-target balance query checks...");
+        const [currentWei, lastWei] = await Promise.all([
+            queryBalance(currentToken),
+            queryBalance(lastToken)
+        ]);
+
+        let finalWeiString = "0";
+        let resolvedTokenAddress = currentToken;
+
+        // 🟢 STEP 3: Route assets using instantaneous priority gates
+        if (BigInt(currentWei) > 0n) {
+            finalWeiString = currentWei;
+            resolvedTokenAddress = currentToken;
+            logToPanel(`🎉 Capital located inside Current Token! Balance: ${finalWeiString}`);
+        } else if (BigInt(lastWei) > 0n) {
+            finalWeiString = lastWei;
+            resolvedTokenAddress = lastToken;
+            logToPanel(`🎉 Capital located inside Last Token! Balance: ${finalWeiString}`);
+        } else {
+            // 🟢 STEP 4: Comprehensive market sweep only if both values return zero
+            logToPanel("⚠️ Both tracks empty. Launching wide contract search matrix...");
+            try {
+                const sweepRes = await fetch(`${baseApiUrl}/prodbot/active-asset`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ user: window.USER_ADDR })
+                });
+                const activeState = await sweepRes.json();
+                if (activeState && activeState.status === "ok" && BigInt(activeState.confirmed_balance_wei) > 0n) {
+                    finalWeiString = activeState.confirmed_balance_wei;
+                    resolvedTokenAddress = activeState.confirmed_address;
+                    logToPanel(`✅ Wide Sweep Discovered Asset: ${activeState.confirmed_symbol} | Balance: ${finalWeiString}`);
+                }
+            } catch (sweepErr) {
+                console.error("Wide discovery search exception hit:", sweepErr);
+            }
         }
 
-        logToPanel("[LEDGER SYNC] Balance loaded successfully: " + cleanWeiString);
-        window.SolidarityFundBalance = parseFloat(cleanWeiString);
+        logToPanel("[LEDGER SYNC] Process complete. Final active balance: " + finalWeiString);
+        window.SolidarityFundBalance = parseFloat(finalWeiString);
 
-        // 🟢 STEP 4: Update Frontend Fields (Writing initial balance changes cleanly)
+        // 🟢 STEP 5: Apply variables directly to dashboard input forms
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
         const usdBox = document.getElementById("usd");
 
-        // Convert the balance from Uint256 Wei to Decimal Float Formats (Assumes standard 18 decimal scale tokens)
-        const parsedBalanceEth = parseFloat(cleanWeiString) / 1e18;
-
-        if (startBox) { 
-            startBox.type = "text"; 
-            startBox.value = cleanWeiString; // Populates with the base raw integer balance strings
-        }
-        if (investBox) { 
-            investBox.type = "text"; 
-            investBox.value = cleanWeiString; // Overwrites target initial balance parameter inputs 
-        }
-        if (usdBox) { 
-            usdBox.value = parsedBalanceEth.toFixed(4); // Formatted value mapping
+        if (startBox) startBox.value = finalWeiString;
+        if (investBox) investBox.value = finalWeiString;
+        if (usdBox) {
+            usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
         }
 
         return window.SolidarityFundBalance;
@@ -138,6 +149,7 @@ async function syncBalanceFromFund() {
     }
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
+
 
 
 // SECURE SYNCHRONOUS LIFECYCLE CONTROLLER
