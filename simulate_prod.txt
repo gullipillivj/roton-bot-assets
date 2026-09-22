@@ -1,7 +1,7 @@
 // ==================================================================
 // 🎛️ SECTION 1: ON-CHAIN VERIFICATION INTERMEDIARIES & SYNC AGENTS
 // ==================================================================
-logToPanel("simulate_prod.txt loaded successfully with Non-Zero Safety Engine.");
+logToPanel("simulate_prod.txt loaded successfully with Dynamic Database Token Tracking.");
 
 window.setStatus = function(statusText) {
     console.log(`[STATUS UPDATE]: ${statusText}`);
@@ -19,7 +19,12 @@ window.discoverActiveOnChainAsset = function(userAddress) {
     .then(res => res.json())
     .catch(err => {
         console.error("Grounding connection lost:", err);
-        return { status: "error", confirmed_symbol: "USDT", confirmed_address: "0x55d398326f99059fF775485246999027B3197955", confirmed_balance_wei: "0" };
+        return { 
+            status: "error", 
+            confirmed_symbol: "USDT", 
+            confirmed_address: "0x55d398326f99059fF775485246999027B3197955", 
+            confirmed_balance_wei: "0" 
+        };
     });
 };
 
@@ -38,12 +43,12 @@ async function queryTokenBalanceDirect(userAddr, tokenAddress) {
         return "0";
     }
 }
+window.queryTokenBalanceDirect = queryTokenBalanceDirect;
 
 window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
     try {
         const cleanWeiString = await queryTokenBalanceDirect(userAddr, tokenAddress);
 
-        // 🟢 NON-ZERO CONTROL PROTECTION: Never overwrite the UI boxes with 0 if trading is running
         if (BigInt(cleanWeiString) > 0n || !window.isBotRunning) {
             const startBox = document.getElementById("startBalance");
             const investBox = document.getElementById("investBalance");
@@ -57,14 +62,13 @@ window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
                 usdBox.value = floatTokens.toFixed(4); 
             }
         }
-
         return cleanWeiString;
     } catch (err) {
         return "0";
     }
 };
 
-// LIVE BACKGROUND SYNC CLOCK: Maintains absolute ledger state safely without spamming logs
+// LIVE BACKGROUND SYNC CLOCK: Maintains absolute ledger state safely without UI noise
 window.initLiveBalanceClock = function() {
     if (window.balanceClockIntervalId) {
         clearInterval(window.balanceClockIntervalId);
@@ -77,7 +81,7 @@ window.initLiveBalanceClock = function() {
             const activeTokenAddr = stateRecord.confirmed_address || "0x55d398326f99059fF775485246999027B3197955";
             await window.updateUIBalanceControl(window.USER_ADDR, activeTokenAddr);
         } catch (error) {
-            // Silently handled to avoid UI noise
+            // Silently handled
         }
     }, 5000); 
 };
@@ -85,155 +89,3 @@ window.initLiveBalanceClock = function() {
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
 
-// ==================================================================
-// 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE
-// ==================================================================
-async function startSimulation(totalCycles = 10) {
-    if (window.isBotRunning) return;
-    window.isBotRunning = true;
-
-    logToPanel(`[LIVE ENGINE INITIALIZED] Guarding runtime loop using direct UI input parameters.`);
-    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-    const RR_BNB_ADDR = "0xba67186fd454D0256a0D3744783538bE08C58feD";
-    const RR_ETH_ADDR = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
-
-    // Track historical runtime balance parameters to prevent drop-downs to 0
-    let runningBalanceWeiLock = "0";
-
-    for (let i = 1; i <= totalCycles; i++) {
-        if (!window.isBotRunning) break;
-
-        logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
-        window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
-
-        logToPanel("🔎 Querying contract state maps via Brownie node link...");
-        const stateRecord = await window.discoverActiveOnChainAsset(window.USER_ADDR);
-        
-        let currentAssetAddress = stateRecord.confirmed_address;
-        let currentAssetSymbol = stateRecord.confirmed_symbol;
-        
-        // Securely fetch active balance profile from ledger
-        let fetchedBalance = await queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
-        
-        // 🟢 NON-ZERO VALUE ENFORCEMENT LOCK
-        // If the query returns a valid number, we update our variable lock. 
-        // If it returns 0, we hold onto our previous value to prevent incorrect tracking.
-        if (BigInt(fetchedBalance) > 0n) {
-            runningBalanceWeiLock = fetchedBalance;
-            logToPanel(`[LEDGER RECORD] Active capital confirmed: ${runningBalanceWeiLock} Wei units.`);
-        } else if (BigInt(runningBalanceWeiLock) > 0n) {
-            logToPanel(`⚠️ Contract storage returned 0 units. Enforcing safety lock: Retaining active balance metrics.`);
-        } else {
-            // Both fields are genuinely 0 (e.g., at boot time before funding)
-            runningBalanceWeiLock = fetchedBalance;
-        }
-
-        let initialFieldText = runningBalanceWeiLock;
-
-        // Force layout containers to display the locked balance value
-        const startBox = document.getElementById("startBalance");
-        const investBox = document.getElementById("investBalance");
-        const usdBox = document.getElementById("usd");
-        if (startBox) startBox.value = initialFieldText;
-        if (investBox) investBox.value = initialFieldText;
-        if (usdBox) usdBox.value = (parseFloat(initialFieldText) / 1e18).toFixed(4);
-
-        // Absolute depletion circuit breaker gate
-        if (BigInt(initialFieldText) <= 0n) {
-            logToPanel("❌ Pipeline Halted: Verified total depletion across all asset channels.");
-            break;
-        }
-
-        let targetSymbol = "USDT";
-        let targetAddress = USDT_ADDRESS;
-        let targetNetwork = "bep20";
-
-        if (i !== totalCycles) {
-            if (currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
-                targetSymbol = "USDT";
-                targetAddress = USDT_ADDRESS;
-                logToPanel(`⚖️ Rotational Check: Re-routing assets to USDT stability layer.`);
-            } else {
-                logToPanel(`⚖️ Stability routing active: Allocating volume to personal assets...`);
-                if (currentAssetAddress.toLowerCase() === RR_BNB_ADDR.toLowerCase()) {
-                    targetSymbol = "RR-ETH";
-                    targetAddress = RR_ETH_ADDR;
-                } else {
-                    targetSymbol = "RR-BNB";
-                    targetAddress = RR_BNB_ADDR;
-                }
-            }
-        }
-
-        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
-            logToPanel(`[INFO] Asset sequence already aligned to target. Skipping loop step.`);
-            await blockDelay(3000);
-            continue;
-        }
-
-        logToPanel(`[ROUTE] Preparing transaction pipeline: Swap ${currentAssetSymbol} ➡️ ${targetSymbol}`);
-
-        try {
-            const baseApiUrl = window.API_BASE || "";
-            const res = await fetch(`${baseApiUrl}/prodbot/swap`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    user_address: window.USER_ADDR,
-                    from_token: currentAssetAddress,
-                    to_token: targetAddress,
-                    amount: initialFieldText,
-                    network: targetNetwork
-                })
-            });
-            const txPayload = await res.json();
-
-            if (txPayload && txPayload.status === "ok") {
-                logToPanel(`[WALLET] Requesting signature profile for ${targetSymbol} asset placement...`);
-                
-                const walletProvider = window.ethereum || window.trustwallet || (window.trustWallet ? window.trustWallet.Provider : null);
-                if (!walletProvider) {
-                    logToPanel("❌ Execution Blocked: Built-in dApp browser wallet injection failed.");
-                    break;
-                }
-
-                const txHash = await walletProvider.request({
-                    method: 'eth_sendTransaction',
-                    params: [{
-                        from: window.USER_ADDR,
-                        to: txPayload.to_contract,
-                        data: txPayload.compiled_data,
-                        value: '0x0'
-                    }],
-                });
-
-                logToPanel(`📡 Broadcasted! Hash: ${txHash}`);
-                logToPanel(`⏳ Pausing engine for transaction settlement...`);
-                await blockDelay(12000);
-                
-                // Fetch fresh numbers post-swap execution
-                let postSwapCheck = await queryTokenBalanceDirect(window.USER_ADDR, targetAddress);
-                if (BigInt(postSwapCheck) > 0n) {
-                    runningBalanceWeiLock = postSwapCheck;
-                }
-                await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
-            } else {
-                logToPanel(`❌ Error: Could not generate swap payload. Reason: ${txPayload.message || "Unknown"}`);
-                break;
-            }
-        } catch (err) {
-            logToPanel(`❌ Critical Exception: ${err.message}`);
-            break;
-        }
-
-        if (i < totalCycles) {
-            await blockDelay(3000);
-        }
-    }
-
-    window.isBotRunning = false;
-    window.setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
-}
-
-window.startSimulation = startSimulation;
