@@ -45,37 +45,44 @@ function initializeLabels() {
 }
 
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
+// 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DATABASE TOKEN SLOT MATCHING
 async function syncBalanceFromFund() {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
-        if (!window.USER_ADDR) return null;
+        if (!window.USER_ADDR || !window.USER_ID) {
+            logToPanel("⚠️ Identification vector missing. Halting balance initialization cycles.");
+            return null;
+        }
 
-        logToPanel("🔎 Querying active smart contract storage slot map...");
+        logToPanel(`🔎 Querying clients.db tokens map tracking for User ID: ${window.USER_ID}...`);
         
-        // 🟢 STEP 1: Query what token address is actually sitting inside the contract slot
-        let targetTokenAddr = "0x55d398326f99059fF775485246999027B3197955"; // Default fallback
+        // 🟢 STEP 1: Query database tokens table record mapping for current active session user
+        let targetTokenAddr = "0x55d398326f99059fF775485246999027B3197955"; // Strict safe standard default
         try {
-            const assetRes = await fetch(`${baseApiUrl}/prodbot/active-asset`, {
+            const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ user: window.USER_ADDR })
+                body: JSON.stringify({ userid: window.USER_ID })
             });
-            const stateRecord = await assetRes.json();
-            if (stateRecord && stateRecord.confirmed_address && stateRecord.confirmed_address !== "0x0000000000000000000000000000000000000000") {
-                targetTokenAddr = stateRecord.confirmed_address;
+            const dbRecord = await tokenDbRes.json();
+            if (dbRecord && dbRecord.status === "ok" && dbRecord.currenttoken) {
+                targetTokenAddr = dbRecord.currenttoken;
+                logToPanel(`✅ Database Active Reference verified: ${targetTokenAddr}`);
+            } else {
+                logToPanel(`💡 No custom layout found in database. Relying on baseline default asset values.`);
             }
-        } catch (assetErr) {
-            console.error("Slot mapping query failed:", assetErr);
+        } catch (dbErr) {
+            console.error("Database structural tokens check failed:", dbErr);
         }
 
-        // 🟢 STEP 2: Enforce non-BNB constraint verification rules
+        // 🟢 STEP 2: Enforce non-BNB constraint verification rules mapping
         const cleanTokenStr = targetTokenAddr.toLowerCase();
         if (cleanTokenStr === "bnb" || cleanTokenStr === window.WBNB_TOKEN_ADDRESS.toLowerCase() || cleanTokenStr === "0x0000000000000000000000000000000000000000") {
-            logToPanel("⚠️ Contract slot empty or pointing to native gas. Shifting focus to search custom non-BNB assets...");
-            targetTokenAddr = "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902"; // Redirect straight to Venus (XVS) layer
+            logToPanel("⚠️ Token target matches gas layers. Diverting to alternate custom non-BNB assets...");
+            targetTokenAddr = "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902"; // Redirect straight to Venus layer tracking
         }
 
-        logToPanel(`⏳ Pinging balance endpoint for wallet: ${window.USER_ADDR} (Asset: ${targetTokenAddr})`);
+        logToPanel(`⏳ Pinging live balance endpoint for wallet: ${window.USER_ADDR} (Asset: ${targetTokenAddr})`);
         const res = await fetch(baseApiUrl + "/prodbot/balance", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -88,7 +95,7 @@ async function syncBalanceFromFund() {
         const rawWeiText = await res.text();
         let cleanWeiString = rawWeiText.trim() || "0";
 
-        // 🟢 STEP 3: Fallback Verification: If Venus also checks out as 0, pull core USDT status checks
+        // 🟢 STEP 3: Fallback Verification Check
         if (BigInt(cleanWeiString) <= 0n && targetTokenAddr.toLowerCase() !== "0x55d398326f99059ff775485246999027b3197955") {
             targetTokenAddr = "0x55d398326f99059fF775485246999027B3197955";
             logToPanel(`🔎 Target empty. Checking alternative portfolio layer: USDT...`);
@@ -101,16 +108,28 @@ async function syncBalanceFromFund() {
             cleanWeiString = fallbackRawText.trim() || "0";
         }
 
-        logToPanel("[LEDGER SYNC] Balance loaded: " + cleanWeiString);
+        logToPanel("[LEDGER SYNC] Balance loaded successfully: " + cleanWeiString);
         window.SolidarityFundBalance = parseFloat(cleanWeiString);
 
+        // 🟢 STEP 4: Update Frontend Fields (Writing initial balance changes cleanly)
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
         const usdBox = document.getElementById("usd");
 
-        if (startBox) { startBox.type = "text"; startBox.value = cleanWeiString; }
-        if (investBox) { investBox.type = "text"; investBox.value = cleanWeiString; }
-        if (usdBox) { usdBox.value = (parseFloat(cleanWeiString) / 1e18).toFixed(4); }
+        // Convert the balance from Uint256 Wei to Decimal Float Formats (Assumes standard 18 decimal scale tokens)
+        const parsedBalanceEth = parseFloat(cleanWeiString) / 1e18;
+
+        if (startBox) { 
+            startBox.type = "text"; 
+            startBox.value = cleanWeiString; // Populates with the base raw integer balance strings
+        }
+        if (investBox) { 
+            investBox.type = "text"; 
+            investBox.value = cleanWeiString; // Overwrites target initial balance parameter inputs 
+        }
+        if (usdBox) { 
+            usdBox.value = parsedBalanceEth.toFixed(4); // Formatted value mapping
+        }
 
         return window.SolidarityFundBalance;
     } catch (err) {
@@ -119,6 +138,7 @@ async function syncBalanceFromFund() {
     }
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
+
 
 // SECURE SYNCHRONOUS LIFECYCLE CONTROLLER
 function initDashboardPipeline() {
