@@ -102,6 +102,7 @@ async function startSimulation(totalCycles = 10) {
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
     const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
 
+    // Authority dynamic token references tracking maps
     let currentAssetAddress = USDT_ADDRESS;
     let currentAssetSymbol = "USDT";
     let runningBalanceWeiLock = "0";
@@ -138,6 +139,7 @@ async function startSimulation(totalCycles = 10) {
         logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
         window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
+        // Pulling absolute values using current checked parameters dynamically
         let fetchedBalance = await queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
         if (BigInt(fetchedBalance) > 0n) {
             runningBalanceWeiLock = fetchedBalance;
@@ -212,13 +214,16 @@ async function startSimulation(totalCycles = 10) {
             continue;
         }
 
-        // Call out execution parameters directly to Part B mapping processes
-        let runSuccess = await window.executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol);
-        if (!runSuccess) break;
+        // ✅ FIX: Part B now returns the updated state values back to the orchestrator layer
+        let executionState = await window.executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol);
+        
+        if (!executionState || !executionState.success) {
+            break;
+        }
 
-        // Sync local reference addresses for subsequent iterations
-        currentAssetAddress = targetAddress;
-        currentAssetSymbol = targetSymbol;
+        // ✅ FIX: Update the memory track pointers using the state variables returned from Part B
+        currentAssetAddress = executionState.updatedAddress;
+        currentAssetSymbol = executionState.updatedSymbol;
 
         if (i < totalCycles) await blockDelay(3000);
     }
@@ -228,6 +233,7 @@ async function startSimulation(totalCycles = 10) {
     logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 window.startSimulation = startSimulation;
+
 
 // ==================================================================
 // 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE (PART B)
@@ -260,7 +266,7 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
             let pollAttempts = 0;
             
             while (postSwapBalanceConfirmed === 0n && pollAttempts < 40) {
-                if (!window.isBotRunning) return false;
+                if (!window.isBotRunning) return { success: false };
                 pollAttempts++;
                 logToPanel(`🔍 Checking target balance via node array mapping (Attempt ${pollAttempts}/40)...`);
                 
@@ -270,23 +276,30 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
                 if (postSwapBalanceConfirmed > 0n) {
                     logToPanel(`🎉 On-Chain Non-Zero balance discovered! Confirmed: ${liveCheckWei} Wei inside ${targetSymbol}.`);
                     await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
-                    return true;
+                    
+                    // ✅ FIX: Package and return the brand new tracking pointers back to the main thread loop
+                    return {
+                        success: true,
+                        updatedAddress: targetAddress,
+                        updatedSymbol: targetSymbol
+                    };
                 }
                 await blockDelay(5000); 
             }
             if (postSwapBalanceConfirmed === 0n) {
                 logToPanel(`⚠️ Settlement check reached timeout thresholds. Forcing process break.`);
-                return false;
+                return { success: false };
             }
         } else {
             const failReason = (swapResult && swapResult.message) ? swapResult.message : "Signature Denied / Nonce collision";
             logToPanel(`❌ [ORCHESTRATION BREAK] Loop halted: ${failReason}`);
-            return false;
+            return { success: false };
         }
     } catch (err) {
         logToPanel(`❌ Critical Loop Exception: ${err.message}`);
-        return false;
+        return { success: false };
     }
-    return true;
+    return { success: false };
 }
 window.executeActualContractSwapBlock = executeActualContractSwapBlock;
+
