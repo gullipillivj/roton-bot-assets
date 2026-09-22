@@ -87,3 +87,208 @@ window.initLiveBalanceClock = function() {
 };
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
+
+// ==================================================================
+// 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE
+// ==================================================================
+async function startSimulation(totalCycles = 10) {
+    if (window.isBotRunning) return;
+    window.isBotRunning = true;
+
+    logToPanel(`[LIVE ENGINE INITIALIZED] Launching loop routines via velocity scoring.`);
+    const baseApiUrl = window.API_BASE || window.location.origin;
+
+    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
+    const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
+
+    // Authority dynamic token references tracking maps
+    let currentAssetAddress = USDT_ADDRESS;
+    let currentAssetSymbol = "USDT";
+    let runningBalanceWeiLock = "0";
+
+    // 🟢 DUAL-QUERY SECOVERY PIPELINE INTEGRATION
+    // Pre-emptively scans database tracks to locate where your unscaled tokens are sitting before firing loop cycles
+    try {
+        const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: window.USER_ID })
+        });
+        const dbRecord = await tokenDbRes.json();
+        
+        let checkTokens = [USDT_ADDRESS, CAKE_ADDRESS];
+        if (dbRecord && dbRecord.status === "ok") {
+            if (dbRecord.currenttoken) checkTokens.unshift(dbRecord.currenttoken);
+            if (dbRecord.lasttoken) checkTokens.push(dbRecord.lasttoken);
+        }
+
+        // Locate the asset container holding your live capital balance string directly
+        for (let targetAddr of checkTokens) {
+            let balCheck = await queryTokenBalanceDirect(window.USER_ADDR, targetAddr);
+            if (BigInt(balCheck) > 0n) {
+                runningBalanceWeiLock = balCheck;
+                currentAssetAddress = targetAddr;
+                currentAssetSymbol = (targetAddr.toLowerCase() === USDT_ADDRESS.toLowerCase()) ? "USDT" : "CAKE";
+                break;
+            }
+        }
+    } catch (initErr) {
+        console.error("Pipeline discovery failed, using standard defaults:", initErr);
+    }
+
+    for (let i = 1; i <= totalCycles; i++) {
+        if (!window.isBotRunning) break;
+
+        logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
+        window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
+
+        // Pulling absolute values using current checked parameters dynamically
+        let fetchedBalance = await queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
+        
+        if (BigInt(fetchedBalance) > 0n) {
+            runningBalanceWeiLock = fetchedBalance;
+            logToPanel(`[LEDGER RECORD] Active capital confirmed: ${runningBalanceWeiLock} Wei units inside ${currentAssetSymbol}.`);
+        } else {
+            logToPanel(`⚠️ Current token balance returned 0. Retaining locked tracking balance vector: ${runningBalanceWeiLock}`);
+        }
+
+        let initialFieldText = runningBalanceWeiLock;
+
+        const startBox = document.getElementById("startBalance");
+        const investBox = document.getElementById("investBalance");
+        const usdBox = document.getElementById("usd");
+        if (startBox) startBox.value = initialFieldText;
+        if (investBox) investBox.value = initialFieldText;
+        if (usdBox) usdBox.value = (parseFloat(initialFieldText) / 1e18).toFixed(4);
+
+        if (BigInt(initialFieldText) <= 0n) {
+            logToPanel("❌ Pipeline Halted: Verified total depletion across all asset channels.");
+            break;
+        }
+
+        let targetSymbol = "USDT";
+        let targetAddress = USDT_ADDRESS;
+
+        if (i !== totalCycles) {
+            if (currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
+                targetSymbol = "USDT";
+                targetAddress = USDT_ADDRESS;
+                logToPanel(`⚖️ Rotational Check: Re-routing assets back to USDT stability layer.`);
+            } else {
+                logToPanel(`⚖️ Velocity Engine Active: Filtering 30 horizon vectors for maximum speed...`);
+                try {
+                    const dynamicMarket = await categorizeCoins();
+                    let combinedPool = [];
+                    if (dynamicMarket.short_term) combinedPool = combinedPool.concat(dynamicMarket.short_term);
+                    if (dynamicMarket.mid_term) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
+                    if (dynamicMarket.long_term) combinedPool = combinedPool.concat(dynamicMarket.long_term);
+
+                    let bestCandidate = null;
+                    let peakVelocityRecorded = -999999;
+                    let uniqueTracker = new Set();
+
+                    for (let token of combinedPool) {
+                        if (!token || !token.tokenAddress || uniqueTracker.has(token.tokenAddress.toLowerCase())) {
+                            continue;
+                        }
+                        uniqueTracker.add(token.tokenAddress.toLowerCase());
+
+                        let currentSpeed = parseFloat(token.change24h || 0.0);
+                        if (currentSpeed > peakVelocityRecorded) {
+                            peakVelocityRecorded = currentSpeed;
+                            bestCandidate = token;
+                        }
+                    }
+
+                    if (bestCandidate && peakVelocityRecorded > 0.05) {
+                        targetSymbol = bestCandidate.symbol;
+                        targetAddress = bestCandidate.tokenAddress;
+                        logToPanel(`🔥 [MOMENTUM CHOICE] Selected ${targetSymbol} -> Climbing at +${bestCandidate.change24h}% velocity.`);
+                    } else {
+                        targetSymbol = "CAKE";
+                        targetAddress = CAKE_ADDRESS;
+                    }
+                } catch (err) {
+                    targetSymbol = "CAKE";
+                    targetAddress = CAKE_ADDRESS;
+                }
+            }
+        }
+
+        // 🟢 STEP 1: Dynamically update tokens table map parameters prior to running verification swaps
+        logToPanel(`💾 Synchronizing tokens mapping index inside clients.db...`);
+        try {
+            await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    userid: window.USER_ID,
+                    currenttoken: targetAddress,       
+                    lasttoken: currentAssetAddress     
+                })
+            });
+        } catch (dbUpdateErr) {
+            console.error("Database connection failed:", dbUpdateErr);
+        }
+
+        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
+            logToPanel(`[INFO] Asset sequence already aligned to target (${targetSymbol}). Skipping swap step.`);
+            await blockDelay(3000);
+            continue;
+        }
+
+        logToPanel(`[ROUTE] Preparing transaction pipeline: Swap ${currentAssetSymbol} ➡️ ${targetSymbol}`);
+
+        try {
+            if (typeof window.runSwap !== "function") {
+                logToPanel("❌ Execution Blocked: window.runSwap method missing from ecosystem.");
+                break;
+            }
+
+            const swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
+
+            if (swapResult && swapResult.status === "ok") {
+                logToPanel(`⏳ Signature confirmed. Starting settlement monitoring loop on-chain...`);
+                let postSwapBalanceConfirmed = 0n;
+                let pollAttempts = 0;
+                
+                while (postSwapBalanceConfirmed === 0n && pollAttempts < 40) {
+                    if (!window.isBotRunning) break;
+                    pollAttempts++;
+                    logToPanel(`🔍 Checking target balance via node array mapping (Attempt ${pollAttempts}/40)...`);
+                    
+                    let liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, targetAddress);
+                    postSwapBalanceConfirmed = BigInt(liveCheckWei);
+                    
+                    if (postSwapBalanceConfirmed > 0n) {
+                        logToPanel(`🎉 On-Chain Non-Zero balance discovered! Confirmed: ${liveCheckWei} Wei inside ${targetSymbol}.`);
+                        currentAssetAddress = targetAddress;
+                        currentAssetSymbol = targetSymbol;
+                        break;
+                    }
+                    await blockDelay(5000); 
+                }
+
+                if (postSwapBalanceConfirmed === 0n) {
+                    logToPanel(`⚠️ Settlement check reached timeout thresholds. Forcing process break.`);
+                    break;
+                }
+            } else {
+                logToPanel(`❌ Swap rejected or failed to process. Halting orchestration loop.`);
+                break;
+            }
+        } catch (err) {
+            logToPanel(`❌ Critical Loop Exception: ${err.message}`);
+            break;
+        }
+
+        if (i < totalCycles) {
+            await blockDelay(3000);
+        }
+    }
+
+    window.isBotRunning = false;
+    window.setStatus("STOPPED");
+    logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
+}
+window.startSimulation = startSimulation;
