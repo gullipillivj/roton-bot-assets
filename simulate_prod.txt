@@ -238,6 +238,9 @@ window.startSimulation = startSimulation;
 // ==================================================================
 // 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE (PART B)
 // ==================================================================
+// ==================================================================
+// 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE (PART B)
+// ==================================================================
 async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol) {
     logToPanel(`💾 Synchronizing tokens mapping index inside clients.db...`);
     try {
@@ -261,7 +264,33 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
         const swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
 
         if (swapResult && swapResult.status === "ok") {
-            logToPanel(`⏳ Signature confirmed. Starting settlement monitoring loop on-chain...`);
+            logToPanel(`⏳ Signature confirmed. Waiting 10 seconds for initial block inclusion...`);
+            await blockDelay(10000); 
+
+            // 🟢 STEP 1: VALIDATE THE TRANSACTION RECEIPT DIRECTLY WITH THE BACKEND
+            logToPanel(`🔎 Pinging on-chain event log verifier for status tracking...`);
+            try {
+                const verifyRes = await fetch(`${baseApiUrl}/prodbot/verify-swap`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        tx_hash: swapResult.tx_hash,
+                        user_address: window.USER_ADDR
+                    })
+                });
+                const verifyData = await verifyRes.json();
+
+                // If the backend tracking route explicitly reports that it failed on-chain, crash early
+                if (verifyData && (verifyData.status === "reverted" || verifyData.status === "invalid_execution")) {
+                    logToPanel(`❌ [BLOCKCHAIN REVERT] Transaction failed execution on-chain! Reason: ${verifyData.message || "Unknown execution crash"}`);
+                    logToPanel(`💡 Balance remains inside source asset ${currentAssetSymbol}. Halting execution.`);
+                    return { success: false };
+                }
+            } catch (verErr) {
+                console.error("On-chain receipt validation skipped:", verErr);
+            }
+
+            // 🟢 STEP 2: Only check balances if the block inclusion receipt cleared successfully
             let postSwapBalanceConfirmed = 0n;
             let pollAttempts = 0;
             
@@ -277,7 +306,6 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
                     logToPanel(`🎉 On-Chain Non-Zero balance discovered! Confirmed: ${liveCheckWei} Wei inside ${targetSymbol}.`);
                     await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
                     
-                    // ✅ FIX: Package and return the brand new tracking pointers back to the main thread loop
                     return {
                         success: true,
                         updatedAddress: targetAddress,
@@ -287,7 +315,7 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
                 await blockDelay(5000); 
             }
             if (postSwapBalanceConfirmed === 0n) {
-                logToPanel(`⚠️ Settlement check reached timeout thresholds. Forcing process break.`);
+                logToPanel(`⚠️ Settlement balance polling timed out. Forcing process break.`);
                 return { success: false };
             }
         } else {
