@@ -90,97 +90,203 @@ const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
 
 // ==================================================================
-// 🚀 SECTION 2: PURE DYNAMIC POOL DISCOVERY RADAR (PART A)
+// 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE (PART A)
 // ==================================================================
-async function startSimulation(totalCycles = 1) {
+async function startSimulation(totalCycles = 10) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
 
-    logToPanel("\n🔥 [DIAGNOSTIC RADAR INITIALIZED] Booting pure memory array test...");
-    window.setStatus("TESTING DATA RADAR");
+    logToPanel(`[LIVE ENGINE INITIALIZED] Launching loop routines via velocity scoring.`);
+    const baseApiUrl = window.API_BASE || window.location.origin;
 
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
     const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
 
     let currentAssetAddress = USDT_ADDRESS;
     let currentAssetSymbol = "USDT";
+    let runningBalanceWeiLock = "0";
 
-    // Fast check to orient local token address values
+    // 🟢 DUAL-QUERY INITIAL RECOVERY HOOKS
     try {
-        let balCheck = await queryTokenBalanceDirect(window.USER_ADDR, CAKE_ADDRESS);
-        if (BigInt(balCheck) > 0n) {
-            currentAssetAddress = CAKE_ADDRESS;
-            currentAssetSymbol = "CAKE";
+        const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: window.USER_ID })
+        });
+        const dbRecord = await tokenDbRes.json();
+        let checkTokens = [USDT_ADDRESS, CAKE_ADDRESS];
+        if (dbRecord && dbRecord.status === "ok") {
+            if (dbRecord.currenttoken) checkTokens.unshift(dbRecord.currenttoken);
+            if (dbRecord.lasttoken) checkTokens.push(dbRecord.lasttoken);
         }
-    } catch (e) {
-        console.error("Local balance check bypass:", e);
+        for (let targetAddr of checkTokens) {
+            let balCheck = await queryTokenBalanceDirect(window.USER_ADDR, targetAddr);
+            if (BigInt(balCheck) > 0n) {
+                runningBalanceWeiLock = balCheck;
+                currentAssetAddress = targetAddr;
+                currentAssetSymbol = (targetAddr.toLowerCase() === USDT_ADDRESS.toLowerCase()) ? "USDT" : "CAKE";
+                break;
+            }
+        }
+    } catch (initErr) {
+        console.error("Pipeline discovery failed:", initErr);
     }
 
-    logToPanel(`[LEDGER RECORD] Active capital token position: ${currentAssetSymbol}`);
-    logToPanel("⚖️ Velocity Engine Active: Filtering 30 horizon vectors for maximum speed...");
+    for (let i = 1; i <= totalCycles; i++) {
+        if (!window.isBotRunning) break;
 
-    try {
-        // Fetch raw metrics array blocks directly from the frontend interface pipeline
-        const dynamicMarket = await categorizeCoins();
-        
-        let combinedPool = [];
-        if (dynamicMarket && Array.isArray(dynamicMarket.short_term)) combinedPool = combinedPool.concat(dynamicMarket.short_term);
-        if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
-        if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
+        logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
+        window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
-        logToPanel(`\n📊 [RAW DATA SUMMARY] Total elements passing CORS layer: ${combinedPool.length} tokens.`);
-        
-        // Expose dynamic metrics cleanly to the text panel print terminal loop
-        await window.executeArrayPrintDump(combinedPool, CAKE_ADDRESS);
+        let fetchedBalance = await queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
+        if (BigInt(fetchedBalance) > 0n) {
+            runningBalanceWeiLock = fetchedBalance;
+            logToPanel(`[LEDGER RECORD] Active capital confirmed: ${runningBalanceWeiLock} Wei units inside ${currentAssetSymbol}.`);
+        } else {
+            logToPanel(`⚠️ Current token balance returned 0. Retaining balance vector: ${runningBalanceWeiLock}`);
+        }
 
-    } catch (err) {
-        logToPanel(`❌ [TEST FAULT] Analysis engine crashed extracting data: ${err.message}`);
+        let initialFieldText = runningBalanceWeiLock;
+        const startBox = document.getElementById("startBalance");
+        const investBox = document.getElementById("investBalance");
+        const usdBox = document.getElementById("usd");
+        if (startBox) startBox.value = initialFieldText;
+        if (investBox) investBox.value = initialFieldText;
+        if (usdBox) usdBox.value = (parseFloat(initialFieldText) / 1e18).toFixed(4);
+
+        if (BigInt(initialFieldText) <= 0n) {
+            logToPanel("❌ Pipeline Halted: Verified total depletion across all asset channels.");
+            break;
+        }
+
+        let targetSymbol = "USDT";
+        let targetAddress = USDT_ADDRESS;
+
+        if (i !== totalCycles) {
+            if (currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
+                targetSymbol = "USDT";
+                targetAddress = USDT_ADDRESS;
+                logToPanel(`⚖️ Rotational Check: Re-routing assets back to USDT stability layer.`);
+            } else {
+                logToPanel(`⚖️ Velocity Engine Active: Filtering horizon vectors for maximum speed...`);
+                try {
+                    const dynamicMarket = await categorizeCoins();
+                    let combinedPool = [];
+                    if (dynamicMarket && Array.isArray(dynamicMarket.short_term)) combinedPool = combinedPool.concat(dynamicMarket.short_term);
+                    if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
+                    if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
+
+                    let bestCandidate = null;
+                    let peakVelocityRecorded = -999999;
+                    let uniqueTracker = new Set();
+
+                    for (let token of combinedPool) {
+                        if (!token || !token.tokenAddress || uniqueTracker.has(token.tokenAddress.toLowerCase())) continue;
+                        uniqueTracker.add(token.tokenAddress.toLowerCase());
+                        let currentSpeed = parseFloat(token.change24h || 0.0);
+                        if (currentSpeed > peakVelocityRecorded) {
+                            peakVelocityRecorded = currentSpeed;
+                            bestCandidate = token;
+                        }
+                    }
+
+                    if (bestCandidate && peakVelocityRecorded > 0.05) {
+                        targetSymbol = bestCandidate.symbol;
+                        targetAddress = bestCandidate.tokenAddress;
+                        logToPanel(`🔥 [MOMENTUM CHOICE] Selected ${targetSymbol} -> Climbing at +${bestCandidate.change24h}% velocity.`);
+                    } else {
+                        targetSymbol = "CAKE";
+                        targetAddress = CAKE_ADDRESS;
+                    }
+                } catch (err) {
+                    targetSymbol = "CAKE";
+                    targetAddress = CAKE_ADDRESS;
+                }
+            }
+        }
+
+        // 🟢 ZERO-GAS OVERLAP PROTECTION CHECK
+        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
+            logToPanel(`🛡️ [GAS PROTECTION] Asset sequence already aligned to target (${targetSymbol}). Skipping transaction execution to prevent fee burn.`);
+            await blockDelay(5000);
+            continue;
+        }
+
+        // Call out execution parameters directly to Part B mapping processes
+        let runSuccess = await window.executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol);
+        if (!runSuccess) break;
+
+        // Sync local reference addresses for subsequent iterations
+        currentAssetAddress = targetAddress;
+        currentAssetSymbol = targetSymbol;
+
+        if (i < totalCycles) await blockDelay(3000);
     }
 
     window.isBotRunning = false;
     window.setStatus("STOPPED");
-    logToPanel("\n⏹ [DIAGNOSTIC COMPLETION] Pipeline test run complete. Engine safely shut down.");
+    logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 window.startSimulation = startSimulation;
+
 // ==================================================================
-// 🚀 SECTION 2: PURE DYNAMIC POOL DISCOVERY RADAR (PART B)
+// 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE (PART B)
 // ==================================================================
-async function executeArrayPrintDump(combinedPool, CAKE_ADDRESS) {
-    let bestCandidate = null;
-    let peakVelocityRecorded = -999999;
-    let uniqueTracker = new Set();
-    let displayCount = 0;
-
-    logToPanel("--- 📄 PRINTING STREAMING MATRIX ENTRIES ---");
-
-    for (let token of combinedPool) {
-        if (!token || !token.tokenAddress) continue;
-        
-        let isDuplicate = uniqueTracker.has(token.tokenAddress.toLowerCase());
-        uniqueTracker.add(token.tokenAddress.toLowerCase());
-
-        // Log the exact payload characteristics arriving from the network proxy data stream
-        if (!isDuplicate) {
-            displayCount++;
-            logToPanel(`[TOKEN #${displayCount}]: Symbol: ${token.symbol} | address: ${token.tokenAddress} | Gain: +${token.change24h}%`);
-        }
-
-        let currentSpeed = parseFloat(token.change24h || 0.0);
-        if (currentSpeed > peakVelocityRecorded) {
-            peakVelocityRecorded = currentSpeed;
-            bestCandidate = token;
-        }
+async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol) {
+    logToPanel(`💾 Synchronizing tokens mapping index inside clients.db...`);
+    try {
+        await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                userid: window.USER_ID,
+                currenttoken: targetAddress,       
+                lasttoken: currentAssetAddress     
+            })
+        });
+        logToPanel(`✅ Database updated: [Last: ${currentAssetSymbol}] ➡️ [Current: ${targetSymbol}]`);
+    } catch (dbUpdateErr) {
+        console.error("Database connection failed:", dbUpdateErr);
     }
 
-    logToPanel("--------------------------------------------");
-    logToPanel(`📋 Unique individual token choices evaluated: ${uniqueTracker.size}`);
+    logToPanel(`[ROUTE] Preparing transaction pipeline: Swap ${currentAssetSymbol} ➡️ ${targetSymbol}`);
 
-    if (bestCandidate && peakVelocityRecorded > 0.05) {
-        logToPanel(`🎯 [TARGET MATCHED] Fastest asset discovered: ${bestCandidate.symbol} climbing at +${bestCandidate.change24h}%`);
-    } else {
-        logToPanel(`⚠️ No asset displays dynamic velocity benchmarks. Target default token address layer fallback: CAKE`);
+    try {
+        const swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
+
+        if (swapResult && swapResult.status === "ok") {
+            logToPanel(`⏳ Signature confirmed. Starting settlement monitoring loop on-chain...`);
+            let postSwapBalanceConfirmed = 0n;
+            let pollAttempts = 0;
+            
+            while (postSwapBalanceConfirmed === 0n && pollAttempts < 40) {
+                if (!window.isBotRunning) return false;
+                pollAttempts++;
+                logToPanel(`🔍 Checking target balance via node array mapping (Attempt ${pollAttempts}/40)...`);
+                
+                let liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, targetAddress);
+                postSwapBalanceConfirmed = BigInt(liveCheckWei);
+                
+                if (postSwapBalanceConfirmed > 0n) {
+                    logToPanel(`🎉 On-Chain Non-Zero balance discovered! Confirmed: ${liveCheckWei} Wei inside ${targetSymbol}.`);
+                    await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
+                    return true;
+                }
+                await blockDelay(5000); 
+            }
+            if (postSwapBalanceConfirmed === 0n) {
+                logToPanel(`⚠️ Settlement check reached timeout thresholds. Forcing process break.`);
+                return false;
+            }
+        } else {
+            const failReason = (swapResult && swapResult.message) ? swapResult.message : "Signature Denied / Nonce collision";
+            logToPanel(`❌ [ORCHESTRATION BREAK] Loop halted: ${failReason}`);
+            return false;
+        }
+    } catch (err) {
+        logToPanel(`❌ Critical Loop Exception: ${err.message}`);
+        return false;
     }
+    return true;
 }
-window.executeArrayPrintDump = executeArrayPrin
-tDump;
-
+window.executeActualContractSwapBlock = executeActualContractSwapBlock;
