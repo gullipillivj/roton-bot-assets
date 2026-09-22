@@ -99,7 +99,11 @@ async function startSimulation(totalCycles = 10) {
     const baseApiUrl = window.API_BASE || window.location.origin;
 
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
- 
+    
+    // Stable token pool settings backup targets
+    const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
+    const XVS_ADDRESS = "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902";
+
     let runningBalanceWeiLock = "0";
 
     for (let i = 1; i <= totalCycles; i++) {
@@ -141,24 +145,34 @@ async function startSimulation(totalCycles = 10) {
         let targetSymbol = "USDT";
         let targetAddress = USDT_ADDRESS;
 
+        // 🟢 FIX: Look up active trends from backend CORS proxy setup to find target asset switches
         if (i !== totalCycles) {
             if (currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
                 targetSymbol = "USDT";
                 targetAddress = USDT_ADDRESS;
-                logToPanel(`⚖️ Rotational Check: Re-routing assets to USDT stability layer.`);
+                logToPanel(`⚖️ Rotational Check: Re-routing assets back to USDT stability layer.`);
             } else {
-                logToPanel(`⚖️ Stability routing active: Allocating volume to personal assets...`);
-                if (currentAssetAddress.toLowerCase() === RR_BNB_ADDR.toLowerCase()) {
-                    targetSymbol = "RR-ETH";
-                    targetAddress = RR_ETH_ADDR;
-                } else {
-                    targetSymbol = "RR-BNB";
-                    targetAddress = RR_BNB_ADDR;
+                logToPanel(`⚖️ Stability routing active: Allocating trade volume via dynamic trending list...`);
+                try {
+                    const dynamicMarket = await categorizeCoins();
+                    if (dynamicMarket && dynamicMarket.short_term && dynamicMarket.short_term.length > 0) {
+                        // Dynamically route capital to the highest trending token option
+                        let selectedAsset = dynamicMarket.short_term[0];
+                        targetSymbol = selectedAsset.symbol;
+                        targetAddress = selectedAsset.tokenAddress;
+                    } else {
+                        targetSymbol = "CAKE";
+                        targetAddress = CAKE_ADDRESS;
+                    }
+                } catch (err) {
+                    // Quick safe fallback setup mapping
+                    targetSymbol = "CAKE";
+                    targetAddress = CAKE_ADDRESS;
                 }
             }
         }
 
-        // 🟢 FIXED STEP 1: Update tokens table matrix BEFORE alignment skip controls check out
+        // 🟢 STEP 1: Dynamically update tokens table map parameters prior to validation
         logToPanel(`💾 Synchronizing tokens mapping index inside clients.db...`);
         try {
             const updateTokensRes = await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
@@ -172,18 +186,14 @@ async function startSimulation(totalCycles = 10) {
             });
             const updateTokensData = await updateTokensRes.json();
             if (updateTokensData && updateTokensData.status === "ok") {
-                logToPanel(`✅ Database synced: [Last: ${currentAssetSymbol}] ➡️ [Current: ${targetSymbol}]`);
-            } else {
-                logToPanel(`⚠️ Database update rejected: ${updateTokensData.message || "Unknown error"}`);
+                logToPanel(`✅ Database updated: [Last: ${currentAssetSymbol}] ➡️ [Current: ${targetSymbol}]`);
             }
         } catch (dbUpdateErr) {
             console.error("Tokens table sync failed:", dbUpdateErr);
-            logToPanel(`❌ Database mapping failed. Proceeding via engine local parameters.`);
         }
 
-        // 🟢 CHECKPOINT GAP PROTECTION: If already aligned, we log changes to DB and then skip network actions safely
         if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
-            logToPanel(`[INFO] Asset sequence already aligned to target (${targetSymbol}). Skipping swap payload dispatch.`);
+            logToPanel(`[INFO] Asset sequence already aligned to target (${targetSymbol}). Skipping swap step.`);
             await blockDelay(3000);
             continue;
         }
@@ -196,13 +206,12 @@ async function startSimulation(totalCycles = 10) {
                 break;
             }
 
-            // 🟢 STEP 2: Execute standard broadcast invocation pipeline
+            // 🟢 STEP 2: Trigger the pure pass-through swap compiler
             const swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
 
             if (swapResult && swapResult.status === "ok") {
                 logToPanel(`⏳ Signature confirmed. Starting settlement monitoring loop on-chain...`);
                 
-                // 🟢 STEP 3: Recursive polling checkpoint checking balance limits till non-zero
                 let postSwapBalanceConfirmed = 0n;
                 let pollAttempts = 0;
                 const maxPollAttempts = 40; 
@@ -226,7 +235,7 @@ async function startSimulation(totalCycles = 10) {
                         break;
                     }
                     
-                    await blockDelay(5000); // 5 second sleep to limit RPC pressure bounds
+                    await blockDelay(5000); 
                 }
 
                 if (postSwapBalanceConfirmed === 0n) {
@@ -252,5 +261,4 @@ async function startSimulation(totalCycles = 10) {
     logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 window.startSimulation = startSimulation;
-
 
