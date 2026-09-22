@@ -99,9 +99,7 @@ async function startSimulation(totalCycles = 10) {
     const baseApiUrl = window.API_BASE || window.location.origin;
 
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-    const RR_BNB_ADDR = "0xba67186fd454D0256a0D3744783538bE08C58feD";
-    const RR_ETH_ADDR = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
-
+ 
     let runningBalanceWeiLock = "0";
 
     for (let i = 1; i <= totalCycles; i++) {
