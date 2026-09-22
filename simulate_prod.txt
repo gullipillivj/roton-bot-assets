@@ -88,6 +88,7 @@ window.initLiveBalanceClock = function() {
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
 
+
 // ==================================================================
 // 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE
 // ==================================================================
@@ -106,7 +107,7 @@ async function startSimulation(totalCycles = 10) {
     let currentAssetSymbol = "USDT";
     let runningBalanceWeiLock = "0";
 
-    // 🟢 DUAL-QUERY SECOVERY PIPELINE INTEGRATION
+    // 🟢 DUAL-QUERY RECOVERY PIPELINE INTEGRATION
     // Pre-emptively scans database tracks to locate where your unscaled tokens are sitting before firing loop cycles
     try {
         const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
@@ -179,9 +180,11 @@ async function startSimulation(totalCycles = 10) {
                 try {
                     const dynamicMarket = await categorizeCoins();
                     let combinedPool = [];
-                    if (dynamicMarket.short_term) combinedPool = combinedPool.concat(dynamicMarket.short_term);
-                    if (dynamicMarket.mid_term) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
-                    if (dynamicMarket.long_term) combinedPool = combinedPool.concat(dynamicMarket.long_term);
+                    
+                    // Secure array verification boundaries lookup
+                    if (dynamicMarket && Array.isArray(dynamicMarket.short_term)) combinedPool = combinedPool.concat(dynamicMarket.short_term);
+                    if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
+                    if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
 
                     let bestCandidate = null;
                     let peakVelocityRecorded = -999999;
@@ -205,10 +208,12 @@ async function startSimulation(totalCycles = 10) {
                         targetAddress = bestCandidate.tokenAddress;
                         logToPanel(`🔥 [MOMENTUM CHOICE] Selected ${targetSymbol} -> Climbing at +${bestCandidate.change24h}% velocity.`);
                     } else {
+                        logToPanel("⚠️ No alternative token displays upward momentum. Defaulting to CAKE.");
                         targetSymbol = "CAKE";
                         targetAddress = CAKE_ADDRESS;
                     }
                 } catch (err) {
+                    console.error("Momentum parsing failed, dropping to fallback tracker:", err);
                     targetSymbol = "CAKE";
                     targetAddress = CAKE_ADDRESS;
                 }
@@ -227,6 +232,7 @@ async function startSimulation(totalCycles = 10) {
                     lasttoken: currentAssetAddress     
                 })
             });
+            logToPanel(`✅ Database updated: [Last: ${currentAssetSymbol}] ➡️ [Current: ${targetSymbol}]`);
         } catch (dbUpdateErr) {
             console.error("Database connection failed:", dbUpdateErr);
         }
@@ -264,6 +270,7 @@ async function startSimulation(totalCycles = 10) {
                         logToPanel(`🎉 On-Chain Non-Zero balance discovered! Confirmed: ${liveCheckWei} Wei inside ${targetSymbol}.`);
                         currentAssetAddress = targetAddress;
                         currentAssetSymbol = targetSymbol;
+                        await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
                         break;
                     }
                     await blockDelay(5000); 
