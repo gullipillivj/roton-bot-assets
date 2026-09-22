@@ -160,13 +160,7 @@ async function startSimulation(totalCycles = 10) {
             }
         }
 
-        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
-            logToPanel(`[INFO] Asset sequence already aligned to target. Skipping loop step.`);
-            await blockDelay(3000);
-            continue;
-        }
-
-        // 🟢 STEP 1: Dynamically update tokens table map parameters prior to dispatching transactions
+        // 🟢 FIXED STEP 1: Update tokens table matrix BEFORE alignment skip controls check out
         logToPanel(`💾 Synchronizing tokens mapping index inside clients.db...`);
         try {
             const updateTokensRes = await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
@@ -180,13 +174,20 @@ async function startSimulation(totalCycles = 10) {
             });
             const updateTokensData = await updateTokensRes.json();
             if (updateTokensData && updateTokensData.status === "ok") {
-                logToPanel(`✅ Database updated cleanly: [Last Token: ${currentAssetSymbol}] ➡️ [Current Token: ${targetSymbol}]`);
+                logToPanel(`✅ Database synced: [Last: ${currentAssetSymbol}] ➡️ [Current: ${targetSymbol}]`);
             } else {
-                logToPanel(`⚠️ Database mapping update rejected: ${updateTokensData.message || "Unknown error"}`);
+                logToPanel(`⚠️ Database update rejected: ${updateTokensData.message || "Unknown error"}`);
             }
         } catch (dbUpdateErr) {
             console.error("Tokens table sync failed:", dbUpdateErr);
-            logToPanel(`❌ Database connection failed. Proceeding with execution under local structural variables.`);
+            logToPanel(`❌ Database mapping failed. Proceeding via engine local parameters.`);
+        }
+
+        // 🟢 CHECKPOINT GAP PROTECTION: If already aligned, we log changes to DB and then skip network actions safely
+        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
+            logToPanel(`[INFO] Asset sequence already aligned to target (${targetSymbol}). Skipping swap payload dispatch.`);
+            await blockDelay(3000);
+            continue;
         }
 
         logToPanel(`[ROUTE] Preparing transaction pipeline: Swap ${currentAssetSymbol} ➡️ ${targetSymbol}`);
@@ -197,7 +198,7 @@ async function startSimulation(totalCycles = 10) {
                 break;
             }
 
-            // 🟢 STEP 2: Fire standard broadcast pipeline
+            // 🟢 STEP 2: Execute standard broadcast invocation pipeline
             const swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
 
             if (swapResult && swapResult.status === "ok") {
@@ -253,4 +254,5 @@ async function startSimulation(totalCycles = 10) {
     logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 window.startSimulation = startSimulation;
+
 
