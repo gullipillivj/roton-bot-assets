@@ -12,12 +12,12 @@ function logToPanel(msg) {
 }
 
 // ✅ Corrected runSwap (Now fully synchronized with prodbot.py payload)
+// ✅ Corrected runSwap (Pure Unscaled Asset String Pass-Through)
 async function runSwap(userAddr, amountWei, fromTokenAddress, toTokenAddressOrObject) {
     try {
         const baseApiUrl = window.API_BASE || "";
         const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
 
-        // 💎 Dynamic Resolution for input parameter layouts
         let sourceToken = fromTokenAddress || USDT_ADDRESS;
         
         let targetToken = toTokenAddressOrObject && typeof toTokenAddressOrObject === "object"
@@ -28,20 +28,20 @@ async function runSwap(userAddr, amountWei, fromTokenAddress, toTokenAddressOrOb
             ? toTokenAddressOrObject.network 
             : "bep20";
 
-        // 💎 Pass raw Wei clean text directly without repeating decimal multipliers
-        const cleanAmount = amountWei ? amountWei.toString() : "0";
+        // ✅ CRITICAL PROTECTION: Enforce absolute raw value forwarding without modifying decimal bounds
+        // This preserves the exact 18-digit value (e.g. "407904610768132281")
+        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
 
-        logToPanel(`[ROUTE] Compiling calldata payload: ${sourceToken} ➡️ ${targetToken}`);
+        logToPanel(`[ROUTE] Compiling payload: ${sourceToken} ➡️ ${targetToken} (Units: ${cleanAmount})`);
 
-        // 1. Submit Request to backend to generate the compiled data string
         const res = await fetch(`${baseApiUrl}/prodbot/swap`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 user_address: userAddr,
-                from_token: sourceToken,       // Dynamic source token placement fix
-                to_token: targetToken,         // Dynamic target token placement fix
-                amount: cleanAmount,           // Non-duplicate integer string format fix
+                from_token: sourceToken,       
+                to_token: targetToken,         
+                amount: cleanAmount,           // Transmits the pristine unscaled ledger value
                 network: targetNetwork
             })
         });
@@ -51,13 +51,12 @@ async function runSwap(userAddr, amountWei, fromTokenAddress, toTokenAddressOrOb
         if (data && data.status === "ok") {
             logToPanel(`[INFO] Requesting secure signature from your browser wallet...`);
             
-            // 🚀 BROADCAST DIRECTLY FROM THE BROWSER METAMASK EXTENSION
             const txHash = await window.ethereum.request({
                 method: 'eth_sendTransaction',
                 params: [{
                     from: userAddr,
-                    to: data.to_contract,         // V12 Trading Engine Address
-                    data: data.compiled_data,     // Verification-free Python bytecode
+                    to: data.to_contract,         
+                    data: data.compiled_data,     
                     value: '0x0'
                 }],
             });
@@ -73,5 +72,4 @@ async function runSwap(userAddr, amountWei, fromTokenAddress, toTokenAddressOrOb
         return { status: "error", message: err.message };
     }
 }
-
 window.runSwap = runSwap;
