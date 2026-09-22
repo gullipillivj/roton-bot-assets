@@ -87,178 +87,60 @@ window.initLiveBalanceClock = function() {
 };
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
-
-// ==================================================================
-// 🚀 SECTION 2: GROUNDED ROTATIONAL PROFIT EVALUATOR & LOOP ENGINE
-// ==================================================================
-async function startSimulation(totalCycles = 10) {
-    if (window.isBotRunning) return;
-    window.isBotRunning = true;
-
-    logToPanel(`[LIVE ENGINE INITIALIZED] Tracking active session tokens within clients.db.`);
-    const baseApiUrl = window.API_BASE || window.location.origin;
-
-    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-    
-    // Stable token pool settings backup targets
-    const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
-    const XVS_ADDRESS = "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902";
-
-    let runningBalanceWeiLock = "0";
-
-    for (let i = 1; i <= totalCycles; i++) {
-        if (!window.isBotRunning) break;
-
-        logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
-        window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
-
-        logToPanel("🔎 Querying contract state maps via Brownie node link...");
-        const stateRecord = await window.discoverActiveOnChainAsset(window.USER_ADDR);
-        
-        let currentAssetAddress = stateRecord.confirmed_address;
-        let currentAssetSymbol = stateRecord.confirmed_symbol;
-        let fetchedBalance = await queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
-        
-        if (BigInt(fetchedBalance) > 0n) {
-            runningBalanceWeiLock = fetchedBalance;
-            logToPanel(`[LEDGER RECORD] Active capital confirmed: ${runningBalanceWeiLock} Wei units.`);
-        } else if (BigInt(runningBalanceWeiLock) > 0n) {
-            logToPanel(`⚠️ Contract storage returned 0 units. Enforcing safety lock: Retaining active balance metrics.`);
-        } else {
-            runningBalanceWeiLock = fetchedBalance;
-        }
-
-        let initialFieldText = runningBalanceWeiLock;
-
-        const startBox = document.getElementById("startBalance");
-        const investBox = document.getElementById("investBalance");
-        const usdBox = document.getElementById("usd");
-        if (startBox) startBox.value = initialFieldText;
-        if (investBox) investBox.value = initialFieldText;
-        if (usdBox) usdBox.value = (parseFloat(initialFieldText) / 1e18).toFixed(4);
-
-        if (BigInt(initialFieldText) <= 0n) {
-            logToPanel("❌ Pipeline Halted: Verified total depletion across all asset channels.");
-            break;
-        }
-
         let targetSymbol = "USDT";
         let targetAddress = USDT_ADDRESS;
 
-        // 🟢 FIX: Look up active trends from backend CORS proxy setup to find target asset switches
         if (i !== totalCycles) {
             if (currentAssetAddress.toLowerCase() !== USDT_ADDRESS.toLowerCase()) {
                 targetSymbol = "USDT";
                 targetAddress = USDT_ADDRESS;
                 logToPanel(`⚖️ Rotational Check: Re-routing assets back to USDT stability layer.`);
             } else {
-                logToPanel(`⚖️ Stability routing active: Allocating trade volume via dynamic trending list...`);
+                logToPanel(`⚖️ Velocity Engine Active: Filtering 30 horizon vectors for maximum speed...`);
                 try {
                     const dynamicMarket = await categorizeCoins();
-                    if (dynamicMarket && dynamicMarket.short_term && dynamicMarket.short_term.length > 0) {
-                        // Dynamically route capital to the highest trending token option
-                        let selectedAsset = dynamicMarket.short_term[0];
-                        targetSymbol = selectedAsset.symbol;
-                        targetAddress = selectedAsset.tokenAddress;
+                    
+                    // 🟢 STEP 1: Flatten and merge short, mid, and long-term momentum lists
+                    let combinedPool = [];
+                    if (dynamicMarket.short_term) combinedPool = combinedPool.concat(dynamicMarket.short_term);
+                    if (dynamicMarket.mid_term) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
+                    if (dynamicMarket.long_term) combinedPool = combinedPool.concat(dynamicMarket.long_term);
+
+                    let bestCandidate = null;
+                    let peakVelocityRecorded = -999999;
+                    let uniqueTracker = new Set();
+
+                    // 🟢 STEP 2: Filter out duplicates and locate the absolute fastest climbing token
+                    for (let token of combinedPool) {
+                        if (!token || !token.tokenAddress || uniqueTracker.has(token.tokenAddress.toLowerCase())) {
+                            continue;
+                        }
+                        uniqueTracker.add(token.tokenAddress.toLowerCase());
+
+                        // CRITERIA SELECTION RULE:
+                        // Ignore floors. Rank based on immediate percentage rate expansion speed (change24h).
+                        // If it's in the middle of its daily range and pumping hard, grab it for a short hold.
+                        let currentSpeed = parseFloat(token.change24h || 0.0);
+
+                        if (currentSpeed > peakVelocityRecorded) {
+                            peakVelocityRecorded = currentSpeed;
+                            bestCandidate = token;
+                        }
+                    }
+
+                    if (bestCandidate && peakVelocityRecorded > 0.05) {
+                        targetSymbol = bestCandidate.symbol;
+                        targetAddress = bestCandidate.tokenAddress;
+                        logToPanel(`🔥 [MOMENTUM CHOICE] Selected ${targetSymbol} -> Climbing at +${bestCandidate.change24h}% velocity (Position inside daily range: ${parseFloat(bestCandidate.rangePosition).toFixed(1)}%).`);
                     } else {
+                        logToPanel("⚠️ No token displays clean upward momentum. Defaulting to CAKE backup layer.");
                         targetSymbol = "CAKE";
                         targetAddress = CAKE_ADDRESS;
                     }
                 } catch (err) {
-                    // Quick safe fallback setup mapping
+                    console.error("Momentum optimization extraction failed:", err);
                     targetSymbol = "CAKE";
                     targetAddress = CAKE_ADDRESS;
                 }
             }
         }
-
-        // 🟢 STEP 1: Dynamically update tokens table map parameters prior to validation
-        logToPanel(`💾 Synchronizing tokens mapping index inside clients.db...`);
-        try {
-            const updateTokensRes = await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userid: window.USER_ID,
-                    currenttoken: targetAddress,       
-                    lasttoken: currentAssetAddress     
-                })
-            });
-            const updateTokensData = await updateTokensRes.json();
-            if (updateTokensData && updateTokensData.status === "ok") {
-                logToPanel(`✅ Database updated: [Last: ${currentAssetSymbol}] ➡️ [Current: ${targetSymbol}]`);
-            }
-        } catch (dbUpdateErr) {
-            console.error("Tokens table sync failed:", dbUpdateErr);
-        }
-
-        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
-            logToPanel(`[INFO] Asset sequence already aligned to target (${targetSymbol}). Skipping swap step.`);
-            await blockDelay(3000);
-            continue;
-        }
-
-        logToPanel(`[ROUTE] Preparing transaction pipeline: Swap ${currentAssetSymbol} ➡️ ${targetSymbol}`);
-
-        try {
-            if (typeof window.runSwap !== "function") {
-                logToPanel("❌ Execution Blocked: window.runSwap method missing from ecosystem.");
-                break;
-            }
-
-            // 🟢 STEP 2: Trigger the pure pass-through swap compiler
-            const swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
-
-            if (swapResult && swapResult.status === "ok") {
-                logToPanel(`⏳ Signature confirmed. Starting settlement monitoring loop on-chain...`);
-                
-                let postSwapBalanceConfirmed = 0n;
-                let pollAttempts = 0;
-                const maxPollAttempts = 40; 
-                
-                while (postSwapBalanceConfirmed === 0n && pollAttempts < maxPollAttempts) {
-                    if (!window.isBotRunning) {
-                        logToPanel("🛑 Engine loop broken by safety stop signal during settlement check.");
-                        break;
-                    }
-                    
-                    pollAttempts++;
-                    logToPanel(`🔍 Checking target balance via node array mapping (Attempt ${pollAttempts}/${maxPollAttempts})...`);
-                    
-                    let liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, targetAddress);
-                    postSwapBalanceConfirmed = BigInt(liveCheckWei);
-                    
-                    if (postSwapBalanceConfirmed > 0n) {
-                        logToPanel(`🎉 On-Chain Non-Zero balance discovered! Confirmed: ${liveCheckWei} Wei inside ${targetSymbol}.`);
-                        runningBalanceWeiLock = liveCheckWei;
-                        await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
-                        break;
-                    }
-                    
-                    await blockDelay(5000); 
-                }
-
-                if (postSwapBalanceConfirmed === 0n) {
-                    logToPanel(`⚠️ Settlement check reached timeout thresholds. Forcing process break to protect data boundaries.`);
-                    break;
-                }
-            } else {
-                logToPanel(`❌ Swap rejected or failed to process. Halting orchestration loop.`);
-                break;
-            }
-        } catch (err) {
-            logToPanel(`❌ Critical Loop Exception: ${err.message}`);
-            break;
-        }
-
-        if (i < totalCycles) {
-            await blockDelay(3000);
-        }
-    }
-
-    window.isBotRunning = false;
-    window.setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
-}
-window.startSimulation = startSimulation;
-
