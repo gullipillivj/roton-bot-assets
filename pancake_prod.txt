@@ -73,3 +73,100 @@ async function runSwap(userAddr, amountWei, fromTokenAddress, toTokenAddressOrOb
     }
 }
 window.runSwap = runSwap;
+
+
+// ==================================================================
+// 🥞 PIPELINE 1: DISPATCH LOCAL UNISWAP ROUTING
+// ==================================================================
+async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
+    try {
+        const base = window.API_BASE || "";
+        const res = await fetch(`${base}/prodbot/swap/uniswap`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_address: userAddr, amount: amountWei.toString(), from_token: fromToken, to_token: toToken })
+        });
+        const data = await res.json();
+        if (data && data.status === "ok") {
+            const txHash = await window.ethereum.request({
+                method: 'eth_sendTransaction',
+                params: [{ from: userAddr, to: data.to_contract, data: data.compiled_data, value: '0x0' }]
+            });
+            return { status: "ok", tx_hash: txHash };
+        }
+        return data;
+    } catch (err) { return { status: "error", message: err.message }; }
+}
+window.runSwapUniswap = runSwapUniswap;
+
+// ==================================================================
+// 🥞 PIPELINE 2: DISPATCH NATIVE BNB SWAP INJECTION
+// ==================================================================
+async function runSwapPancakeBNB(userAddr, amountWei, toToken) {
+    try {
+        const base = window.API_BASE || "";
+        const res = await fetch(`${base}/prodbot/swap/pancake-bnb`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: amountWei.toString(), to_token: toToken })
+        });
+        const data = await res.json();
+        if (data && data.status === "ok") {
+            const txHash = await window.ethereum.request({
+                method: 'eth_sendTransaction',
+                params: [{ from: userAddr, to: data.to_contract, data: data.compiled_data, value: '0x0' }]
+            });
+            return { status: "ok", tx_hash: txHash };
+        }
+        return data;
+    } catch (err) { return { status: "error", message: err.message }; }
+}
+window.runSwapPancakeBNB = runSwapPancakeBNB;
+
+// ==================================================================
+// 🥞 PIPELINE 3: DISPATCH LAYERZERO CROSS-CHAIN BRIDGE (ETHEREUM ID: 1)
+// ==================================================================
+async function runSwapCrossChainETH(userAddr, amountWei, fromToken, toToken) {
+    try {
+        const base = window.API_BASE || "";
+        const res = await fetch(`${base}/prodbot/swap/crosschain-eth`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_address: userAddr, amount: amountWei.toString(), from_token: fromToken, to_token: toToken })
+        });
+        const data = await res.json();
+        if (data && data.status === "ok") {
+            const txHash = await window.ethereum.request({
+                method: 'eth_sendTransaction',
+                params: [{ from: userAddr, to: data.to_contract, data: data.compiled_data, value: '0x0' }]
+            });
+            return { status: "ok", tx_hash: txHash };
+        }
+        return data;
+    } catch (err) { return { status: "error", message: err.message }; }
+}
+window.runSwapCrossChainETH = runSwapCrossChainETH;
+
+// ==================================================================
+// 🥞 PIPELINE 4: DISPATCH LAYERZERO CROSS-CHAIN BRIDGE (BSC ID: 56)
+// ==================================================================
+async function runSwapCrossChainBSC(userAddr, amountWei, fromToken, toToken) {
+    try {
+        const base = window.API_BASE || "";
+        const res = await fetch(`${base}/prodbot/swap/crosschain-bsc`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_address: userAddr, amount: amountWei.toString(), from_token: fromToken, to_token: toToken })
+        });
+        const data = await res.json();
+        if (data && data.status === "ok") {
+            const txHash = await window.ethereum.request({
+                method: 'eth_sendTransaction',
+                params: [{ from: userAddr, to: data.to_contract, data: data.compiled_data, value: '0x0' }]
+            });
+            return { status: "ok", tx_hash: txHash };
+        }
+        return data;
+    } catch (err) { return { status: "error", message: err.message }; }
+}
+window.runSwapCrossChainBSC = runSwapCrossChainBSC;
