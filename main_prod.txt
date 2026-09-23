@@ -44,6 +44,32 @@ function initializeLabels() {
   if (nameLabel) nameLabel.innerText = "Wallet Name: " + window.WALLET_NAME;
 }
 
+// Utility to ensure values are scaled to 18 decimals without dropping float remainders
+function ensure18Decimals(amountInput) {
+    if (!amountInput) return "0";
+    let str = amountInput.toString().trim();
+    if (str === "0" || str === "") return "0";
+    if (str.length > 12) return str;
+    
+    if (!str.includes('.')) {
+        return str + "000000000000000000";
+    }
+    
+    let parts = str.split('.');
+    let whole = parts[0];
+    let fraction = parts[1];
+    
+    if (fraction.length < 18) {
+        fraction = fraction.padEnd(18, '0');
+    } else if (fraction.length > 18) {
+        fraction = fraction.substring(0, 18);
+    }
+    
+    let combined = (whole + fraction).replace(/^0+/, '');
+    return combined === "" ? "0" : combined;
+}
+
+
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DATABASE TOKEN SLOT MATCHING
 // 📊 OPTIMIZED FAST DUAL-TOKEN PORTFOLIO SYNCHRONIZER
