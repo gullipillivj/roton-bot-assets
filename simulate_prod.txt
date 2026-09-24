@@ -94,18 +94,17 @@ async function startSimulation(totalCycles = 10) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
 
-    logToPanel(`[LIVE ENGINE INITIALIZED] Launching cross-chain loop matrices via velocity radar.`);
+    window.logToPanel(`[LIVE ENGINE INITIALIZED] Launching cross-chain loop matrices via velocity radar.`);
+    
+    // Scoped clean constants mapping
     const baseApiUrl = window.API_BASE || window.location.origin;
-
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
     const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
 
-    // Authority dynamic token references tracking maps
     let currentAssetAddress = USDT_ADDRESS;
     let currentAssetSymbol = "USDT";
     let runningBalanceWeiLock = "0";
 
-    // 🟢 INITIAL NETWORK RECOVERY HOOKS
     try {
         const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
             method: "POST",
@@ -121,7 +120,7 @@ async function startSimulation(totalCycles = 10) {
         }
 
         for (let targetAddr of checkTracks) {
-            let balCheck = await queryTokenBalanceDirect(window.USER_ADDR, targetAddr);
+            let balCheck = await window.queryTokenBalanceDirect(window.USER_ADDR, targetAddr);
             if (BigInt(balCheck) > 0n) {
                 runningBalanceWeiLock = balCheck;
                 currentAssetAddress = targetAddr;
@@ -144,21 +143,18 @@ async function startSimulation(totalCycles = 10) {
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
 
-        logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
+        window.logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
         window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
-        let fetchedBalance = await queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
+        let fetchedBalance = await window.queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
         if (BigInt(fetchedBalance) > 0n) {
             runningBalanceWeiLock = fetchedBalance;
-            logToPanel(`[LEDGER RECORD] Active on-chain balance checked: ${runningBalanceWeiLock} Wei units.`);
+            window.logToPanel(`[LEDGER RECORD] Active on-chain balance checked: ${runningBalanceWeiLock} Wei units.`);
         }
 
-        // 🌟 FIXED PREFIXED ENGINE STEP: 
-        // Read directly from the static input form element, preserving user's preset value.
         const investBox = document.getElementById("investBalance");
         let initialFieldText = investBox ? investBox.value.trim() : "0";
 
-        // Fallback placeholder logic if form is completely blank
         if (initialFieldText === "0" || initialFieldText === "") {
             initialFieldText = runningBalanceWeiLock;
             if (investBox) investBox.value = initialFieldText;
@@ -167,83 +163,87 @@ async function startSimulation(totalCycles = 10) {
         const startBox = document.getElementById("startBalance");
         if (startBox) startBox.value = runningBalanceWeiLock;
 
-        logToPanel(`[PREFIXED OPERATION] Routing execution using fixed amount: ${initialFieldText} Wei units inside ${currentAssetSymbol}.`);
+        window.logToPanel(`[PREFIXED OPERATION] Routing execution using fixed amount: ${initialFieldText} Wei units inside ${currentAssetSymbol}.`);
 
         if (BigInt(initialFieldText) <= 0n) {
-            logToPanel("❌ Pipeline Halted: Specified target trading balance resolves to zero.");
+            window.logToPanel("❌ Pipeline Halted: Specified target trading balance resolves to zero.");
             break;
         }
 
-        // ✅ CRITICAL SAFETY PRE-INITIALIZATION BOUNDARIES
         let targetSymbol = "USDT";
         let targetAddress = USDT_ADDRESS;
         let targetNetworkMode = "bep20"; 
         let targetChainOrigin = "bsc";
 
-        try {
-            const dynamicMarket = await categorizeCoins();
-            let combinedPool = [];
-            if (dynamicMarket && Array.isArray(dynamicMarket.short_term)) combinedPool = combinedPool.concat(dynamicMarket.short_term);
-            if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
-            if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
+        // Custom loop intercepts routing your proprietary tokens smoothly
+        if (i === 2 || i === 6) {
+            targetSymbol = "RR-BNB";
+            targetAddress = "0xba67186fd454D0256a0D3744783538bE08C58feD";
+            window.logToPanel(`🎯 [CYCLE INTERCEPT] Iteration ${i}: Forcing transaction payload to custom asset RR-BNB.`);
+        } 
+        else if (i === 4 || i === 8) {
+            targetSymbol = "RR-ETH";
+            targetAddress = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
+            window.logToPanel(`🎯 [CYCLE INTERCEPT] Iteration ${i}: Forcing transaction payload to custom asset RR-ETH.`);
+        } 
+        else {
+            try {
+                const dynamicMarket = await window.categorizeCoins();
+                let combinedPool = [];
+                if (dynamicMarket && Array.isArray(dynamicMarket.short_term)) combinedPool = combinedPool.concat(dynamicMarket.short_term);
+                if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
+                if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
 
-            let baselineAsset = (combinedPool && combinedPool.length > 0) ? combinedPool[combinedPool.length - 1] : null;
-            let stableAddress = (baselineAsset && baselineAsset.tokenAddress) ? baselineAsset.tokenAddress : USDT_ADDRESS;
-            let stableSymbol = (baselineAsset && baselineAsset.symbol) ? baselineAsset.symbol : "USDT";
-            let stableNetwork = (baselineAsset && baselineAsset.network) ? baselineAsset.network : "bep20";
-            let stableChain = (baselineAsset && baselineAsset.chainOrigin) ? baselineAsset.chainOrigin : "bsc";
+                let baselineAsset = (combinedPool && combinedPool.length > 0) ? combinedPool[combinedPool.length - 1] : null;
+                let stableAddress = (baselineAsset && baselineAsset.tokenAddress) ? baselineAsset.tokenAddress : USDT_ADDRESS;
+                let stableSymbol = (baselineAsset && baselineAsset.symbol) ? baselineAsset.symbol : "USDT";
 
-            if (currentAssetAddress.toLowerCase() !== stableAddress.toLowerCase()) {
-                targetSymbol = stableSymbol;
-                targetAddress = stableAddress;
-                targetNetworkMode = stableNetwork;
-                targetChainOrigin = stableChain;
-                logToPanel(`⚖️ Rotational Check: Re-routing ${currentAssetSymbol} back to ${targetSymbol} stability layer.`);
-            } else {
-                logToPanel(`⚖️ Velocity Engine Active: Filtering dynamic horizon vectors for maximum speed...`);
-                let bestCandidate = null;
-                let peakVelocityRecorded = -999999;
-                let uniqueTracker = new Set();
+                if (currentAssetAddress.toLowerCase() !== stableAddress.toLowerCase()) {
+                    targetSymbol = stableSymbol;
+                    targetAddress = stableAddress;
+                    window.logToPanel(`⚖️ Rotational Check: Re-routing back to ${targetSymbol} stability layer.`);
+                } else {
+                    window.logToPanel(`⚖️ Velocity Radar Active: Scanning market for maximum momentum...`);
+                    let bestCandidate = null;
+                    let peakVelocityRecorded = -999999;
+                    let uniqueTracker = new Set();
 
-                for (let token of combinedPool) {
-                    if (!token || !token.tokenAddress || uniqueTracker.has(token.tokenAddress.toLowerCase())) continue;
-                    uniqueTracker.add(token.tokenAddress.toLowerCase());
-                    let currentSpeed = parseFloat(token.change24h || 0.0);
-                    if (currentSpeed > peakVelocityRecorded) {
-                        peakVelocityRecorded = currentSpeed;
-                        bestCandidate = token;
+                    for (let token of combinedPool) {
+                        if (!token || !token.tokenAddress || uniqueTracker.has(token.tokenAddress.toLowerCase())) continue;
+                        uniqueTracker.add(token.tokenAddress.toLowerCase());
+                        let currentSpeed = parseFloat(token.change24h || 0.0);
+                        if (currentSpeed > peakVelocityRecorded) {
+                            peakVelocityRecorded = currentSpeed;
+                            bestCandidate = token;
+                        }
+                    }
+
+                    if (bestCandidate && peakVelocityRecorded > 0.05) {
+                        targetSymbol = bestCandidate.symbol;
+                        targetAddress = bestCandidate.tokenAddress;
+                        targetNetworkMode = bestCandidate.network || "bep20";
+                        targetChainOrigin = bestCandidate.chainOrigin || "bsc";
+                        window.logToPanel(`🔥 [RADAR VELOCITY] Momentum choice: ${targetSymbol} at +${bestCandidate.change24h}% velocity.`);
+                    } else {
+                        targetSymbol = "CAKE";
+                        targetAddress = CAKE_ADDRESS;
                     }
                 }
-
-                if (bestCandidate && peakVelocityRecorded > 0.05) {
-                    targetSymbol = bestCandidate.symbol;
-                    targetAddress = bestCandidate.tokenAddress;
-                    targetNetworkMode = bestCandidate.network || "bep20";
-                    targetChainOrigin = bestCandidate.chainOrigin || "bsc";
-                    logToPanel(`🔥 [MOMENTUM CHOICE] Selected ${targetSymbol} on [${targetChainOrigin.toUpperCase()}] at +${bestCandidate.change24h}% velocity.`);
-                } else {
-                    targetSymbol = "CAKE";
-                    targetAddress = CAKE_ADDRESS;
-                    targetNetworkMode = "bep20";
-                    targetChainOrigin = "bsc";
-                }
+            } catch (marketErr) {
+                console.error("Market routing dropped, resetting defaults:", marketErr);
+                targetSymbol = "USDT";
+                targetAddress = USDT_ADDRESS;
             }
-        } catch (marketErr) {
-            console.error("Market routing calculation dropped, applying stable baselines:", marketErr);
-            targetSymbol = "USDT";
-            targetAddress = USDT_ADDRESS;
-            targetNetworkMode = "bep20";
-            targetChainOrigin = "bsc";
         }
 
         if (!targetAddress || !currentAssetAddress) {
-            logToPanel("⚠️ Runtime tracking properties resolved empty. Skipping iteration safely to save gas.");
+            window.logToPanel("⚠️ Runtime tracking properties resolved empty. Skipping iteration safely.");
             await blockDelay(3000);
             continue;
         }
 
         if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
-            logToPanel(`🛡️ [GAS PROTECTION] Asset sequence already aligned to target (${targetSymbol}). Skipping contract transaction to prevent fee burn.`);
+            window.logToPanel(`🛡️ [GAS PROTECTION] Asset sequence already aligned to target (${targetSymbol}). Skipping contract transaction.`);
             await blockDelay(5000);
             continue;
         }
@@ -259,7 +259,7 @@ async function startSimulation(totalCycles = 10) {
 
     window.isBotRunning = false;
     window.setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
+    window.logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 window.startSimulation = startSimulation;
 
