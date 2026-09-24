@@ -1,0 +1,119 @@
+// coins.txt — Coin scanner in JS (client-side)
+
+// === API endpoints ===
+const BINANCE_INFO   = "https://api.binance.com/api/v3/exchangeInfo";
+const BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/24hr";
+const BINANCE_KLINES = "https://api.binance.com/api/v3/klines";
+const COINGECKO_API  = "https://api.coingecko.com/api/v3/simple/price";
+const CHANGENOW_API  = "https://api.changenow.io/v1/currencies";
+const KRAKEN_API     = "https://api.kraken.com/0/public/Ticker";
+
+// === Helpers ===
+export async function getBinancePairs() {
+  try {
+    const res = await fetch(BINANCE_INFO);
+    const data = await res.json();
+    return data.symbols.filter(s => s.quoteAsset === "USDT").map(s => s.symbol);
+  } catch (e) {
+    console.warn("[WARN] Binance pairs fetch failed:", e);
+    return ["BTCUSDT","ETHUSDT","BNBUSDT"];
+  }
+}
+
+export async function getBinanceStats(symbol) {
+  try {
+    const res = await fetch(`${BINANCE_TICKER}?symbol=${symbol}`);
+    const d = await res.json();
+    return {
+      symbol,
+      lastPrice: parseFloat(d.lastPrice),
+      priceChangePercent: parseFloat(d.priceChangePercent),
+      volume: parseFloat(d.volume)
+    };
+  } catch (e) {
+    console.warn("[WARN] Binance stats failed:", e);
+    return null;
+  }
+}
+
+export async function getBinanceHistory(symbol, interval="1h", limit=200) {
+  try {
+    const res = await fetch(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    const klines = await res.json();
+    return klines.map(k => parseFloat(k[4])); // closing prices
+  } catch (e) {
+    console.warn("[WARN] Binance history failed:", e);
+    return [];
+  }
+}
+
+function movingAverage(closes, window) {
+  if (closes.length < window) return null;
+  const slice = closes.slice(-window);
+  return slice.reduce((a,b) => a+b, 0) / window;
+}
+
+export async function evaluateCoin(symbol) {
+  const stats = await getBinanceStats(symbol);
+  const closes = await getBinanceHistory(symbol, "1h", 200);
+
+  const ma20  = movingAverage(closes, 20);
+  const ma50  = movingAverage(closes, 50);
+  const ma100 = movingAverage(closes, 100);
+
+  const upward = ma20 && ma50 && ma20 > ma50;
+
+  return {
+    symbol,
+    lastPrice: stats ? stats.lastPrice : null,
+    "24hr%": stats ? stats.priceChangePercent : null,
+    volume: stats ? stats.volume : null,
+    ma20, ma50, ma100,
+    upward_trend: upward
+  };
+}
+
+export async function categorizeCoins() {
+  const symbols = await getBinancePairs();
+  const results = await Promise.all(symbols.map(s => evaluateCoin(s)));
+
+  const long_term  = results.sort((a,b) => (b.ma100||0) - (a.ma100||0)).slice(0,10);
+  const mid_term   = results.sort((a,b) => (b.ma50||0) - (a.ma50||0)).slice(0,10);
+  const short_term = results.sort((a,b) => (b.ma20||0) - (a.ma20||0)).slice(0,10);
+
+  return { long_term, mid_term, short_term };
+}
+
+// === Other APIs for redundancy ===
+export async function getCoingecko(ids="bitcoin", vs="usd") {
+  try {
+    const res = await fetch(`${COINGECKO_API}?ids=${ids}&vs_currencies=${vs}`);
+    const d = await res.json();
+    return { symbol: ids, lastPrice: d[ids][vs] };
+  } catch (e) {
+    console.warn("[WARN] CoinGecko failed:", e);
+    return null;
+  }
+}
+
+export async function getChangenow() {
+  try {
+    const res = await fetch(CHANGENOW_API);
+    return await res.json();
+  } catch (e) {
+    console.warn("[WARN] ChangeNOW failed:", e);
+    return [];
+  }
+}
+
+export async function getKraken(pair="XBTUSD") {
+  try {
+    const res = await fetch(`${KRAKEN_API}?pair=${pair}`);
+    const d = await res.json();
+    const ticker = d.result[pair];
+    return { symbol: pair, lastPrice: parseFloat(ticker.c[0]) };
+  } catch (e) {
+    console.warn("[WARN] Kraken failed:", e);
+    return null;
+  }
+}
