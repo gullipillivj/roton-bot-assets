@@ -9,7 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (startBtn) {
         startBtn.addEventListener("click", () => {
             if (typeof window.initBot === "function") {
-                window.initBot(10); // always run 10 cycles
+                window.startSimulation(10); // always run 10 cycles
             } else {
                 logToPanel("ERROR: initBot not found");
             }
