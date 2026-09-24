@@ -141,57 +141,91 @@ async function startSimulation(totalCycles = 10) {
 }
 window.startSimulation = startSimulation;
 
-
 // ==================================================================
-// 🚀 SIMULATE_PROD.TXT — PART C: CASCADING MULTI-ROUTER ENGINES
+// 🚀 SIMULATE_PROD.TXT — PART C: TRANSACTION RECEIPT BARRIER ENGINE
 // ==================================================================
 async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, tokenIn, tokenOut, targetSymbol, targetNetworkMode, targetChainOrigin) {
     window.logToPanel(`[ROUTE] Launching 5-stage serial fallback matrix...`);
+    const cleanAmountStr = initialFieldText.toString().trim();
     let swapResult = null;
 
+    // ------------------------------------------------------------------
     // ROUTE 1: TRY UNIVERSAL PIPELINE (runSwap)
+    // ------------------------------------------------------------------
     if (!swapResult && typeof window.runSwap === "function") {
         try {
             window.logToPanel(`📡 [ROUTE 1/5] Launching standard runSwap router...`);
-            swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
-        } catch (e) { console.warn("R1 Failed:", e.message); }
+            swapResult = await window.runSwap(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
+        } catch (e) { console.warn("R1 Bypassed:", e.message); }
     }
 
+    // ------------------------------------------------------------------
     // ROUTE 2: TRY UNISWAP WRAPPER (runSwapUniswap)
+    // ------------------------------------------------------------------
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapUniswap === "function") {
         try {
             window.logToPanel(`⚠️ [ROUTE 2/5] Shifting transaction payload to runSwapUniswap...`);
-            swapResult = await window.runSwapUniswap(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
-        } catch (e) { console.warn("R2 Failed:", e.message); }
+            swapResult = await window.runSwapUniswap(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
+        } catch (e) { console.warn("R2 Bypassed:", e.message); }
     }
 
+    // ------------------------------------------------------------------
     // ROUTE 3: TRY CROSS-CHAIN BSC BRIDGE (runSwapCrossChainBSC)
+    // ------------------------------------------------------------------
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapCrossChainBSC === "function") {
         try {
             window.logToPanel(`⚠️ [ROUTE 3/5] Shifting transaction payload to LayerZero BSC...`);
-            swapResult = await window.runSwapCrossChainBSC(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
-        } catch (e) { console.warn("R3 Failed:", e.message); }
+            swapResult = await window.runSwapCrossChainBSC(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
+        } catch (e) { console.warn("R3 Bypassed:", e.message); }
     }
 
+    // ------------------------------------------------------------------
     // ROUTE 4: TRY CROSS-CHAIN ETH BRIDGE (runSwapCrossChainETH)
+    // ------------------------------------------------------------------
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapCrossChainETH === "function") {
         try {
             window.logToPanel(`⚠️ [ROUTE 4/5] Shifting transaction payload to LayerZero ETH...`);
-            swapResult = await window.runSwapCrossChainETH(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
-        } catch (e) { console.warn("R4 Failed:", e.message); }
+            swapResult = await window.runSwapCrossChainETH(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
+        } catch (e) { console.warn("R4 Bypassed:", e.message); }
     }
 
-    // ROUTE 5: FINAL PANCAKE NATIVE BNB ROUTER (runSwapPancakeBNB)
+    // ------------------------------------------------------------------
+    // ROUTE 5: NATIVE BNB ROUTER (runSwapPancakeBNB)
+    // ------------------------------------------------------------------
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapPancakeBNB === "function") {
         try {
             window.logToPanel(`⚠️ [ROUTE 5/5] Shifting transaction payload to PancakeSwap BNB Native...`);
-            swapResult = await window.runSwapPancakeBNB(window.USER_ADDR, initialFieldText, tokenOut);
-        } catch (e) { console.warn("R5 Failed:", e.message); }
+            swapResult = await window.runSwapPancakeBNB(window.USER_ADDR, cleanAmountStr, tokenOut);
+        } catch (e) { console.warn("R5 Bypassed:", e.message); }
     }
 
-    // 🔍 ACCELERATED BALANCE SYNC TRACKER (MAX 15 SCANS)
+    // ------------------------------------------------------------------
+    // 🌟 THE TRANSACTION RECEIPT CONFIRMATION BARRIER
+    // ------------------------------------------------------------------
     if (swapResult && swapResult.status === "ok") {
-        window.logToPanel(`⏳ Signature confirmed on-chain. Scanning ledger updates...`);
+        const liveTxHash = swapResult.tx_hash || swapResult.txHash;
+        window.logToPanel(`⏳ Broadcast success! Hash: ${liveTxHash}`);
+        window.logToPanel(`⏳ [BARRIER] Waiting for block inclusion receipt prior to balance checks...`);
+        
+        // Explicit 6-second cooling delay to allow the BSC node to mine the transaction
+        await blockDelay(6000);
+
+        try {
+            window.logToPanel(`🔍 [VERIFIER] Querying backend /verify-swap logger...`);
+            const verifyRes = await fetch(`${baseApiUrl}/prodbot/verify-swap`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tx_hash: liveTxHash, user_address: window.USER_ADDR })
+            });
+            const verifyData = await verifyRes.json();
+            window.logToPanel(`💡 [VERIFIER ANSWER]: ${verifyData.message || verifyData.status}`);
+        } catch (verifErr) {
+            window.logToPanel(`⚠️ Verification server check delayed: ${verifErr.message}`);
+        }
+
+        // --------------------------------------------------------------
+        // 🔍 ACCELERATED BALANCE SYNC TRACKER (MAX 15 SCANS)
+        // --------------------------------------------------------------
         let postSwapBalanceConfirmed = 0n;
         let pollAttempts = 0;
         
@@ -200,11 +234,11 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, toke
             pollAttempts++;
             window.logToPanel(`🔍 Scanning target ledger balance (Attempt ${pollAttempts}/15)...`);
             
-            let liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, tokenOut);
+            const liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, tokenOut);
             postSwapBalanceConfirmed = BigInt(liveCheckWei);
             
             if (postSwapBalanceConfirmed > 0n) {
-                window.logToPanel(`🎉 Balance Update Discovered! Confirmed: ${liveCheckWei} Wei.`);
+                window.logToPanel(`🎉 Ledger balance verified! Confirmed: ${liveCheckWei} Wei.`);
                 break;
             }
             await blockDelay(4000); 
@@ -218,8 +252,8 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, toke
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
                     userid: window.USER_ID, 
-                    currenttoken: tokenOut, // tokenOut mapping target goes to currenttoken
-                    lasttoken: tokenIn      // tokenIn retrieved state goes to lasttoken
+                    currenttoken: tokenOut, 
+                    lasttoken: tokenIn      
                 })
             });
             window.logToPanel(`✅ [DB UPDATE SUCCESS] Synchronized: [Last: ${tokenIn}] ➡️ [Current: ${tokenOut}]`);
@@ -235,6 +269,3 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, toke
     return { success: false };
 }
 window.executeActualContractSwapBlock = executeActualContractSwapBlock;
-
-
-
