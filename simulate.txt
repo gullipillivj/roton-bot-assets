@@ -1,25 +1,25 @@
 // ==================================================================
-// 🚀 FIXED SIMULATION RUNTIME TIMERS
+// 🚀 FIXED SIMULATION RUNTIME ENGINES
 // ==================================================================
-logToPanel("simulate.txt loaded");
+window.logToPanel("simulate.txt loaded");
 
 let currentCycle = 1;
 let cycleTimer = null;
 
 async function simulateCycle(cycle) {
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
+    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
 
     // Pick coin from Binance pairs
     const coin = await pickRandomCoin();
     const stats = await window.getBinanceStats(coin);
 
     if (!stats) {
-        logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
+        window.logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
         return;
     }
 
     const buyPrice = parseFloat(stats.lastPrice);
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT`);
+    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT`);
 
     // Profit/loss based on actual 24hr % change
     const result = calculatePnL(buyPrice, parseFloat(stats.priceChangePercent));
@@ -28,9 +28,9 @@ async function simulateCycle(cycle) {
     updateLiveProfit(result);
 
     if (result >= 0) {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit +${result.toFixed(2)} USDT`);
+        window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit +${result.toFixed(2)} USDT`);
     } else {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
+        window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
     }
 
     // Chart update integration
@@ -38,57 +38,60 @@ async function simulateCycle(cycle) {
         window.updateChart(buyPrice, result);
     }
 
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
+    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
 }
 
-// 🌟 FIX: Instantly invokes cycle 1 upon interaction, then triggers the 1-minute interval loop
 function startSimulation(totalCycles) {
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
+    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
     currentCycle = 1;
     if (cycleTimer) clearInterval(cycleTimer);
 
-    // 1. EXECUTE INSTANTLY RIGHT NOW
+    // 🌟 STEP 1: Execute Cycle 1 immediately on click
     simulateCycle(currentCycle);
     currentCycle++;
 
-    // 2. QUEUE UP REMAINING TIMED INTERVALS
+    // 🌟 STEP 2: Queue up subsequent intervals
     cycleTimer = setInterval(async () => {
         if (currentCycle > totalCycles) {
             clearInterval(cycleTimer);
-            logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
+            window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
             return;
         }
 
         await simulateCycle(currentCycle);
         currentCycle++;
-    }, 60000); // 1-minute tick interval remains preserved
+    }, 60000);
 }
 
 function initBot(totalCycles = 10) {
     startSimulation(totalCycles);
 }
 
-// Expose globally
-window.startSimulation = startSimulation;
-window.simulateCycle = simulateCycle;
-window.initBot = initBot;
-
-// Add window tracking hooks for standard helpers
+// === Helpers ===
 async function pickRandomCoin() {
     try {
         const pairs = await window.getBinancePairs();
         if (!pairs || pairs.length === 0) return "BTCUSDT";
         return pairs[Math.floor(Math.random() * pairs.length)];
     } catch (e) {
-         return "BTCUSDT";
+        return "BTCUSDT";
     }
 }
+
 function updateLiveProfit(value) {
     const el = document.getElementById("liveProfitValue");
-    if (el) el.textContent = `${value.toFixed(2)} USDT`;
+    if (el) {
+        el.textContent = `${value.toFixed(2)} USDT`;
+    }
 }
+
 function calculatePnL(price, percentChange) {
     if (!percentChange) return 0;
     return price * (percentChange / 100);
 }
+
+// Expose globally
+window.startSimulation = startSimulation;
+window.simulateCycle = simulateCycle;
+window.initBot = initBot;
