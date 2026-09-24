@@ -192,6 +192,65 @@ function initDashboardPipeline() {
 
 initDashboardPipeline();
 
+// ✅ Deposit
+document.getElementById("depositBtn")?.addEventListener("click", async () => {
+  const token = document.getElementById("tokenSelect").value;
+  const amount = parseFloat(document.getElementById("depositAmount").value) * 1e6;
+  if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+  const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
+  try {
+    const res = await fetch(`${API_BASE}/prodbot/deposit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
+      return;
+    }
+
+    const data = await res.json();
+    if (data.status !== "ok") {
+      logToPanel(`❌ Deposit failed: ${data.message || "Unknown error"}`);
+    } else {
+      logToPanel(`✅ Deposit prepared: ${JSON.stringify(data)}`);
+    }
+  } catch (err) {
+    logToPanel(`❌ Deposit error: ${err.message}`);
+  }
+});
+
+// ✅ Withdraw
+document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+  const token = document.getElementById("tokenSelect").value;
+  const amount = parseFloat(document.getElementById("withdrawAmount").value) * 1e6;
+  if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+  const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
+  try {
+    const res = await fetch(`${API_BASE}/prodbot/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
+      return;
+    }
+
+    const data = await res.json();
+    if (data.status !== "ok") {
+      logToPanel(`❌ Withdraw failed: ${data.message || "Unknown error"}`);
+    } else {
+      logToPanel(`✅ Withdraw prepared: ${JSON.stringify(data)}`);
+    }
+  } catch (err) {
+    logToPanel(`❌ Withdraw error: ${err.message}`);
+  }
+});
+
+
 // ========================================================
 // 📱 WALLET INTERFACE IMPLEMENTATION (SAFE & ISOLATED)
 // ========================================================
