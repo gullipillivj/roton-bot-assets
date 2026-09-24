@@ -265,7 +265,6 @@ window.startSimulation = startSimulation;
 
 
 
-
 // ==================================================================
 // 🚀 SECTION 2: MULTI-ROUTE OMNICHAIN LOOP ENHANCEMENT (PART B)
 // ==================================================================
@@ -287,7 +286,6 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
         const normMode = targetNetworkMode.toLowerCase();
         const normChain = targetChainOrigin.toLowerCase();
 
-        // 🟢 THE 4-WAY AUTOMATED RUNTIME FORK GATEWAY
         if (normMode === "cross-chain") {
             if (normChain === "ethereum" || normChain === "mainnet") {
                 logToPanel(`📡 Firing Omnichain Router Pipeline [LayerZero ETH - Chain ID: 1]`);
@@ -297,7 +295,6 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
                 swapResult = await window.runSwapCrossChainBSC(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
             }
         } else {
-            // Local base chain selections processing rules
             if (currentAssetSymbol.toUpperCase() === "BNB" || targetSymbol.toUpperCase() === "BNB") {
                 logToPanel(`📡 Firing Native Layer Pipeline [PancakeSwap BNB Router]`);
                 swapResult = await window.runSwapPancakeBNB(window.USER_ADDR, initialFieldText, targetAddress);
@@ -307,12 +304,14 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
             }
         }
 
+        // 🌟 EXPLICIT RE-ENFORCED SAFETY GATEWAY:
+        // Halt loop execution instantly if the wallet throws a rejection or execution revert
         if (swapResult && swapResult.status === "ok") {
-            logToPanel(`⏳ Signature confirmed. Starting settlement monitoring loop on-chain...`);
+            logToPanel(`⏳ Signature confirmed on-chain. Starting settlement monitoring loop...`);
             let postSwapBalanceConfirmed = 0n;
             let pollAttempts = 0;
             
-            while (postSwapBalanceConfirmed === 0n && pollAttempts < 15) {
+            while (postSwapBalanceConfirmed === 0n && pollAttempts < 40) {
                 if (!window.isBotRunning) return { success: false };
                 pollAttempts++;
                 logToPanel(`🔍 Checking target balance via node array mapping (Attempt ${pollAttempts}/40)...`);
@@ -328,11 +327,11 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
                 await blockDelay(5000); 
             }
             if (postSwapBalanceConfirmed === 0n) {
-                logToPanel(`⚠️ Settlement check reached timeout thresholds.`);
+                logToPanel(`⚠️ Settlement check reached timeout thresholds due to infinitesimal value allocation.`);
                 return { success: false };
             }
         } else {
-            const failReason = (swapResult && swapResult.message) ? swapResult.message : "Signature Rejected / Nonce collision";
+            const failReason = (swapResult && swapResult.message) ? swapResult.message : "Signature Rejected / EVM Execution Reverted";
             logToPanel(`❌ [ORCHESTRATION BREAK] Loop halted: ${failReason}`);
             return { success: false };
         }
@@ -343,4 +342,3 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
     return { success: false };
 }
 window.executeActualContractSwapBlock = executeActualContractSwapBlock;
-
