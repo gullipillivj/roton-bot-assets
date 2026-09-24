@@ -191,63 +191,73 @@ function initDashboardPipeline() {
 
 initDashboardPipeline();
 
-// ✅ Deposit
-document.getElementById("depositBtn")?.addEventListener("click", async () => {
-  const token = document.getElementById("tokenSelect").value;
-  const amount = parseFloat(document.getElementById("depositAmount").value) * 1e6;
-  if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
-  const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
-  try {
-    const res = await fetch(`/prodbot/deposit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
-      return;
+// ========================================================
+// 📱 PART B: DEPOSIT & WITHDRAW PIPELINE ACTIONS
+// ========================================================
+function setupActionListeners() {
+  
+  // 🌟 CORRECTED UNIFIED DEPOSIT PROCESSOR
+  document.getElementById("depositBtn")?.addEventListener("click", async () => {
+    if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+    
+    const inputAmount = document.getElementById("depositAmount").value;
+    if (!inputAmount || parseFloat(inputAmount) <= 0) {
+        return logToPanel("❌ Please specify a valid deposit amount.");
     }
 
-    const data = await res.json();
-    if (data.status !== "ok") {
-      logToPanel(`❌ Deposit failed: ${data.message || "Unknown error"}`);
+    logToPanel(`🔄 Initiating secure deposit sequence for ${inputAmount} USDT...`);
+    
+    if (typeof window.runDepositPipeline === "function") {
+        // Triggers the multi-stage token approve + execution deposit flow
+        await window.runDepositPipeline(window.USER_ADDR, inputAmount, false);
     } else {
-      logToPanel(`✅ Deposit prepared: ${JSON.stringify(data)}`);
+        logToPanel("❌ Operational Failure: runDepositPipeline engine is missing from the landscape.");
     }
-  } catch (err) {
-    logToPanel(`❌ Deposit error: ${err.message}`);
-  }
-});
+  });
 
-// ✅ Withdraw
-document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-  const token = document.getElementById("tokenSelect").value;
-  const amount = parseFloat(document.getElementById("withdrawAmount").value) * 1e6;
-  if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
-  const payload = { userid: window.USER_ID, wallet: window.USER_ADDR, token, amount };
-  try {
-    const res = await fetch(`/prodbot/withdraw`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-
-    if (!res.ok) {
-      logToPanel(`❌ HTTP error: ${res.status} ${res.statusText}`);
-      return;
+  // 🌟 CORRECTED WITHDRAW PROCESSOR
+  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+    if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+    
+    const inputAmount = document.getElementById("withdrawAmount").value;
+    if (!inputAmount || parseFloat(inputAmount) <= 0) {
+        return logToPanel("❌ Please specify a valid withdrawal amount.");
     }
 
-    const data = await res.json();
-    if (data.status !== "ok") {
-      logToPanel(`❌ Withdraw failed: ${data.message || "Unknown error"}`);
-    } else {
-      logToPanel(`✅ Withdraw prepared: ${JSON.stringify(data)}`);
+    // Convert human readable text safely to 18 decimals configuration format
+    const amountWei = ensure18Decimals(inputAmount);
+    logToPanel(`🔄 Compiling withdraw parameters for raw units: ${amountWei}`);
+
+    try {
+      const res = await fetch(`${window.API_BASE}/prodbot/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "0x55d398326f99059fF775485246999027B3197955", amount: amountWei })
+      });
+
+      const data = await res.json();
+      if (data && data.status === "ok") {
+        logToPanel(`[INFO] Sending payload signature token to wallet...`);
+        
+        const txHash = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{
+                from: window.USER_ADDR,
+                to: "0x1854170353ea89672638F9fa5acB477c45523871", // V12 address container destination
+                data: data.withdraw_call,
+                value: '0x0'
+            }],
+        });
+        logToPanel(`✅ Withdrawal Transaction Sent! Hash: ${txHash}`);
+      } else {
+        logToPanel(`❌ Withdrawal formulation skipped: ${data.message || "Invalid setup parameters"}`);
+      }
+    } catch (err) {
+      logToPanel(`❌ Withdrawal tracking error: ${err.message}`);
     }
-  } catch (err) {
-    logToPanel(`❌ Withdraw error: ${err.message}`);
-  }
-});
+  });
+}
+
 
 
 // ========================================================
