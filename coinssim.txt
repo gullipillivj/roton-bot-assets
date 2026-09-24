@@ -1,7 +1,7 @@
 // ==================================================================
 // 🎛️ COINS FRONTEND MANAGEMENT CONTEXT INTERFACE (PROXY SYNC)
 // ==================================================================
-logToPanel("coins.txt loaded safely.");
+window.logToPanel("coins.txt loaded safely.");
 
 async function getBinancePairs() {
   try {
@@ -9,13 +9,13 @@ async function getBinancePairs() {
     const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
     const data = await res.json();
     
-    // Extract token symbols dynamically from your existing server radar arrays
-    if (data && Array.isArray(data.short_term)) {
+    if (data && Array.isArray(data.short_term) && data.short_term.length > 0) {
         return data.short_term.map(t => `${t.symbol}USDT`);
     }
     return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XVSUSDT"];
   } catch (e) {
-    return ["BTCUSDT", "ETHUSDT", "BNBUSDT"];
+    console.warn("[WARN] Ticker fetch failed, using fallback list:", e);
+    return ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XVSUSDT"];
   }
 }
 
@@ -33,23 +33,23 @@ async function getBinanceStats(symbol) {
         tokenMatch = mergedPool.find(t => t.symbol === plainSymbol);
     }
     
-    // Map your custom backend response formats directly to standard dashboard expectations
     if (tokenMatch) {
         return {
           symbol: symbol,
-          lastPrice: parseFloat(tokenMatch.lastPrice || 1.0),
-          priceChangePercent: parseFloat(tokenMatch.change24h || tokenMatch.velocityScore || 0.0),
-          volume: parseFloat(tokenMatch.volume || 1000)
+          lastPrice: parseFloat(tokenMatch.lastPrice || 10.0),
+          priceChangePercent: parseFloat(tokenMatch.change24h || 1.2),
+          volume: parseFloat(tokenMatch.volume || 5000)
         };
     }
-    
-    // Clean fallback asset structure if the ticker is missing
-    return { symbol, lastPrice: 10.0, priceChangePercent: 1.5, volume: 5000 };
+    return { symbol, lastPrice: 5.0, priceChangePercent: 0.8, volume: 1000 };
   } catch (e) {
+    console.warn("[WARN] Stats mapping failed:", e);
     return null;
   }
 }
 
-// Bind directly to global scope properties
+// 🌟 EXPLICIT REGISTRATION: Expose these globally to fix the freeze
 window.getBinancePairs = getBinancePairs;
 window.getBinanceStats = getBinanceStats;
+
+window.logToPanel("coins.txt methods fully initialized globally.");
