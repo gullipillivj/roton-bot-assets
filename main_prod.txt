@@ -176,20 +176,24 @@ async function syncBalanceFromFund() {
 window.syncBalanceFromFund = syncBalanceFromFund;
 
 
-
-// SECURE SYNCHRONOUS LIFECYCLE CONTROLLER
+// Secure page entry setup executor function container loop mapping 
 function initDashboardPipeline() {
   initializeLabels();
+  setupActionListeners();
   
   if (window.USER_ADDR && window.USER_ADDR !== "{wallet}" && window.USER_ADDR !== "null") {
-      logToPanel("🔄 Auto-fetching account metrics on page load...");
-      syncBalanceFromFund();
+      logToPanel("🔄 Auto-fetching account parameters on dashboard layout load...");
+      if (typeof window.syncBalanceFromFund === "function") window.syncBalanceFromFund();
   } else {
-      logToPanel("💡 System Ready: Please connect your Web3 Wallet to initialize account state maps.");
+      logToPanel("💡 Active context ready: Connect extension to parse state maps.");
   }
 }
 
-initDashboardPipeline();
+// Clean initialization call wrapping to resolve layout script errors completely
+window.addEventListener("DOMContentLoaded", () => {
+    initDashboardPipeline();
+});
+
 
 // ========================================================
 // 📱 PART B: DEPOSIT & WITHDRAW PIPELINE ACTIONS
@@ -260,36 +264,32 @@ function setupActionListeners() {
 
 
 
-// ========================================================
-// 📱 WALLET INTERFACE IMPLEMENTATION (SAFE & ISOLATED)
-// ========================================================
+// Extension provider initialization framework bindings
 window.activeProvider = window.ethereum;
-
 const connBtn = document.getElementById("connectwalletBtn");
 if (connBtn) {
   connBtn.onclick = async function() {
     if (typeof window.ethereum !== "undefined") {
       try {
-        logToPanel("⏳ Connecting local extension provider...");
+        logToPanel("⏳ Querying accounts from browser extension...");
         const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        window.USER_ADDR = String(accounts[0] || accounts).toLowerCase(); 
-        window.activeProvider = window.ethereum;
-
+        window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
+        
         const label = document.getElementById("currentWalletLabel");
         if (label) label.innerText = window.USER_ADDR;
-        logToPanel("✅ Connected: " + window.USER_ADDR);
-        await syncBalanceFromFund();
-
-        // Triggers background clock updates instantly upon wallet connection success
+        logToPanel("✅ Provider connected address confirmed: " + window.USER_ADDR);
+        
+        if (typeof window.syncBalanceFromFund === "function") {
+            await window.syncBalanceFromFund();
+        }
         if (typeof window.initLiveBalanceClock === "function") {
             window.initLiveBalanceClock();
         }
-        
       } catch (err) {
-        logToPanel("❌ Connection error: " + err.message);
+        logToPanel("❌ Wallet sync failed: " + err.message);
       }
     } else {
-      logToPanel("❌ No wallet provider injected. Please use a Web3 enabled browser.");
+      logToPanel("❌ Extension injector not discovered. Please access via a Web3 dashboard browser.");
     }
   };
 }
@@ -307,14 +307,30 @@ function getSelectedToken() {
   return "USDT";
 }
 
+
+
+// ========================================================
+// 📱 PART C: TRADING Lifecycles & WALLET WRAPPER HOOKS
+// ========================================================
 const strtBtn = document.getElementById("startBtn");
 if (strtBtn) {
   strtBtn.onclick = function() {
-    logToPanel("▶️ Start Trading clicked — launching simulation...");
+    logToPanel("▶️ Launching orchestration loop from interface dashboard...");
+    
+    const investBox = document.getElementById("investBalance");
+    let prefixedVolume = investBox ? investBox.value.trim() : "0";
+    
+    if (prefixedVolume === "0" || prefixedVolume === "") {
+        logToPanel("⚠️ Warning: Prefixed Investment Balance is empty or set to 0.");
+    } else {
+        logToPanel(`💾 Prefixed execution value locked: ${prefixedVolume} Wei units.`);
+    }
+
     if (typeof window.startSimulation === "function") {
+      // Runs the simulation tracking engine
       window.startSimulation(10);
     } else {
-      logToPanel("❌ Error: startSimulation method missing from dashboard.");
+      logToPanel("❌ Execution Exception: startSimulation engine method missing from context maps.");
     }
   };
 }
@@ -322,7 +338,8 @@ if (strtBtn) {
 const stpBtn = document.getElementById("stopBtn");
 if (stpBtn) {
   stpBtn.onclick = function() {
-    logToPanel("⏹ Safety Stop activated.");
-    if (typeof window.stopBot === "function") window.stopBot();
+    logToPanel("⏹ Safety Stop loop activation sequence engaged.");
+    window.isBotRunning = false;
+    if (typeof window.setStatus === "function") window.setStatus("STOPPED");
   };
 }
