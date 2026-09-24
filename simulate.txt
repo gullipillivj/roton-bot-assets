@@ -3,8 +3,10 @@
 // ==================================================================
 window.logToPanel("simulate.txt loaded");
 
-let currentCycle = 1;
-let cycleTimer = null;
+currentCycle = 1;
+ cycleTimer = null;
+
+
 
 async function simulateCycle(cycle) {
     window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
