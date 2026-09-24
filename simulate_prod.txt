@@ -87,7 +87,6 @@ window.initLiveBalanceClock = function() {
 };
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
-
 // ==================================================================
 // 🚀 SECTION 2: MULTI-ROUTE OMNICHAIN LOOP ENHANCEMENT (PART A)
 // ==================================================================
@@ -151,17 +150,27 @@ async function startSimulation(totalCycles = 10) {
         let fetchedBalance = await queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
         if (BigInt(fetchedBalance) > 0n) {
             runningBalanceWeiLock = fetchedBalance;
-            logToPanel(`[LEDGER RECORD] Active capital confirmed: ${runningBalanceWeiLock} Wei units inside ${currentAssetSymbol}.`);
+            logToPanel(`[LEDGER RECORD] Active on-chain balance checked: ${runningBalanceWeiLock} Wei units.`);
         }
 
-        let initialFieldText = runningBalanceWeiLock;
-        const startBox = document.getElementById("startBalance");
+        // 🌟 FIXED PREFIXED ENGINE STEP: 
+        // Read directly from the static input form element, preserving user's preset value.
         const investBox = document.getElementById("investBalance");
-        if (startBox) startBox.value = initialFieldText;
-        if (investBox) investBox.value = initialFieldText;
+        let initialFieldText = investBox ? investBox.value.trim() : "0";
+
+        // Fallback placeholder logic if form is completely blank
+        if (initialFieldText === "0" || initialFieldText === "") {
+            initialFieldText = runningBalanceWeiLock;
+            if (investBox) investBox.value = initialFieldText;
+        }
+
+        const startBox = document.getElementById("startBalance");
+        if (startBox) startBox.value = runningBalanceWeiLock;
+
+        logToPanel(`[PREFIXED OPERATION] Routing execution using fixed amount: ${initialFieldText} Wei units inside ${currentAssetSymbol}.`);
 
         if (BigInt(initialFieldText) <= 0n) {
-            logToPanel("❌ Pipeline Halted: Verified total depletion across all asset channels.");
+            logToPanel("❌ Pipeline Halted: Specified target trading balance resolves to zero.");
             break;
         }
 
@@ -178,7 +187,6 @@ async function startSimulation(totalCycles = 10) {
             if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
             if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
 
-            // Safely extract the stability token baseline reference properties
             let baselineAsset = (combinedPool && combinedPool.length > 0) ? combinedPool[combinedPool.length - 1] : null;
             let stableAddress = (baselineAsset && baselineAsset.tokenAddress) ? baselineAsset.tokenAddress : USDT_ADDRESS;
             let stableSymbol = (baselineAsset && baselineAsset.symbol) ? baselineAsset.symbol : "USDT";
@@ -228,14 +236,12 @@ async function startSimulation(totalCycles = 10) {
             targetChainOrigin = "bsc";
         }
 
-        // ✅ RE-ENFORCED INTERCEPTOR: Fallback verification gate if any variable values resolved blank
         if (!targetAddress || !currentAssetAddress) {
             logToPanel("⚠️ Runtime tracking properties resolved empty. Skipping iteration safely to save gas.");
             await blockDelay(3000);
             continue;
         }
 
-        // 🟢 ZERO-GAS OVERLAP PROTECTION CHECK
         if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
             logToPanel(`🛡️ [GAS PROTECTION] Asset sequence already aligned to target (${targetSymbol}). Skipping contract transaction to prevent fee burn.`);
             await blockDelay(5000);
@@ -256,6 +262,7 @@ async function startSimulation(totalCycles = 10) {
     logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
 }
 window.startSimulation = startSimulation;
+
 
 
 
