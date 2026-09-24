@@ -8,6 +8,8 @@ async function simulateCycle(cycle) {
 
     // Pick coin from Binance pairs
     const coin = await pickRandomCoin();
+    
+    // Fixed reference query gateway
     const stats = await window.getBinanceStats(coin);
 
     if (!stats) {
@@ -17,8 +19,7 @@ async function simulateCycle(cycle) {
 
     const buyPrice = parseFloat(stats.lastPrice);
 
-    // Hide coin name in logs, but still use it internally
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ..... at ${buyPrice} USDT`);
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought asset marker at ${buyPrice} USDT`);
 
     // Profit/loss based on actual 24hr % change
     const result = calculatePnL(buyPrice, parseFloat(stats.priceChangePercent));
@@ -27,13 +28,19 @@ async function simulateCycle(cycle) {
     updateLiveProfit(result);
 
     if (result >= 0) {
-        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit ${result.toFixed(2)} USDT`);
+        logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit +${result.toFixed(2)} USDT`);
     } else {
         logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
     }
 
-    // Chart update (make sure updateChart is defined in your UI)
-    updateChart(buyPrice, result);
+    // Fixed execution check safeguarding the tracking loop against missing chart initializers
+    if (typeof window.updateChart === "function") {
+        window.updateChart(buyPrice, result);
+    } else if (typeof updateChart === "function") {
+        updateChart(buyPrice, result);
+    } else {
+        console.warn("[UI] updateChart function container not loaded on viewport yet.");
+    }
 
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
 }
@@ -42,6 +49,10 @@ function startSimulation(totalCycles) {
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
     currentCycle = 1;
+    
+    // Safety check to kill existing hanging intervals if clicked repeatedly
+    if (cycleTimer) clearInterval(cycleTimer);
+    
     cycleTimer = setInterval(async () => {
         if (currentCycle > totalCycles) {
             clearInterval(cycleTimer);
@@ -61,12 +72,17 @@ function initBot(totalCycles = 10) {
 // === Helpers ===
 async function pickRandomCoin() {
     try {
-        const pairs = await window.getBinancePairs();
-        if (!pairs || pairs.length === 0) {
-            logToPanel("[WARN] No live pairs fetched, fallback to BTCUSDT");
+        if (typeof window.getBinancePairs === "function") {
+            const pairs = await window.getBinancePairs();
+            if (!pairs || pairs.length === 0) {
+                logToPanel("[WARN] Empty array fetched, using default fallback BTCUSDT");
+                return "BTCUSDT";
+            }
+            return pairs[Math.floor(Math.random() * pairs.length)];
+        } else {
+            logToPanel("[WARN] window.getBinancePairs is initializing, using placeholder");
             return "BTCUSDT";
         }
-        return pairs[Math.floor(Math.random() * pairs.length)];
     } catch (e) {
         logToPanel("[ERROR] pickRandomCoin failed: " + e);
         return "BTCUSDT";
