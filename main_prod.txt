@@ -44,6 +44,11 @@ function initializeLabels() {
   if (nameLabel) nameLabel.innerText = "Wallet Name: " + window.WALLET_NAME;
 }
 
+// ==================================================================
+// 🥞 FULLY RE-ENGINEERED SWAP & PIPELINE ENGINE
+// ==================================================================
+
+// Helper utility to safely ensure 18-decimal scaling strings match blockchain formats
 function ensure18Decimals(amountInput) {
     if (!amountInput) return "0";
     let str = amountInput.toString().trim();
@@ -67,7 +72,6 @@ function ensure18Decimals(amountInput) {
     let combined = (whole + fraction).replace(/^0+/, '');
     return combined === "" ? "0" : combined;
 }
-
 
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DATABASE TOKEN SLOT MATCHING
