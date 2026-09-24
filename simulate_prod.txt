@@ -61,50 +61,72 @@ async function startSimulation(totalCycles = 10) {
         // ==================================================================
         // 🚀 SIMULATE_PROD.TXT — PART B: TARGET SELECTION LAYER
         // ==================================================================
-        let targetSymbol = "USDT";
-        let tokenOutAddress = USDT_ADDRESS;
-        let targetNetworkMode = "bep20"; 
-        let targetChainOrigin = "bsc";
+            // ==================================================================
+        // 🚀 SIMULATE_PROD.TXT — PART B: IMMUTABLE CONST TARGET SELECTION
+        // ==================================================================
+        // Define a read-only context object for this specific cycle iteration
+        const cycleTargetContext = {
+            symbol: "USDT",
+            tokenAddress: USDT_ADDRESS,
+            networkMode: "bep20",
+            chainOrigin: "bsc"
+        };
 
-        // Custom cycle token assignment allocations
+        // Custom cycle token assignment allocations using distinct conditional blocks
         if (i === 2 || i === 6) {
-            targetSymbol = "RR-BNB";
-            tokenOutAddress = "0xba67186fd454D0256a0D3744783538bE08C58feD";
+            cycleTargetContext.symbol = "RR-BNB";
+            cycleTargetContext.tokenAddress = "0xba67186fd454D0256a0D3744783538bE08C58feD";
             window.logToPanel(`🎯 [CYCLE INTERCEPT] Forcing Target TokenOut to custom asset RR-BNB.`);
         } 
         else if (i === 4 || i === 8) {
-            targetSymbol = "RR-ETH";
-            tokenOutAddress = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
+            cycleTargetContext.symbol = "RR-ETH";
+            cycleTargetContext.tokenAddress = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
             window.logToPanel(`🎯 [CYCLE INTERCEPT] Forcing Target TokenOut to custom asset RR-ETH.`);
         } 
         else {
             try {
                 const dynamicMarket = await window.categorizeCoins();
                 const combinedPool = [].concat(dynamicMarket.short_term || [], dynamicMarket.mid_term || [], dynamicMarket.long_term || []);
+                
+                // Read the top trending momentum candidate token safely from the pool array
                 const topCandidate = (combinedPool && combinedPool.length > 0) ? combinedPool[0] : null;
 
                 if (topCandidate && topCandidate.tokenAddress) {
-                    targetSymbol = topCandidate.symbol;
-                    tokenOutAddress = topCandidate.tokenAddress;
-                    window.logToPanel(`🔥 [RADAR VELOCITY] Momentum choice: ${targetSymbol} (${tokenOutAddress})`);
+                    cycleTargetContext.symbol = topCandidate.symbol;
+                    cycleTargetContext.tokenAddress = topCandidate.tokenAddress;
+                    window.logToPanel(`🔥 [RADAR VELOCITY] Momentum choice: ${cycleTargetContext.symbol} (${cycleTargetContext.tokenAddress})`);
                 } else {
-                    targetSymbol = "CAKE";
-                    tokenOutAddress = CAKE_ADDRESS;
+                    cycleTargetContext.symbol = "CAKE";
+                    cycleTargetContext.tokenAddress = CAKE_ADDRESS;
                 }
             } catch (err) {
-                targetSymbol = "CAKE";
-                tokenOutAddress = CAKE_ADDRESS;
+                cycleTargetContext.symbol = "CAKE";
+                cycleTargetContext.tokenAddress = CAKE_ADDRESS;
             }
         }
 
-        // 🛡️ ZERO-GAS OVERLAP INTERCEPTOR
-        if (tokenInAddress.toLowerCase() === tokenOutAddress.toLowerCase()) {
-            window.logToPanel(`🛡️ [GAS PROTECTION] TokenIn matches TokenOut (${targetSymbol}). Skipping contract transaction.`);
+        // 🌟 EXPLICIT LOWERCASE SANITIZATION: Forces clean un-padded address strings
+        const sanitizedTokenIn = tokenInAddress.toString().trim().toLowerCase();
+        const sanitizedTokenOut = cycleTargetContext.tokenAddress.toString().trim().toLowerCase();
+
+        // 🛡️ ZERO-GAS OVERLAP INTERCEPTOR GATES
+        if (sanitizedTokenIn === sanitizedTokenOut) {
+            window.logToPanel(`🛡️ [GAS PROTECTION] TokenIn already matches Target TokenOut (${cycleTargetContext.symbol}). Skipping iteration.`);
             await blockDelay(4000);
             continue;
         }
 
-        const executionState = await executeActualContractSwapBlock(baseApiUrl, initialFieldText, tokenInAddress, tokenOutAddress, targetSymbol, targetNetworkMode, targetChainOrigin);
+        // Dispatch clean, lowercase parameters down to Part C multi-router sequence
+        const executionState = await executeActualContractSwapBlock(
+            baseApiUrl, 
+            initialFieldText, 
+            sanitizedTokenIn, 
+            sanitizedTokenOut, 
+            cycleTargetContext.symbol, 
+            cycleTargetContext.networkMode, 
+            cycleTargetContext.chainOrigin
+        );
+        
         if (!executionState || !executionState.success) {
             window.logToPanel("❌ [ORCHESTRATION SHUTDOWN] Execution block failed to find a valid route.");
             break;
@@ -118,6 +140,7 @@ async function startSimulation(totalCycles = 10) {
     window.logToPanel("[BOT FINISHED] Pipeline run complete.");
 }
 window.startSimulation = startSimulation;
+
 
 // ==================================================================
 // 🚀 SIMULATE_PROD.TXT — PART C: CASCADING MULTI-ROUTER ENGINES
