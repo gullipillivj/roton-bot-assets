@@ -312,7 +312,7 @@ async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, curr
             let postSwapBalanceConfirmed = 0n;
             let pollAttempts = 0;
             
-            while (postSwapBalanceConfirmed === 0n && pollAttempts < 40) {
+            while (postSwapBalanceConfirmed === 0n && pollAttempts < 15) {
                 if (!window.isBotRunning) return { success: false };
                 pollAttempts++;
                 logToPanel(`🔍 Checking target balance via node array mapping (Attempt ${pollAttempts}/40)...`);
