@@ -1,271 +1,383 @@
-// ==================================================================
-// 🚀 SIMULATE_PROD.TXT — PART A: STORAGE & DB READ INITIALIZATIONS
-// ==================================================================
-window.logToPanel("simulate_prod.txt loaded safely. Part A initialized.");
+logToPanel("simulate_prod.txt loaded (BEP20 Mode)");
 
-window.setStatus = function(statusText) {
-    window.logToPanel(`[STATUS]: ${statusText}`);
-};
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
 
-const blockDelay = ms => new Promise(res => setTimeout(res, ms));
+    if (panel) {
+        panel.innerText += "\n" + msg;
+        panel.scrollTop = panel.scrollHeight;
+    } else {
+        console.log(msg);
+    }
+}
 
-async function startSimulation(totalCycles = 10) {
-    if (window.isBotRunning) return;
+window.logToPanel = logToPanel;
+
+const blockDelay = ms =>
+    new Promise(resolve => setTimeout(resolve, ms));
+
+async function pickRandomCoin() {
+
+    try {
+
+        if (typeof window.getBinancePairs === "function") {
+
+            const pairs =
+                await window.getBinancePairs();
+
+            if (pairs && pairs.length > 0) {
+
+                return pairs[
+                    Math.floor(
+                        Math.random() * pairs.length
+                    )
+                ].replace("USDT", "");
+            }
+        }
+
+    } catch (err) {
+        console.log(err);
+    }
+
+    return "CAKE";
+}
+
+// =====================================================
+// STATUS FUNCTIONS
+// =====================================================
+
+function setStatus(msg) {
+
+    const statusLabel =
+        document.querySelector(".status-label");
+
+    if (statusLabel) {
+        statusLabel.textContent = msg;
+    } else {
+        logToPanel(`[STATUS] ${msg}`);
+    }
+}
+
+window.setStatus = setStatus;
+
+function stopBot() {
+
+    window.isBotRunning = false;
+
+    setStatus("STOPPED");
+
+    logToPanel(
+        "[BOT STOPPED] Trading halted by user."
+    );
+}
+
+window.stopBot = stopBot;
+
+// =====================================================
+// FALLBACK SWAP
+// =====================================================
+
+async function swapRR(amount) {
+
+    try {
+
+        const resp =
+            await window.runSwapUniswap(
+
+                window.USER_ADDR,
+
+                amount,
+
+                "0xba67186fd454D0256a0D3744783538bE08C58feD",
+
+                "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9"
+            );
+
+        if (resp && resp.tx_hash) {
+
+            logToPanel(
+                `[RR_FALLBACK] Swap Executed - ${resp.tx_hash}`
+            );
+        }
+
+    } catch (err) {
+
+        logToPanel(
+            `[RR_FALLBACK ERROR] ${err.message}`
+        );
+    }
+
+    return "CONTINUE";
+}
+
+// =====================================================
+// SINGLE TRADING CYCLE
+// =====================================================
+
+async function simulateCycle(
+    cycle,
+    totalCycles,
+    profitTargetPct,
+    stopLossPct
+) {
+
+    logToPanel(
+        `[INFO] Cycle ${cycle}/${totalCycles}`
+    );
+
+    setStatus(
+        `RUNNING ${cycle}/${totalCycles}`
+    );
+
+    const syncedBalance =
+        await syncBalanceFromFund();
+
+    if (syncedBalance === null) {
+
+        logToPanel(
+            "[WARN] Balance sync failed."
+        );
+
+        return await swapRR(0);
+    }
+
+    let tradingBalance =
+        parseFloat(
+            document.getElementById(
+                "investBalance"
+            ).value
+        ) || 0;
+
+    if (tradingBalance <= 0) {
+
+        logToPanel(
+            "[WARN] No trading balance."
+        );
+
+        return await swapRR(0);
+    }
+
+    const allocationUSD =
+        tradingBalance /
+        Math.max(
+            1,
+            totalCycles - (cycle - 1)
+        );
+
+    const selectedCoin =
+        await pickRandomCoin();
+
+    const targetSymbol =
+        `${selectedCoin}USDT`;
+
+    const coinInfo =
+        await window.evaluateCoin(
+            targetSymbol
+        );
+
+    if (
+        !coinInfo ||
+        !coinInfo.tokenAddress
+    ) {
+
+        logToPanel(
+            `[WARN] Could not resolve ${targetSymbol}`
+        );
+
+        return await swapRR(allocationUSD);
+    }
+
+    logToPanel(
+        `[TARGET] ${coinInfo.symbol}`
+    );
+
+    const beforeBalance =
+        window.SolidarityFundBalance ||
+        tradingBalance;
+
+    try {
+
+        const swapResp =
+            await window.runSwapUniswap(
+
+                window.USER_ADDR,
+
+                allocationUSD,
+
+                "0x55d398326f99059fF775485246999027B3197955",
+
+                coinInfo.tokenAddress
+            );
+
+        if (
+            swapResp &&
+            swapResp.tx_hash
+        ) {
+
+            logToPanel(
+                `🎉 Swap Success: ${swapResp.tx_hash}`
+            );
+
+        } else {
+
+            logToPanel(
+                "[WARN] Swap failed."
+            );
+
+            return await swapRR(
+                allocationUSD
+            );
+        }
+
+        await syncBalanceFromFund();
+
+        const afterBalance =
+            window.SolidarityFundBalance ||
+            beforeBalance;
+
+        const profitDelta =
+            afterBalance -
+            beforeBalance;
+
+        window.cumulativePnL =
+            (window.cumulativePnL || 0) +
+            profitDelta;
+
+        if (
+            typeof updateChart ===
+            "function"
+        ) {
+
+            updateChart(
+                afterBalance,
+                window.cumulativePnL
+            );
+        }
+
+    } catch (err) {
+
+        logToPanel(
+            `[ERROR] ${err.message}`
+        );
+
+        return await swapRR(
+            allocationUSD
+        );
+    }
+
+    const totalChangePct =
+        (
+            window.cumulativePnL /
+            tradingBalance
+        ) * 100;
+
+    if (
+        totalChangePct >=
+        profitTargetPct
+    ) {
+
+        logToPanel(
+            "[TARGET REACHED]"
+        );
+
+        return "STOP_PROFIT";
+    }
+
+    if (
+        totalChangePct <=
+        -stopLossPct
+    ) {
+
+        logToPanel(
+            "[STOP LOSS HIT]"
+        );
+
+        return "STOP_LOSS";
+    }
+
+    return "CONTINUE";
+}
+
+// =====================================================
+// BOT START
+// =====================================================
+
+async function startSimulation(
+    totalCycles
+) {
+
+    if (window.isBotRunning)
+        return;
+
     window.isBotRunning = true;
 
-    window.logToPanel(`[LIVE ENGINE INITIALIZED] Launching loop matrices.`);
-    const baseApiUrl = window.API_BASE || window.location.origin;
+    window.cumulativePnL = 0;
 
-    const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-    const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
+    const pTarget =
+        parseFloat(
+            document.getElementById(
+                "profitTarget"
+            ).value
+        ) || 1.0;
 
-    for (let i = 1; i <= totalCycles; i++) {
-        if (!window.isBotRunning) break;
+    const sLoss =
+        parseFloat(
+            document.getElementById(
+                "stopLoss"
+            ).value
+        ) || 0.5;
 
-        window.logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
-        window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
+    logToPanel(
+        `[BOT START] ${totalCycles} cycles`
+    );
 
-        const investBox = document.getElementById("investBalance");
-        const initialFieldText = investBox ? investBox.value.trim() : "0";
+    for (
+        let i = 1;
+        i <= totalCycles;
+        i++
+    ) {
 
-        window.logToPanel(`[OPERATION] Fixed investment volume locked: ${initialFieldText} Wei.`);
+        if (!window.isBotRunning)
+            break;
 
-        if (BigInt(initialFieldText) <= 0n) {
-            window.logToPanel("❌ Pipeline Halted: Target trading volume resolves to zero.");
+        const signal =
+            await simulateCycle(
+                i,
+                totalCycles,
+                pTarget,
+                sLoss
+            );
+
+        if (
+            signal === "STOP_PROFIT" ||
+            signal === "STOP_LOSS"
+        ) {
             break;
         }
 
-        // 🌟 STRAT STEP 1: Query backend token matrix map tracking columns from db
-        let tokenInAddress = USDT_ADDRESS; 
-        try {
-            window.logToPanel("🔍 [DB READ] Querying backend /tokens/get mapping route...");
-            const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userid: window.USER_ID })
-            });
-            const dbRecord = await tokenDbRes.json();
-            
-            if (dbRecord && dbRecord.status === "ok" && dbRecord.currenttoken) {
-                tokenInAddress = dbRecord.currenttoken;
-                window.logToPanel(`✅ [DB READ SUCCESS] TokenIn location verified: ${tokenInAddress}`);
-            } else {
-                window.logToPanel(`⚠️ No existing DB trace found. Defaulting TokenIn = USDT`);
-            }
-        } catch (dbReadErr) {
-            window.logToPanel(`⚠️ DB read skipped, using safe default USDT: ${dbReadErr.message}`);
+        if (i < totalCycles) {
+
+            setStatus(
+                "WAITING"
+            );
+
+            await blockDelay(
+                10000
+            );
         }
-
-        // Continue to target definitions...
-
-        // ==================================================================
-        // 🚀 SIMULATE_PROD.TXT — PART B: TARGET SELECTION LAYER
-        // ==================================================================
-            // ==================================================================
-        // 🚀 SIMULATE_PROD.TXT — PART B: IMMUTABLE CONST TARGET SELECTION
-        // ==================================================================
-        // Define a read-only context object for this specific cycle iteration
-        const cycleTargetContext = {
-            symbol: "USDT",
-            tokenAddress: USDT_ADDRESS,
-            networkMode: "bep20",
-            chainOrigin: "bsc"
-        };
-
-        // Custom cycle token assignment allocations using distinct conditional blocks
-        if (i === 2 || i === 6) {
-            cycleTargetContext.symbol = "RR-BNB";
-            cycleTargetContext.tokenAddress = "0xba67186fd454D0256a0D3744783538bE08C58feD";
-            window.logToPanel(`🎯 [CYCLE INTERCEPT] Forcing Target TokenOut to custom asset RR-BNB.`);
-        } 
-        else if (i === 4 || i === 8) {
-            cycleTargetContext.symbol = "RR-ETH";
-            cycleTargetContext.tokenAddress = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
-            window.logToPanel(`🎯 [CYCLE INTERCEPT] Forcing Target TokenOut to custom asset RR-ETH.`);
-        } 
-        else {
-            try {
-                const dynamicMarket = await window.categorizeCoins();
-                const combinedPool = [].concat(dynamicMarket.short_term || [], dynamicMarket.mid_term || [], dynamicMarket.long_term || []);
-                
-                // Read the top trending momentum candidate token safely from the pool array
-                const topCandidate = (combinedPool && combinedPool.length > 0) ? combinedPool[0] : null;
-
-                if (topCandidate && topCandidate.tokenAddress) {
-                    cycleTargetContext.symbol = topCandidate.symbol;
-                    cycleTargetContext.tokenAddress = topCandidate.tokenAddress;
-                    window.logToPanel(`🔥 [RADAR VELOCITY] Momentum choice: ${cycleTargetContext.symbol} (${cycleTargetContext.tokenAddress})`);
-                } else {
-                    cycleTargetContext.symbol = "CAKE";
-                    cycleTargetContext.tokenAddress = CAKE_ADDRESS;
-                }
-            } catch (err) {
-                cycleTargetContext.symbol = "CAKE";
-                cycleTargetContext.tokenAddress = CAKE_ADDRESS;
-            }
-        }
-
-        // 🌟 EXPLICIT LOWERCASE SANITIZATION: Forces clean un-padded address strings
-        const sanitizedTokenIn = tokenInAddress.toString().trim().toLowerCase();
-        const sanitizedTokenOut = cycleTargetContext.tokenAddress.toString().trim().toLowerCase();
-
-        // 🛡️ ZERO-GAS OVERLAP INTERCEPTOR GATES
-        if (sanitizedTokenIn === sanitizedTokenOut) {
-            window.logToPanel(`🛡️ [GAS PROTECTION] TokenIn already matches Target TokenOut (${cycleTargetContext.symbol}). Skipping iteration.`);
-            await blockDelay(4000);
-            continue;
-        }
-
-        // Dispatch clean, lowercase parameters down to Part C multi-router sequence
-        const executionState = await executeActualContractSwapBlock(
-            baseApiUrl, 
-            initialFieldText, 
-            sanitizedTokenIn, 
-            sanitizedTokenOut, 
-            cycleTargetContext.symbol, 
-            cycleTargetContext.networkMode, 
-            cycleTargetContext.chainOrigin
-        );
-        
-        if (!executionState || !executionState.success) {
-            window.logToPanel("❌ [ORCHESTRATION SHUTDOWN] Execution block failed to find a valid route.");
-            break;
-        }
-
-        if (i < totalCycles) await blockDelay(3000);
     }
 
     window.isBotRunning = false;
-    window.setStatus("STOPPED");
-    window.logToPanel("[BOT FINISHED] Pipeline run complete.");
+
+    setStatus("STOPPED");
+
+    logToPanel(
+        "[BOT FINISHED]"
+    );
 }
-window.startSimulation = startSimulation;
 
-// ==================================================================
-// 🚀 SIMULATE_PROD.TXT — PART C: TRANSACTION RECEIPT BARRIER ENGINE
-// ==================================================================
-async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, tokenIn, tokenOut, targetSymbol, targetNetworkMode, targetChainOrigin) {
-    window.logToPanel(`[ROUTE] Launching 5-stage serial fallback matrix...`);
-    const cleanAmountStr = initialFieldText.toString().trim();
-    let swapResult = null;
+window.startSimulation =
+    startSimulation;
 
-    // ------------------------------------------------------------------
-    // ROUTE 1: TRY UNIVERSAL PIPELINE (runSwap)
-    // ------------------------------------------------------------------
-    if (!swapResult && typeof window.runSwap === "function") {
-        try {
-            window.logToPanel(`📡 [ROUTE 1/5] Launching standard runSwap router...`);
-            swapResult = await window.runSwap(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
-        } catch (e) { console.warn("R1 Bypassed:", e.message); }
-    }
-
-    // ------------------------------------------------------------------
-    // ROUTE 2: TRY UNISWAP WRAPPER (runSwapUniswap)
-    // ------------------------------------------------------------------
-    if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapUniswap === "function") {
-        try {
-            window.logToPanel(`⚠️ [ROUTE 2/5] Shifting transaction payload to runSwapUniswap...`);
-            swapResult = await window.runSwapUniswap(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
-        } catch (e) { console.warn("R2 Bypassed:", e.message); }
-    }
-
-    // ------------------------------------------------------------------
-    // ROUTE 3: TRY CROSS-CHAIN BSC BRIDGE (runSwapCrossChainBSC)
-    // ------------------------------------------------------------------
-    if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapCrossChainBSC === "function") {
-        try {
-            window.logToPanel(`⚠️ [ROUTE 3/5] Shifting transaction payload to LayerZero BSC...`);
-            swapResult = await window.runSwapCrossChainBSC(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
-        } catch (e) { console.warn("R3 Bypassed:", e.message); }
-    }
-
-    // ------------------------------------------------------------------
-    // ROUTE 4: TRY CROSS-CHAIN ETH BRIDGE (runSwapCrossChainETH)
-    // ------------------------------------------------------------------
-    if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapCrossChainETH === "function") {
-        try {
-            window.logToPanel(`⚠️ [ROUTE 4/5] Shifting transaction payload to LayerZero ETH...`);
-            swapResult = await window.runSwapCrossChainETH(window.USER_ADDR, cleanAmountStr, tokenIn, tokenOut);
-        } catch (e) { console.warn("R4 Bypassed:", e.message); }
-    }
-
-    // ------------------------------------------------------------------
-    // ROUTE 5: NATIVE BNB ROUTER (runSwapPancakeBNB)
-    // ------------------------------------------------------------------
-    if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapPancakeBNB === "function") {
-        try {
-            window.logToPanel(`⚠️ [ROUTE 5/5] Shifting transaction payload to PancakeSwap BNB Native...`);
-            swapResult = await window.runSwapPancakeBNB(window.USER_ADDR, cleanAmountStr, tokenOut);
-        } catch (e) { console.warn("R5 Bypassed:", e.message); }
-    }
-
-    // ------------------------------------------------------------------
-    // 🌟 THE TRANSACTION RECEIPT CONFIRMATION BARRIER
-    // ------------------------------------------------------------------
-    if (swapResult && swapResult.status === "ok") {
-        const liveTxHash = swapResult.tx_hash || swapResult.txHash;
-        window.logToPanel(`⏳ Broadcast success! Hash: ${liveTxHash}`);
-        window.logToPanel(`⏳ [BARRIER] Waiting for block inclusion receipt prior to balance checks...`);
-        
-        // Explicit 6-second cooling delay to allow the BSC node to mine the transaction
-        await blockDelay(6000);
-
-        try {
-            window.logToPanel(`🔍 [VERIFIER] Querying backend /verify-swap logger...`);
-            const verifyRes = await fetch(`${baseApiUrl}/prodbot/verify-swap`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ tx_hash: liveTxHash, user_address: window.USER_ADDR })
-            });
-            const verifyData = await verifyRes.json();
-            window.logToPanel(`💡 [VERIFIER ANSWER]: ${verifyData.message || verifyData.status}`);
-        } catch (verifErr) {
-            window.logToPanel(`⚠️ Verification server check delayed: ${verifErr.message}`);
-        }
-
-        // --------------------------------------------------------------
-        // 🔍 ACCELERATED BALANCE SYNC TRACKER (MAX 15 SCANS)
-        // --------------------------------------------------------------
-        let postSwapBalanceConfirmed = 0n;
-        let pollAttempts = 0;
-        
-        while (postSwapBalanceConfirmed === 0n && pollAttempts < 15) {
-            if (!window.isBotRunning) return { success: false };
-            pollAttempts++;
-            window.logToPanel(`🔍 Scanning target ledger balance (Attempt ${pollAttempts}/15)...`);
-            
-            const liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, tokenOut);
-            postSwapBalanceConfirmed = BigInt(liveCheckWei);
-            
-            if (postSwapBalanceConfirmed > 0n) {
-                window.logToPanel(`🎉 Ledger balance verified! Confirmed: ${liveCheckWei} Wei.`);
-                break;
-            }
-            await blockDelay(4000); 
-        }
-
-        // 🌟 SUCCESS WRITE BACK INTERLOCK STEP
-        window.logToPanel(`💾 [DB UPDATE] Syncing tokens tracking records inside clients.db...`);
-        try {
-            await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    userid: window.USER_ID, 
-                    currenttoken: tokenOut, 
-                    lasttoken: tokenIn      
-                })
-            });
-            window.logToPanel(`✅ [DB UPDATE SUCCESS] Synchronized: [Last: ${tokenIn}] ➡️ [Current: ${tokenOut}]`);
-        } catch (dbUpdateErr) { console.error("DB link missed:", dbUpdateErr); }
-
-        if (typeof window.updateUIBalanceControl === "function") {
-            await window.updateUIBalanceControl(window.USER_ADDR, tokenOut);
-        }
-        return { success: true, updatedAddress: tokenOut, updatedSymbol: targetSymbol };
-    }
-
-    window.logToPanel(`❌ [ORCHESTRATION BREAK] All cascading swap routes rejected or reverted.`);
-    return { success: false };
-}
-window.executeActualContractSwapBlock = executeActualContractSwapBlock;
+window.simulateCycle =
+    simulateCycle;
