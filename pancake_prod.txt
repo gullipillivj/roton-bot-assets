@@ -83,7 +83,7 @@ window.runSwap = runSwap;
 async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
     try {
         const base = window.API_BASE || "";
-        const cleanAmount = ensure18Decimals(amountWei);
+        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
         
         logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
         
@@ -100,10 +100,17 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         
         const data = await res.json();
         if (data && data.status === "ok") {
+            logToPanel(`[INFO] Sending transaction payload directly to browser extension...`);
             const txHash = await window.ethereum.request({
                 method: 'eth_sendTransaction',
-                params: [{ from: userAddr, to: data.to_contract, data: data.compiled_data, value: '0x0' }]
+                params: [{ 
+                    from: userAddr, 
+                    to: data.to_contract, 
+                    data: data.compiled_data, 
+                    value: '0x0' 
+                }]
             });
+            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
             return { status: "ok", tx_hash: txHash };
         }
         return data;
@@ -120,18 +127,12 @@ window.runSwapUniswap = runSwapUniswap;
 async function runSwapPancakeBNB(userAddr, amountWei, toToken) {
     try {
         const base = window.API_BASE || "";
-        const cleanAmount = ensure18Decimals(amountWei);
-        
-        logToPanel(`[ROUTE] Dispatching Native BNB pipeline query for ${cleanAmount} units...`);
+        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
         
         const res = await fetch(`${base}/prodbot/swap/pancake-bnb`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                user_address: userAddr,
-                amount: cleanAmount, 
-                to_token: toToken 
-            })
+            body: JSON.stringify({ user_address: userAddr, amount: cleanAmount, to_token: toToken })
         });
         
         const data = await res.json();
@@ -150,26 +151,18 @@ async function runSwapPancakeBNB(userAddr, amountWei, toToken) {
 }
 window.runSwapPancakeBNB = runSwapPancakeBNB;
 
-
 // ==================================================================
 // 🥞 PIPELINE 3: DISPATCH LAYERZERO CROSS-CHAIN BRIDGE (ETHEREUM)
 // ==================================================================
 async function runSwapCrossChainETH(userAddr, amountWei, fromToken, toToken) {
     try {
         const base = window.API_BASE || "";
-        const cleanAmount = ensure18Decimals(amountWei);
-        
-        logToPanel(`[ROUTE] Dispatching LayerZero Cross-Chain ETH query for ${cleanAmount} units...`);
+        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
         
         const res = await fetch(`${base}/prodbot/swap/crosschain-eth`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                user_address: userAddr, 
-                amount: cleanAmount, 
-                from_token: fromToken, 
-                to_token: toToken 
-            })
+            body: JSON.stringify({ user_address: userAddr, amount: cleanAmount, from_token: fromToken, to_token: toToken })
         });
         
         const data = await res.json();
@@ -187,3 +180,33 @@ async function runSwapCrossChainETH(userAddr, amountWei, fromToken, toToken) {
     }
 }
 window.runSwapCrossChainETH = runSwapCrossChainETH;
+
+// ==================================================================
+// 🥞 PIPELINE 4: DISPATCH LAYERZERO CROSS-CHAIN BRIDGE (BSC)
+// ==================================================================
+async function runSwapCrossChainBSC(userAddr, amountWei, fromToken, toToken) {
+    try {
+        const base = window.API_BASE || "";
+        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
+        
+        const res = await fetch(`${base}/prodbot/swap/crosschain-bsc`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_address: userAddr, amount: cleanAmount, from_token: fromToken, to_token: toToken })
+        });
+        
+        const data = await res.json();
+        if (data && data.status === "ok") {
+            const txHash = await window.ethereum.request({
+                method: 'eth_sendTransaction',
+                params: [{ from: userAddr, to: data.to_contract, data: data.compiled_data, value: '0x0' }]
+            });
+            return { status: "ok", tx_hash: txHash };
+        }
+        return data;
+    } catch (err) { 
+        logToPanel(`❌ Cross-Chain BSC Pipeline Error: ${err.message}`);
+        return { status: "error", message: err.message }; 
+    }
+}
+window.runSwapCrossChainBSC = runSwapCrossChainBSC;
