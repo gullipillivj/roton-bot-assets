@@ -1,6 +1,9 @@
 // ========================================================
-// 📊 RESTORED BASIC FRONTEND LIFECYCLE CONTROLLER
+// 📱 PART A: DASHBOARD INITIALIZATION & UTILITIES
 // ========================================================
+window.API_BASE = window.location.origin; 
+window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
+
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -11,9 +14,6 @@ function logToPanel(msg) {
   }
 }
 window.logToPanel = logToPanel;
-
-window.API_BASE = window.location.origin; 
-window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
 function getQueryParams() {
   try {
@@ -31,7 +31,7 @@ function getQueryParams() {
 
 const q = getQueryParams();
 window.USER_ID = q.userid;
-window.USER_ADDR = q.wallet;
+window.USER_ADDR = q.wallet ? q.wallet.toLowerCase() : null;
 window.WALLET_NAME = q.walletname;
 
 function initializeLabels() {
@@ -40,11 +40,10 @@ function initializeLabels() {
   const nameLabel = document.getElementById("currentWalletName");
 
   if (userLabel) userLabel.innerText = "Current User: " + window.USER_ID;
-  if (walletLabel) walletLabel.innerText = "Wallet Address: " + window.USER_ADDR;
+  if (walletLabel) walletLabel.innerText = "Wallet Address: " + (window.USER_ADDR || "Not Connected");
   if (nameLabel) nameLabel.innerText = "Wallet Name: " + window.WALLET_NAME;
 }
 
-// Utility to ensure values are scaled to 18 decimals without dropping float remainders
 function ensure18Decimals(amountInput) {
     if (!amountInput) return "0";
     let str = amountInput.toString().trim();
