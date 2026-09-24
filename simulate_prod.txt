@@ -164,6 +164,16 @@ async function simulateCycle(
             totalCycles - (cycle - 1)
         );
 
+if (cycle === 6) {
+
+    logToPanel(
+        "[RR SUPPORT] Dedicated RR circulation cycle."
+    );
+
+    return await swapRR(allocationUSD);
+}
+
+
     const selectedCoin =
         await pickRandomCoin();
 
