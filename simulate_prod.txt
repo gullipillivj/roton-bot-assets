@@ -1,144 +1,23 @@
 // ==================================================================
-// 🎛️ SECTION 1: ON-CHAIN VERIFICATION INTERMEDIARIES & SYNC AGENTS
+// 🚀 SIMULATE_PROD.TXT — PART A: STORAGE & DB READ INITIALIZATIONS
 // ==================================================================
-logToPanel("simulate_prod.txt loaded successfully with Dynamic Database Token Tracking.");
+window.logToPanel("simulate_prod.txt loaded safely. Part A initialized.");
 
 window.setStatus = function(statusText) {
-    console.log(`[STATUS UPDATE]: ${statusText}`);
-    logToPanel(`[STATUS]: ${statusText}`);
-};
-
-// 🧠 Dynamic verification handler targeting live smart contract state maps
-window.discoverActiveOnChainAsset = function(userAddress) {
-    const baseApiUrl = window.API_BASE || window.location.origin;
-    return fetch(`${baseApiUrl}/prodbot/active-asset`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user: userAddress })
-    })
-    .then(res => res.json())
-    .catch(err => {
-        console.error("Grounding connection lost:", err);
-        return { 
-            status: "error", 
-            confirmed_symbol: "USDT", 
-            confirmed_address: "0x55d398326f99059fF775485246999027B3197955", 
-            confirmed_balance_wei: "0" 
-        };
-    });
-};
-
-// 🟢 DIRECT BALANCING AGENT: Queries the absolute ledger balance cleanly
-async function queryTokenBalanceDirect(userAddr, tokenAddress) {
-    try {
-        const baseApiUrl = window.API_BASE || window.location.origin;
-        const res = await fetch(baseApiUrl + "/prodbot/balance", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user: userAddr, token: tokenAddress })
-        });
-        const rawWeiText = await res.text();
-        return rawWeiText.trim() || "0";
-    } catch (err) {
-        return "0";
-    }
-}
-window.queryTokenBalanceDirect = queryTokenBalanceDirect;
-
-window.updateUIBalanceControl = async function(userAddr, tokenAddress) {
-    try {
-        const cleanWeiString = await queryTokenBalanceDirect(userAddr, tokenAddress);
-
-        if (BigInt(cleanWeiString) > 0n || !window.isBotRunning) {
-            const startBox = document.getElementById("startBalance");
-            const investBox = document.getElementById("investBalance");
-            const usdBox = document.getElementById("usd");
-            
-            if (startBox) startBox.value = cleanWeiString;
-            if (investBox) investBox.value = cleanWeiString;
-            
-            if (usdBox) {
-                const floatTokens = parseFloat(cleanWeiString) / 1e18;
-                usdBox.value = floatTokens.toFixed(4); 
-            }
-        }
-        return cleanWeiString;
-    } catch (err) {
-        return "0";
-    }
-};
-
-// LIVE BACKGROUND SYNC CLOCK: Maintains absolute ledger state safely without UI noise
-window.initLiveBalanceClock = function() {
-    if (window.balanceClockIntervalId) {
-        clearInterval(window.balanceClockIntervalId);
-    }
-    
-    window.balanceClockIntervalId = setInterval(async () => {
-        if (!window.USER_ADDR || window.isBotRunning) return; 
-        try {
-            const stateRecord = await window.discoverActiveOnChainAsset(window.USER_ADDR);
-            const activeTokenAddr = stateRecord.confirmed_address || "0x55d398326f99059fF775485246999027B3197955";
-            await window.updateUIBalanceControl(window.USER_ADDR, activeTokenAddr);
-        } catch (error) {
-            // Silently handled
-        }
-    }, 5000); 
+    window.logToPanel(`[STATUS]: ${statusText}`);
 };
 
 const blockDelay = ms => new Promise(res => setTimeout(res, ms));
-// ==================================================================
-// 🚀 SECTION 2: MULTI-ROUTE OMNICHAIN LOOP ENHANCEMENT (PART A)
-// ==================================================================
+
 async function startSimulation(totalCycles = 10) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
 
-    window.logToPanel(`[LIVE ENGINE INITIALIZED] Launching cross-chain loop matrices via velocity radar.`);
-    
-    // Scoped clean constants mapping
+    window.logToPanel(`[LIVE ENGINE INITIALIZED] Launching loop matrices.`);
     const baseApiUrl = window.API_BASE || window.location.origin;
+
     const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
     const CAKE_ADDRESS = "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82";
-
-    let currentAssetAddress = USDT_ADDRESS;
-    let currentAssetSymbol = "USDT";
-    let runningBalanceWeiLock = "0";
-
-    try {
-        const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userid: window.USER_ID })
-        });
-        const dbRecord = await tokenDbRes.json();
-        
-        let checkTracks = [];
-        if (dbRecord && dbRecord.status === "ok") {
-            if (dbRecord.currenttoken) checkTracks.push(dbRecord.currenttoken);
-            if (dbRecord.lasttoken) checkTracks.push(dbRecord.lasttoken);
-        }
-
-        for (let targetAddr of checkTracks) {
-            let balCheck = await window.queryTokenBalanceDirect(window.USER_ADDR, targetAddr);
-            if (BigInt(balCheck) > 0n) {
-                runningBalanceWeiLock = balCheck;
-                currentAssetAddress = targetAddr;
-                const activeState = await window.discoverActiveOnChainAsset(window.USER_ADDR);
-                currentAssetSymbol = activeState.confirmed_symbol || "UNKNOWN";
-                break;
-            }
-        }
-    } catch (initErr) {
-        console.error("Dynamic recovery skipped:", initErr);
-    }
-
-    if (!currentAssetAddress) {
-        const activeState = await window.discoverActiveOnChainAsset(window.USER_ADDR);
-        currentAssetAddress = activeState.confirmed_address || USDT_ADDRESS;
-        currentAssetSymbol = activeState.confirmed_symbol || "USDT";
-        runningBalanceWeiLock = activeState.confirmed_balance_wei || "0";
-    }
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
@@ -146,234 +25,193 @@ async function startSimulation(totalCycles = 10) {
         window.logToPanel(`\n[INFO] — Cycle ${i}/${totalCycles} starting...`);
         window.setStatus(`RUNNING cycle ${i}/${totalCycles}`);
 
-        let fetchedBalance = await window.queryTokenBalanceDirect(window.USER_ADDR, currentAssetAddress);
-        if (BigInt(fetchedBalance) > 0n) {
-            runningBalanceWeiLock = fetchedBalance;
-            window.logToPanel(`[LEDGER RECORD] Active on-chain balance checked: ${runningBalanceWeiLock} Wei units.`);
-        }
-
         const investBox = document.getElementById("investBalance");
-        let initialFieldText = investBox ? investBox.value.trim() : "0";
+        const initialFieldText = investBox ? investBox.value.trim() : "0";
 
-        if (initialFieldText === "0" || initialFieldText === "") {
-            initialFieldText = runningBalanceWeiLock;
-            if (investBox) investBox.value = initialFieldText;
-        }
-
-        const startBox = document.getElementById("startBalance");
-        if (startBox) startBox.value = runningBalanceWeiLock;
-
-        window.logToPanel(`[PREFIXED OPERATION] Routing execution using fixed amount: ${initialFieldText} Wei units inside ${currentAssetSymbol}.`);
+        window.logToPanel(`[OPERATION] Fixed investment volume locked: ${initialFieldText} Wei.`);
 
         if (BigInt(initialFieldText) <= 0n) {
-            window.logToPanel("❌ Pipeline Halted: Specified target trading balance resolves to zero.");
+            window.logToPanel("❌ Pipeline Halted: Target trading volume resolves to zero.");
             break;
         }
 
+        // 🌟 STRAT STEP 1: Query backend token matrix map tracking columns from db
+        let tokenInAddress = USDT_ADDRESS; 
+        try {
+            window.logToPanel("🔍 [DB READ] Querying backend /tokens/get mapping route...");
+            const tokenDbRes = await fetch(`${baseApiUrl}/prodbot/tokens/get`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userid: window.USER_ID })
+            });
+            const dbRecord = await tokenDbRes.json();
+            
+            if (dbRecord && dbRecord.status === "ok" && dbRecord.currenttoken) {
+                tokenInAddress = dbRecord.currenttoken;
+                window.logToPanel(`✅ [DB READ SUCCESS] TokenIn location verified: ${tokenInAddress}`);
+            } else {
+                window.logToPanel(`⚠️ No existing DB trace found. Defaulting TokenIn = USDT`);
+            }
+        } catch (dbReadErr) {
+            window.logToPanel(`⚠️ DB read skipped, using safe default USDT: ${dbReadErr.message}`);
+        }
+
+        // Continue to target definitions...
+
+        // ==================================================================
+        // 🚀 SIMULATE_PROD.TXT — PART B: TARGET SELECTION LAYER
+        // ==================================================================
         let targetSymbol = "USDT";
-        let targetAddress = USDT_ADDRESS;
+        let tokenOutAddress = USDT_ADDRESS;
         let targetNetworkMode = "bep20"; 
         let targetChainOrigin = "bsc";
 
-        // Custom loop intercepts routing your proprietary tokens smoothly
+        // Custom cycle token assignment allocations
         if (i === 2 || i === 6) {
             targetSymbol = "RR-BNB";
-            targetAddress = "0xba67186fd454D0256a0D3744783538bE08C58feD";
-            window.logToPanel(`🎯 [CYCLE INTERCEPT] Iteration ${i}: Forcing transaction payload to custom asset RR-BNB.`);
+            tokenOutAddress = "0xba67186fd454D0256a0D3744783538bE08C58feD";
+            window.logToPanel(`🎯 [CYCLE INTERCEPT] Forcing Target TokenOut to custom asset RR-BNB.`);
         } 
         else if (i === 4 || i === 8) {
             targetSymbol = "RR-ETH";
-            targetAddress = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
-            window.logToPanel(`🎯 [CYCLE INTERCEPT] Iteration ${i}: Forcing transaction payload to custom asset RR-ETH.`);
+            tokenOutAddress = "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9";
+            window.logToPanel(`🎯 [CYCLE INTERCEPT] Forcing Target TokenOut to custom asset RR-ETH.`);
         } 
         else {
             try {
                 const dynamicMarket = await window.categorizeCoins();
-                let combinedPool = [];
-                if (dynamicMarket && Array.isArray(dynamicMarket.short_term)) combinedPool = combinedPool.concat(dynamicMarket.short_term);
-                if (dynamicMarket && Array.isArray(dynamicMarket.mid_term)) combinedPool = combinedPool.concat(dynamicMarket.mid_term);
-                if (dynamicMarket && Array.isArray(dynamicMarket.long_term)) combinedPool = combinedPool.concat(dynamicMarket.long_term);
+                const combinedPool = [].concat(dynamicMarket.short_term || [], dynamicMarket.mid_term || [], dynamicMarket.long_term || []);
+                const topCandidate = (combinedPool && combinedPool.length > 0) ? combinedPool[0] : null;
 
-                let baselineAsset = (combinedPool && combinedPool.length > 0) ? combinedPool[combinedPool.length - 1] : null;
-                let stableAddress = (baselineAsset && baselineAsset.tokenAddress) ? baselineAsset.tokenAddress : USDT_ADDRESS;
-                let stableSymbol = (baselineAsset && baselineAsset.symbol) ? baselineAsset.symbol : "USDT";
-
-                if (currentAssetAddress.toLowerCase() !== stableAddress.toLowerCase()) {
-                    targetSymbol = stableSymbol;
-                    targetAddress = stableAddress;
-                    window.logToPanel(`⚖️ Rotational Check: Re-routing back to ${targetSymbol} stability layer.`);
+                if (topCandidate && topCandidate.tokenAddress) {
+                    targetSymbol = topCandidate.symbol;
+                    tokenOutAddress = topCandidate.tokenAddress;
+                    window.logToPanel(`🔥 [RADAR VELOCITY] Momentum choice: ${targetSymbol} (${tokenOutAddress})`);
                 } else {
-                    window.logToPanel(`⚖️ Velocity Radar Active: Scanning market for maximum momentum...`);
-                    let bestCandidate = null;
-                    let peakVelocityRecorded = -999999;
-                    let uniqueTracker = new Set();
-
-                    for (let token of combinedPool) {
-                        if (!token || !token.tokenAddress || uniqueTracker.has(token.tokenAddress.toLowerCase())) continue;
-                        uniqueTracker.add(token.tokenAddress.toLowerCase());
-                        let currentSpeed = parseFloat(token.change24h || 0.0);
-                        if (currentSpeed > peakVelocityRecorded) {
-                            peakVelocityRecorded = currentSpeed;
-                            bestCandidate = token;
-                        }
-                    }
-
-                    if (bestCandidate && peakVelocityRecorded > 0.05) {
-                        targetSymbol = bestCandidate.symbol;
-                        targetAddress = bestCandidate.tokenAddress;
-                        targetNetworkMode = bestCandidate.network || "bep20";
-                        targetChainOrigin = bestCandidate.chainOrigin || "bsc";
-                        window.logToPanel(`🔥 [RADAR VELOCITY] Momentum choice: ${targetSymbol} at +${bestCandidate.change24h}% velocity.`);
-                    } else {
-                        targetSymbol = "CAKE";
-                        targetAddress = CAKE_ADDRESS;
-                    }
+                    targetSymbol = "CAKE";
+                    tokenOutAddress = CAKE_ADDRESS;
                 }
-            } catch (marketErr) {
-                console.error("Market routing dropped, resetting defaults:", marketErr);
-                targetSymbol = "USDT";
-                targetAddress = USDT_ADDRESS;
+            } catch (err) {
+                targetSymbol = "CAKE";
+                tokenOutAddress = CAKE_ADDRESS;
             }
         }
 
-        if (!targetAddress || !currentAssetAddress) {
-            window.logToPanel("⚠️ Runtime tracking properties resolved empty. Skipping iteration safely.");
-            await blockDelay(3000);
+        // 🛡️ ZERO-GAS OVERLAP INTERCEPTOR
+        if (tokenInAddress.toLowerCase() === tokenOutAddress.toLowerCase()) {
+            window.logToPanel(`🛡️ [GAS PROTECTION] TokenIn matches TokenOut (${targetSymbol}). Skipping contract transaction.`);
+            await blockDelay(4000);
             continue;
         }
 
-        if (targetAddress.toLowerCase() === currentAssetAddress.toLowerCase()) {
-            window.logToPanel(`🛡️ [GAS PROTECTION] Asset sequence already aligned to target (${targetSymbol}). Skipping contract transaction.`);
-            await blockDelay(5000);
-            continue;
+        const executionState = await executeActualContractSwapBlock(baseApiUrl, initialFieldText, tokenInAddress, tokenOutAddress, targetSymbol, targetNetworkMode, targetChainOrigin);
+        if (!executionState || !executionState.success) {
+            window.logToPanel("❌ [ORCHESTRATION SHUTDOWN] Execution block failed to find a valid route.");
+            break;
         }
-
-        let executionState = await window.executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol, targetNetworkMode, targetChainOrigin);
-        if (!executionState || !executionState.success) break;
-
-        currentAssetAddress = executionState.updatedAddress;
-        currentAssetSymbol = executionState.updatedSymbol;
 
         if (i < totalCycles) await blockDelay(3000);
     }
 
     window.isBotRunning = false;
     window.setStatus("STOPPED");
-    window.logToPanel("[BOT FINISHED] Pipeline orchestration run complete.");
+    window.logToPanel("[BOT FINISHED] Pipeline run complete.");
 }
 window.startSimulation = startSimulation;
 
 // ==================================================================
-// 🚀 SECTION 2: MULTI-ROUTE OMNICHAIN LOOP ENHANCEMENT (PART B)
+// 🚀 SIMULATE_PROD.TXT — PART C: CASCADING MULTI-ROUTER ENGINES
 // ==================================================================
-async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, currentAssetAddress, targetAddress, currentAssetSymbol, targetSymbol, targetNetworkMode, targetChainOrigin) {
-    logToPanel(`💾 Synchronizing tokens mapping index inside clients.db...`);
-    try {
-        await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userid: window.USER_ID, currenttoken: targetAddress, lasttoken: currentAssetAddress })
-        });
-        logToPanel(`✅ Database updated: [Last: ${currentAssetSymbol}] ➡️ [Current: ${targetSymbol}]`);
-    } catch (dbUpdateErr) { console.error("DB link missed:", dbUpdateErr); }
-
-    logToPanel(`[ROUTE] Preparing cascading fallback pipeline for amount: ${initialFieldText} Wei`);
-
+async function executeActualContractSwapBlock(baseApiUrl, initialFieldText, tokenIn, tokenOut, targetSymbol, targetNetworkMode, targetChainOrigin) {
+    window.logToPanel(`[ROUTE] Launching 5-stage serial fallback matrix...`);
     let swapResult = null;
-    let currentRouteIndex = 1;
 
-    // ------------------------------------------------------------------
-    // ROUTE 1: UNIVERSAL TRANSACTION PIPELINE ENGINE (runSwap)
-    // ------------------------------------------------------------------
+    // ROUTE 1: TRY UNIVERSAL PIPELINE (runSwap)
     if (!swapResult && typeof window.runSwap === "function") {
         try {
-            logToPanel(`📡 [ROUTE 1/5] Executing initial runSwap engine parameter check...`);
-            swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
-        } catch (err1) {
-            console.warn("Route 1 bypassed:", err1.message);
-        }
+            window.logToPanel(`📡 [ROUTE 1/5] Launching standard runSwap router...`);
+            swapResult = await window.runSwap(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
+        } catch (e) { console.warn("R1 Failed:", e.message); }
     }
 
-    // ------------------------------------------------------------------
-    // ROUTE 2: DISPATCH LOCAL UNISWAP / PANCAKE ROUTING (runSwapUniswap)
-    // ------------------------------------------------------------------
+    // ROUTE 2: TRY UNISWAP WRAPPER (runSwapUniswap)
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapUniswap === "function") {
         try {
-            logToPanel(`⚠️ [FALLBACK] Route 1 failed or bypassed. [ROUTE 2/5] Shifting payload to runSwapUniswap...`);
-            swapResult = await window.runSwapUniswap(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
-        } catch (err2) {
-            console.warn("Route 2 bypassed:", err2.message);
-        }
+            window.logToPanel(`⚠️ [ROUTE 2/5] Shifting transaction payload to runSwapUniswap...`);
+            swapResult = await window.runSwapUniswap(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
+        } catch (e) { console.warn("R2 Failed:", e.message); }
     }
 
-    // ------------------------------------------------------------------
-    // ROUTE 3: LAYERZERO CROSS-CHAIN BRIDGE - BSC DIRECTION (runSwapCrossChainBSC)
-    // ------------------------------------------------------------------
+    // ROUTE 3: TRY CROSS-CHAIN BSC BRIDGE (runSwapCrossChainBSC)
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapCrossChainBSC === "function") {
         try {
-            logToPanel(`⚠️ [FALLBACK] Route 2 failed or bypassed. [ROUTE 3/5] Shifting payload to LayerZero Cross-Chain BSC...`);
-            swapResult = await window.runSwapCrossChainBSC(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
-        } catch (err3) {
-            console.warn("Route 3 bypassed:", err3.message);
-        }
+            window.logToPanel(`⚠️ [ROUTE 3/5] Shifting transaction payload to LayerZero BSC...`);
+            swapResult = await window.runSwapCrossChainBSC(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
+        } catch (e) { console.warn("R3 Failed:", e.message); }
     }
 
-    // ------------------------------------------------------------------
-    // ROUTE 4: LAYERZERO CROSS-CHAIN BRIDGE - ETHEREUM DIRECTION (runSwapCrossChainETH)
-    // ------------------------------------------------------------------
+    // ROUTE 4: TRY CROSS-CHAIN ETH BRIDGE (runSwapCrossChainETH)
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapCrossChainETH === "function") {
         try {
-            logToPanel(`⚠️ [FALLBACK] Route 3 failed or bypassed. [ROUTE 4/5] Shifting payload to LayerZero Cross-Chain ETH...`);
-            swapResult = await window.runSwapCrossChainETH(window.USER_ADDR, initialFieldText, currentAssetAddress, targetAddress);
-        } catch (err4) {
-            console.warn("Route 4 bypassed:", err4.message);
-        }
+            window.logToPanel(`⚠️ [ROUTE 4/5] Shifting transaction payload to LayerZero ETH...`);
+            swapResult = await window.runSwapCrossChainETH(window.USER_ADDR, initialFieldText, tokenIn, tokenOut);
+        } catch (e) { console.warn("R4 Failed:", e.message); }
     }
 
-    // ------------------------------------------------------------------
-    // ROUTE 5: NATIVE BNB SWAP INJECTION PANCAKE ROUTERS (runSwapPancakeBNB)
-    // ------------------------------------------------------------------
+    // ROUTE 5: FINAL PANCAKE NATIVE BNB ROUTER (runSwapPancakeBNB)
     if ((!swapResult || swapResult.status !== "ok") && typeof window.runSwapPancakeBNB === "function") {
         try {
-            logToPanel(`⚠️ [FALLBACK] Route 4 failed or bypassed. [ROUTE 5/5] Shifting to core PancakeSwap BNB Router...`);
-            swapResult = await window.runSwapPancakeBNB(window.USER_ADDR, initialFieldText, targetAddress);
-        } catch (err5) {
-            console.warn("Route 5 bypassed:", err5.message);
-        }
+            window.logToPanel(`⚠️ [ROUTE 5/5] Shifting transaction payload to PancakeSwap BNB Native...`);
+            swapResult = await window.runSwapPancakeBNB(window.USER_ADDR, initialFieldText, tokenOut);
+        } catch (e) { console.warn("R5 Failed:", e.message); }
     }
 
-    // ------------------------------------------------------------------
-    // 🔍 OPTIMIZED SETTLEMENT & BALANCE CONFIRMATION GATEWAY
-    // ------------------------------------------------------------------
+    // 🔍 ACCELERATED BALANCE SYNC TRACKER (MAX 15 SCANS)
     if (swapResult && swapResult.status === "ok") {
-        logToPanel(`⏳ Signature captured via cascading layer matrix. Waking up node tracker...`);
+        window.logToPanel(`⏳ Signature confirmed on-chain. Scanning ledger updates...`);
         let postSwapBalanceConfirmed = 0n;
         let pollAttempts = 0;
         
-        // Strict boundary: Only execute up to 15 scans instead of wasting time on 40 logs
         while (postSwapBalanceConfirmed === 0n && pollAttempts < 15) {
             if (!window.isBotRunning) return { success: false };
             pollAttempts++;
-            logToPanel(`🔍 Checking contract balance map via node array tracker (Attempt ${pollAttempts}/15)...`);
+            window.logToPanel(`🔍 Scanning target ledger balance (Attempt ${pollAttempts}/15)...`);
             
-            let liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, targetAddress);
+            let liveCheckWei = await queryTokenBalanceDirect(window.USER_ADDR, tokenOut);
             postSwapBalanceConfirmed = BigInt(liveCheckWei);
             
             if (postSwapBalanceConfirmed > 0n) {
-                logToPanel(`🎉 On-Chain Settlement Verified! Balance confirmed: ${liveCheckWei} Wei inside ${targetSymbol}.`);
-                await window.updateUIBalanceControl(window.USER_ADDR, targetAddress);
-                return { success: true, updatedAddress: targetAddress, updatedSymbol: targetSymbol };
+                window.logToPanel(`🎉 Balance Update Discovered! Confirmed: ${liveCheckWei} Wei.`);
+                break;
             }
             await blockDelay(4000); 
         }
 
-        // Optimistic cycle continuation fallback if the RPC node experiences temporary block delay
-        logToPanel(`⚠️ Target settlement balance did not update within 15 scans. Advancing loop layers optimistically...`);
-        return { success: true, updatedAddress: targetAddress, updatedSymbol: targetSymbol };
-    } else {
-        const failReason = (swapResult && swapResult.message) ? swapResult.message : "All cascading contract routers rejected or reverted.";
-        logToPanel(`❌ [ORCHESTRATION BREAK] Execution chain broken: ${failReason}`);
-        return { success: false };
+        // 🌟 SUCCESS WRITE BACK INTERLOCK STEP
+        window.logToPanel(`💾 [DB UPDATE] Syncing tokens tracking records inside clients.db...`);
+        try {
+            await fetch(`${baseApiUrl}/prodbot/tokens/update`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    userid: window.USER_ID, 
+                    currenttoken: tokenOut, // tokenOut mapping target goes to currenttoken
+                    lasttoken: tokenIn      // tokenIn retrieved state goes to lasttoken
+                })
+            });
+            window.logToPanel(`✅ [DB UPDATE SUCCESS] Synchronized: [Last: ${tokenIn}] ➡️ [Current: ${tokenOut}]`);
+        } catch (dbUpdateErr) { console.error("DB link missed:", dbUpdateErr); }
+
+        if (typeof window.updateUIBalanceControl === "function") {
+            await window.updateUIBalanceControl(window.USER_ADDR, tokenOut);
+        }
+        return { success: true, updatedAddress: tokenOut, updatedSymbol: targetSymbol };
     }
+
+    window.logToPanel(`❌ [ORCHESTRATION BREAK] All cascading swap routes rejected or reverted.`);
+    return { success: false };
 }
 window.executeActualContractSwapBlock = executeActualContractSwapBlock;
+
+
+
