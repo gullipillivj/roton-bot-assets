@@ -73,6 +73,85 @@ function ensure18Decimals(amountInput) {
     return combined === "" ? "0" : combined;
 }
 
+// 🌟 THE UNIFIED TRIPLE-TRANSACTION DEPOSIT ENGINE
+async function runDepositPipeline(userAddr, amountHumanOrWei) {
+    try {
+        const baseApiUrl = window.API_BASE || window.location.origin;
+        const finalWeiAmount = amountHumanOrWei.toString().length > 12 ? amountHumanOrWei.toString() : ensure18Decimals(amountHumanOrWei);
+        
+        window.logToPanel(`[DEPOSIT START] Compiling triple-stage transaction vectors for: ${finalWeiAmount} Wei...`);
+        
+        // Fetch encoded txdata configurations from your backend endpoint
+        const res = await fetch(`${baseApiUrl}/prodbot/deposit/usdt/pipeline`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: finalWeiAmount, tradingPhase: false })
+        });
+        
+        const data = await res.json();
+        if (!data || data.status !== "ok") throw new Error(data.message || "Failed API fetch.");
+        
+        const v12ContractAddress = data.contract;
+        const usdtTokenAddress = data.tokenAddress || "0x55d398326f99059fF775485246999027B3197955";
+
+        // ----------------------------------------------------------
+        // 🌟 TRANSACTION 1/3: ERC-20 APPROVE VALUE
+        // ----------------------------------------------------------
+        window.logToPanel(`[STAGE 1/3] Prompting browser wallet to authorize token spend allowance...`);
+        const cleanSpender = v12ContractAddress.toLowerCase().replace("0x", "").padStart(64, "0");
+        const cleanValue = BigInt(finalWeiAmount).toString(16).padStart(64, "0");
+        const approveCalldata = "0x095ea7b3" + cleanSpender + cleanValue;
+        
+        const txHash1 = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: userAddr, to: usdtTokenAddress, data: approveCalldata, value: '0x0' }],
+        });
+        window.logToPanel(`⏳ Stage 1 complete. Allowance Hash: ${txHash1}. Waiting for node sync...`);
+        await new Promise(resolve => setTimeout(resolve, 5000)); 
+
+        // ----------------------------------------------------------
+        // 🌟 TRANSACTION 2/3: depositCommissionFirst (COMMISSION = FALSE)
+        // ----------------------------------------------------------
+        window.logToPanel(`[STAGE 2/3] Prompting wallet to execute core deposit (Commission = false)...`);
+        
+        // This transaction uses the packed data payload coming straight from your backend route compilation
+        const txHash2 = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: userAddr, to: v12ContractAddress, data: data.txdata, value: '0x0' }],
+        });
+        window.logToPanel(`⏳ Stage 2 complete. Core Deposit Hash: ${txHash2}. Waiting for node sync...`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+
+        // ----------------------------------------------------------
+        // 🌟 TRANSACTION 3/3: depositCommissionFirst (COMMISSION = TRUE)
+        // ----------------------------------------------------------
+        window.logToPanel(`[STAGE 3/3] Prompting wallet to execute final fee step (Commission = true)...`);
+        
+        // Request an explicit secondary call data pack from backend passing tradingPhase: true
+        const secondRes = await fetch(`${baseApiUrl}/prodbot/deposit/usdt/pipeline`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ amount: finalWeiAmount, tradingPhase: true })
+        });
+        const secondData = await secondRes.json();
+        
+        const txHash3 = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: userAddr, to: v12ContractAddress, data: secondData.txdata, value: '0x0' }],
+        });
+        
+        window.logToPanel(`🎉 Triple-Stage Pipeline fully finalized! Master Receipt Hash: ${txHash3}`);
+        return { status: "ok", tx_hash: txHash3 };
+        
+    } catch (err) {
+        window.logToPanel(`❌ Triple Deposit Pipeline Aborted: ${err.message}`);
+        return { status: "error", message: err.message };
+    }
+}
+window.runDepositPipeline = runDepositPipeline;
+
+
+
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DATABASE TOKEN SLOT MATCHING
 // 📊 OPTIMIZED FAST DUAL-TOKEN PORTFOLIO SYNCHRONIZER
