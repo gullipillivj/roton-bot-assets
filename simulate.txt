@@ -1,3 +1,6 @@
+// ==================================================================
+// 🚀 FIXED SIMULATION RUNTIME TIMERS
+// ==================================================================
 logToPanel("simulate.txt loaded");
 
 let currentCycle = 1;
@@ -8,8 +11,6 @@ async function simulateCycle(cycle) {
 
     // Pick coin from Binance pairs
     const coin = await pickRandomCoin();
-    
-    // Fixed reference query gateway
     const stats = await window.getBinanceStats(coin);
 
     if (!stats) {
@@ -18,8 +19,7 @@ async function simulateCycle(cycle) {
     }
 
     const buyPrice = parseFloat(stats.lastPrice);
-
-    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought asset marker at ${buyPrice} USDT`);
+    logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT`);
 
     // Profit/loss based on actual 24hr % change
     const result = calculatePnL(buyPrice, parseFloat(stats.priceChangePercent));
@@ -33,26 +33,26 @@ async function simulateCycle(cycle) {
         logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
     }
 
-    // Fixed execution check safeguarding the tracking loop against missing chart initializers
+    // Chart update integration
     if (typeof window.updateChart === "function") {
         window.updateChart(buyPrice, result);
-    } else if (typeof updateChart === "function") {
-        updateChart(buyPrice, result);
-    } else {
-        console.warn("[UI] updateChart function container not loaded on viewport yet.");
     }
 
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
 }
 
+// 🌟 FIX: Instantly invokes cycle 1 upon interaction, then triggers the 1-minute interval loop
 function startSimulation(totalCycles) {
     logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
 
     currentCycle = 1;
-    
-    // Safety check to kill existing hanging intervals if clicked repeatedly
     if (cycleTimer) clearInterval(cycleTimer);
-    
+
+    // 1. EXECUTE INSTANTLY RIGHT NOW
+    simulateCycle(currentCycle);
+    currentCycle++;
+
+    // 2. QUEUE UP REMAINING TIMED INTERVALS
     cycleTimer = setInterval(async () => {
         if (currentCycle > totalCycles) {
             clearInterval(cycleTimer);
@@ -62,47 +62,33 @@ function startSimulation(totalCycles) {
 
         await simulateCycle(currentCycle);
         currentCycle++;
-    }, 60000);
+    }, 60000); // 1-minute tick interval remains preserved
 }
 
 function initBot(totalCycles = 10) {
     startSimulation(totalCycles);
 }
 
-// === Helpers ===
-async function pickRandomCoin() {
-    try {
-        if (typeof window.getBinancePairs === "function") {
-            const pairs = await window.getBinancePairs();
-            if (!pairs || pairs.length === 0) {
-                logToPanel("[WARN] Empty array fetched, using default fallback BTCUSDT");
-                return "BTCUSDT";
-            }
-            return pairs[Math.floor(Math.random() * pairs.length)];
-        } else {
-            logToPanel("[WARN] window.getBinancePairs is initializing, using placeholder");
-            return "BTCUSDT";
-        }
-    } catch (e) {
-        logToPanel("[ERROR] pickRandomCoin failed: " + e);
-        return "BTCUSDT";
-    }
-}
-
-function updateLiveProfit(value) {
-    const el = document.getElementById("liveProfitValue");
-    if (el) {
-        el.textContent = `${value.toFixed(2)} USDT`;
-    }
-}
-
-function calculatePnL(price, percentChange) {
-    if (!percentChange) return 0;
-    const changeFactor = percentChange / 100;
-    return price * changeFactor;
-}
-
 // Expose globally
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
 window.initBot = initBot;
+
+// Add window tracking hooks for standard helpers
+async function pickRandomCoin() {
+    try {
+        const pairs = await window.getBinancePairs();
+        if (!pairs || pairs.length === 0) return "BTCUSDT";
+        return pairs[Math.floor(Math.random() * pairs.length)];
+    } catch (e) {
+         return "BTCUSDT";
+    }
+}
+function updateLiveProfit(value) {
+    const el = document.getElementById("liveProfitValue");
+    if (el) el.textContent = `${value.toFixed(2)} USDT`;
+}
+function calculatePnL(price, percentChange) {
+    if (!percentChange) return 0;
+    return price * (percentChange / 100);
+}
