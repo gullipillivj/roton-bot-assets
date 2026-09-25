@@ -15,20 +15,19 @@
             const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
             const data = await res.json();
 
-            // Direct mapping of the pure dynamic arrays passed from the backend
             return {
                 short_term: data.short_term || [],
                 mid_term: data.mid_term || [],
                 long_term: data.long_term || []
             };
         } catch (err) {
-            console.error("Market analysis critical failure:", err);
+            console.error("Market analysis connection failure:", err);
             return { short_term: [], mid_term: [], long_term: [] };
         }
     }
 
     // ==============================================================
-    // 🪙 Supported Trading Pairs (Completely Dynamic Mirror)
+    // 🪙 Supported Trading Pairs Mirror Loop
     // ==============================================================
     window.getBinancePairs = async () => {
         try {
@@ -39,19 +38,17 @@
                 ...(marketData.long_term || [])
             ];
             
-            // Map the true real-time operational pairs currently tracking up
             if (allTokens.length > 0) {
                 return allTokens.map(t => t.marketPair || `${t.symbol}USDT`);
             }
         } catch (e) {
             console.error(e);
         }
-        // Emergency stop backup string to keep runtime execution fluid
         return ["CAKEUSDT"];
     };
 
     // ==============================================================
-    // 🔍 Token Resolver (Registry Independent)
+    // 🔍 Token Resolver (Bridges Address vectors safely to simulate_prod)
     // ==============================================================
     window.evaluateCoin = async function (symbol) {
         try {
@@ -62,35 +59,39 @@
                 ...(marketData.long_term || [])
             ];
 
+            // Strip out base trading extensions to cleanly check ticker symbols
             const cleanSymbol = String(symbol)
                 .replace("USDT", "")
                 .toUpperCase()
                 .trim();
 
-            // Locate target token profile details inside the active trend dataset
             const token = allTokens.find(
                 x => String(x.symbol).toUpperCase().trim() === cleanSymbol
             );
 
             if (!token) {
-                window.logToPanel(`[WARN] Token not found in active rising pool: ${cleanSymbol}`);
+                window.logToPanel(`[WARN] Token not discovered inside active pools: ${cleanSymbol}`);
                 return null;
             }
 
-            // 🚀 DYNAMIC INJECTION: Pull smart contract address parameters directly from live metrics
-            // Fallback to safe defaults if asset data strings are missing
-            const extractedAddress = token.tokenAddress || "0x55d398326f99059fF775485246999027B3197955";
+            // 🚀 SUCCESS: Extract the verified contract address string provided directly by the backend response
+            const verifiedContractAddress = token.tokenAddress;
+
+            if (!verifiedContractAddress) {
+                window.logToPanel(`[WARN] Payload vector is missing tokenAddress string properties for token: ${cleanSymbol}`);
+                return null;
+            }
 
             return {
                 symbol: token.symbol,
-                tokenAddress: extractedAddress,
+                tokenAddress: verifiedContractAddress, // Passed securely down to simulateCycle()
                 network: "bep20",
                 router: "pancakeswap",
                 change24h: token.change24h
             };
 
         } catch (err) {
-            window.logToPanel(`[ERROR] evaluateCoin failed: ${err.message}`);
+            window.logToPanel(`[ERROR] evaluateCoin resolution crashed: ${err.message}`);
             return null;
         }
     };
