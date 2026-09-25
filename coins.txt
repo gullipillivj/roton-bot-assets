@@ -1,5 +1,5 @@
 // ==================================================================
-// 🎛️ COINS FRONTEND MANAGEMENT CONTEXT INTERFACE
+// 🎛️ COINS FRONTEND MANAGEMENT CONTEXT INTERFACE (DYNAMIC PROD)
 // ==================================================================
 
 (function () {
@@ -9,128 +9,57 @@
     // ==============================================================
     // 📊 Market Analysis Loader
     // ==============================================================
-
     async function categorizeCoins() {
-
-        window.logToPanel(
-            "🔎 Querying live dynamic market trends from backend..."
-        );
-
         try {
-
-            const baseApiUrl =
-                window.API_BASE || window.location.origin;
-
-            const res = await fetch(
-                `${baseApiUrl}/prodbot/market-analysis`
-            );
-
+            const baseApiUrl = window.API_BASE || window.location.origin;
+            const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
             const data = await res.json();
 
-            if (
-                data &&
-                Array.isArray(data.short_term) &&
-                data.short_term.length > 0
-            ) {
-
-                const top =
-                    data.short_term[0];
-
-                window.logToPanel(
-                    `📈 Market scan complete. Top candidate: ${top.symbol} (+${top.change24h}%)`
-                );
-
-                return {
-                    short_term: data.short_term,
-                    mid_term: data.mid_term || data.short_term,
-                    long_term: data.long_term || data.short_term
-                };
-            }
-
-            throw new Error(
-                "Invalid market analysis payload."
-            );
-
-        } catch (err) {
-
-            console.error(
-                "Market analysis failure:",
-                err
-            );
-
-            // ✅ BEP20 fallback only
-            const fallbackPool = [
-
-                {
-                    symbol: "CAKE",
-                    tokenAddress:
-                        "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
-                    network: "bep20",
-                    change24h: 3.1
-                },
-
-                {
-                    symbol: "XVS",
-                    tokenAddress:
-                        "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902",
-                    network: "bep20",
-                    change24h: 2.4
-                },
-
-                {
-                    symbol: "LINK",
-                    tokenAddress:
-                        "0xF8aEe1784988F6E59c1664195e67042c244514d8",
-                    network: "bep20",
-                    change24h: 1.8
-                }
-
-            ];
-
+            // Direct mapping of the pure dynamic arrays passed from the backend
             return {
-                short_term: fallbackPool,
-                mid_term: fallbackPool,
-                long_term: fallbackPool
+                short_term: data.short_term || [],
+                mid_term: data.mid_term || [],
+                long_term: data.long_term || []
             };
+        } catch (err) {
+            console.error("Market analysis critical failure:", err);
+            return { short_term: [], mid_term: [], long_term: [] };
         }
     }
 
     // ==============================================================
-    // 🪙 Supported Trading Pairs (BEP20 Only)
+    // 🪙 Supported Trading Pairs (Completely Dynamic Mirror)
     // ==============================================================
-
-    window.getBinancePairs = async () => [
-
-        "CAKEUSDT",
-        "XVSUSDT",
-        "LINKUSDT",
-        "DOTUSDT",
-        "ADAUSDT",
-        "DOGEUSDT",
-        "MATICUSDT",
-        "XRPUSDT",
-        "FILUSDT",
-        "LTCUSDT"
-
-    ];
-
-    // ==============================================================
-    // 🔍 Token Resolver
-    // ==============================================================
-
-    window.evaluateCoin = async function (symbol) {
-
+    window.getBinancePairs = async () => {
         try {
-
-            const marketData =
-                await categorizeCoins();
-
+            const marketData = await categorizeCoins();
             const allTokens = [
-
                 ...(marketData.short_term || []),
                 ...(marketData.mid_term || []),
                 ...(marketData.long_term || [])
+            ];
+            
+            // Map the true real-time operational pairs currently tracking up
+            if (allTokens.length > 0) {
+                return allTokens.map(t => t.marketPair || `${t.symbol}USDT`);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+        // Emergency stop backup string to keep runtime execution fluid
+        return ["CAKEUSDT"];
+    };
 
+    // ==============================================================
+    // 🔍 Token Resolver (Registry Independent)
+    // ==============================================================
+    window.evaluateCoin = async function (symbol) {
+        try {
+            const marketData = await categorizeCoins();
+            const allTokens = [
+                ...(marketData.short_term || []),
+                ...(marketData.mid_term || []),
+                ...(marketData.long_term || [])
             ];
 
             const cleanSymbol = String(symbol)
@@ -138,54 +67,33 @@
                 .toUpperCase()
                 .trim();
 
+            // Locate target token profile details inside the active trend dataset
             const token = allTokens.find(
-                x =>
-                    String(x.symbol)
-                        .toUpperCase()
-                        .trim() === cleanSymbol
+                x => String(x.symbol).toUpperCase().trim() === cleanSymbol
             );
 
             if (!token) {
-
-                window.logToPanel(
-                    `[WARN] Token not found: ${cleanSymbol}`
-                );
-
+                window.logToPanel(`[WARN] Token not found in active rising pool: ${cleanSymbol}`);
                 return null;
             }
 
+            // 🚀 DYNAMIC INJECTION: Pull smart contract address parameters directly from live metrics
+            // Fallback to safe defaults if asset data strings are missing
+            const extractedAddress = token.tokenAddress || "0x55d398326f99059fF775485246999027B3197955";
+
             return {
-
                 symbol: token.symbol,
-
-                tokenAddress:
-                    token.tokenAddress,
-
+                tokenAddress: extractedAddress,
                 network: "bep20",
-
-                router: "pancakeswap"
-
+                router: "pancakeswap",
+                change24h: token.change24h
             };
 
         } catch (err) {
-
-            window.logToPanel(
-                `[ERROR] evaluateCoin failed: ${err.message}`
-            );
-
+            window.logToPanel(`[ERROR] evaluateCoin failed: ${err.message}`);
             return null;
         }
     };
 
-    // ==============================================================
-    // 🌐 Global Bindings
-    // ==============================================================
-
-    window.categorizeCoins =
-        categorizeCoins;
-
-    window.logToPanel(
-        "coins.txt initialized successfully (BEP20 mode)."
-    );
-
+    window.categorizeCoins = categorizeCoins;
 })();
