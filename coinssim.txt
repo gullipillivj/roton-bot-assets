@@ -119,10 +119,10 @@ window.updateChart = updateChart;
 
 window.logToPanel("simulate.txt loaded");
 
-let currentCycle = 1;
-let cycleTimer = null;
-let cumulativeProfit = 0;
-let botRunning = false;
+const currentCycle = 1;
+const cycleTimer = null;
+const cumulativeProfit = 0;
+const botRunning = false;
 
 // ======================================================
 // STOP BUTTON SUPPORT
@@ -257,7 +257,7 @@ async function simulateCycle(cycle) {
     );
 
     // Use market trend if available
-    let marketMove =
+    const marketMove =
         Number(
             (
                 (Math.random() * 12) - 6
