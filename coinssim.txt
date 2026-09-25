@@ -1,190 +1,191 @@
-// coins.txt — Coin scanner in JS (client-side)
-logToPanel("coins.txt loaded");
+// ==================================================================
+// 🎛️ COINS FRONTEND MANAGEMENT CONTEXT INTERFACE
+// ==================================================================
 
-// === API endpoints ===
-const BINANCE_INFO   = "https://api.binance.com/api/v3/exchangeInfo";
-const BINANCE_TICKER = "https://api.binance.com/api/v3/ticker/24hr";
-const BINANCE_KLINES = "https://api.binance.com/api/v3/klines";
-const COINGECKO_API  = "https://api.coingecko.com/api/v3/simple/price";
-const CHANGENOW_API  = "https://api.changenow.io/v1/currencies";
-const KRAKEN_API     = "https://api.kraken.com/0/public/Ticker";
+(function () {
 
-// === New Gas Fee APIs ===
-const ETHERSCAN_GAS  = "https://api.etherscan.io/api?module=gastracker&action=gasoracle";
-const BSC_GAS        = "https://api.bscscan.com/api?module=gastracker&action=gasoracle";
+    window.logToPanel("coins.txt loaded safely.");
 
-// === Helpers ===
-async function getBinancePairs() {
-  try {
-    const res = await fetch(BINANCE_INFO);
-    const data = await res.json();
-    return data.symbols.filter(s => s.quoteAsset === "USDT").map(s => s.symbol);
-  } catch (e) {
-    console.warn("[WARN] Binance pairs fetch failed:", e);
-    return ["BTCUSDT","ETHUSDT","BNBUSDT"];
-  }
-}
+    // ==============================================================
+    // 📊 Market Analysis Loader
+    // ==============================================================
 
-async function getBinanceStats(symbol) {
-  try {
-    const res = await fetch(`${BINANCE_TICKER}?symbol=${symbol}`);
-    const d = await res.json();
-    return {
-      symbol,
-      lastPrice: parseFloat(d.lastPrice),
-      priceChangePercent: parseFloat(d.priceChangePercent),
-      volume: parseFloat(d.volume)
+    async function categorizeCoins() {
+
+        window.logToPanel(
+            "🔎 Querying live dynamic market trends from backend..."
+        );
+
+        try {
+
+            const baseApiUrl =
+                window.API_BASE || window.location.origin;
+
+            const res = await fetch(
+                `${baseApiUrl}/prodbot/market-analysis`
+            );
+
+            const data = await res.json();
+
+            if (
+                data &&
+                Array.isArray(data.short_term) &&
+                data.short_term.length > 0
+            ) {
+
+                const top =
+                    data.short_term[0];
+
+                window.logToPanel(
+                    `📈 Market scan complete. Top candidate: ${top.symbol} (+${top.change24h}%)`
+                );
+
+                return {
+                    short_term: data.short_term,
+                    mid_term: data.mid_term || data.short_term,
+                    long_term: data.long_term || data.short_term
+                };
+            }
+
+            throw new Error(
+                "Invalid market analysis payload."
+            );
+
+        } catch (err) {
+
+            console.error(
+                "Market analysis failure:",
+                err
+            );
+
+            // ✅ BEP20 fallback only
+            const fallbackPool = [
+
+                {
+                    symbol: "CAKE",
+                    tokenAddress:
+                        "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",
+                    network: "bep20",
+                    change24h: 3.1
+                },
+
+                {
+                    symbol: "XVS",
+                    tokenAddress:
+                        "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902",
+                    network: "bep20",
+                    change24h: 2.4
+                },
+
+                {
+                    symbol: "LINK",
+                    tokenAddress:
+                        "0xF8aEe1784988F6E59c1664195e67042c244514d8",
+                    network: "bep20",
+                    change24h: 1.8
+                }
+
+            ];
+
+            return {
+                short_term: fallbackPool,
+                mid_term: fallbackPool,
+                long_term: fallbackPool
+            };
+        }
+    }
+
+    // ==============================================================
+    // 🪙 Supported Trading Pairs (BEP20 Only)
+    // ==============================================================
+
+    window.getBinancePairs = async () => [
+
+        "CAKEUSDT",
+        "XVSUSDT",
+        "LINKUSDT",
+        "DOTUSDT",
+        "ADAUSDT",
+        "DOGEUSDT",
+        "MATICUSDT",
+        "XRPUSDT",
+        "FILUSDT",
+        "LTCUSDT"
+
+    ];
+
+    // ==============================================================
+    // 🔍 Token Resolver
+    // ==============================================================
+
+    window.evaluateCoin = async function (symbol) {
+
+        try {
+
+            const marketData =
+                await categorizeCoins();
+
+            const allTokens = [
+
+                ...(marketData.short_term || []),
+                ...(marketData.mid_term || []),
+                ...(marketData.long_term || [])
+
+            ];
+
+            const cleanSymbol = String(symbol)
+                .replace("USDT", "")
+                .toUpperCase()
+                .trim();
+
+            const token = allTokens.find(
+                x =>
+                    String(x.symbol)
+                        .toUpperCase()
+                        .trim() === cleanSymbol
+            );
+
+            if (!token) {
+
+                window.logToPanel(
+                    `[WARN] Token not found: ${cleanSymbol}`
+                );
+
+                return null;
+            }
+
+            return {
+
+                symbol: token.symbol,
+
+                tokenAddress:
+                    token.tokenAddress,
+
+                network: "bep20",
+
+                router: "pancakeswap"
+
+            };
+
+        } catch (err) {
+
+            window.logToPanel(
+                `[ERROR] evaluateCoin failed: ${err.message}`
+            );
+
+            return null;
+        }
     };
-  } catch (e) {
-    console.warn("[WARN] Binance stats failed:", e);
-    return null;
-  }
-}
 
-async function getBinanceHistory(symbol, interval="1h", limit=200) {
-  try {
-    const res = await fetch(`${BINANCE_KLINES}?symbol=${symbol}&interval=${interval}&limit=${limit}`);
-    const klines = await res.json();
-    return klines.map(k => parseFloat(k[4])); // closing prices
-  } catch (e) {
-    console.warn("[WARN] Binance history failed:", e);
-    return [];
-  }
-}
+    // ==============================================================
+    // 🌐 Global Bindings
+    // ==============================================================
 
-function movingAverage(closes, window) {
-  if (closes.length < window) return null;
-  const slice = closes.slice(-window);
-  return slice.reduce((a,b) => a+b, 0) / window;
-}
+    window.categorizeCoins =
+        categorizeCoins;
 
-async function evaluateCoin(symbol) {
-  const stats = await getBinanceStats(symbol);
-  const closes = await getBinanceHistory(symbol, "1h", 200);
+    window.logToPanel(
+        "coins.txt initialized successfully (BEP20 mode)."
+    );
 
-  const ma20  = movingAverage(closes, 20);
-  const ma50  = movingAverage(closes, 50);
-  const ma100 = movingAverage(closes, 100);
-
-  const upward = ma20 && ma50 && ma20 > ma50;
-
-  // Resolve token address dynamically
-  const tokenAddress = await getTokenAddress(symbol);
-
-  return {
-    symbol,
-    lastPrice: stats ? stats.lastPrice : null,
-    "24hr%": stats ? stats.priceChangePercent : null,
-    volume: stats ? stats.volume : null,
-    ma20, ma50, ma100,
-    upward_trend: upward,
-    tokenAddress
-  };
-}
-
-async function categorizeCoins() {
-  const symbols = await getBinancePairs();
-  const results = await Promise.all(symbols.map(s => evaluateCoin(s)));
-
-  const long_term  = results.sort((a,b) => (b.ma100||0) - (a.ma100||0)).slice(0,10);
-  const mid_term   = results.sort((a,b) => (b.ma50||0) - (a.ma50||0)).slice(0,10);
-  const short_term = results.sort((a,b) => (b.ma20||0) - (a.ma20||0)).slice(0,10);
-
-  return { long_term, mid_term, short_term };
-}
-
-// === Other APIs for redundancy ===
-async function getCoingecko(ids="bitcoin", vs="usd") {
-  try {
-    const res = await fetch(`${COINGECKO_API}?ids=${ids}&vs_currencies=${vs}`);
-    const d = await res.json();
-    return { symbol: ids, lastPrice: d[ids][vs] };
-  } catch (e) {
-    console.warn("[WARN] CoinGecko failed:", e);
-    return null;
-  }
-}
-
-async function getChangenow() {
-  try {
-    const res = await fetch(CHANGENOW_API);
-    return await res.json();
-  } catch (e) {
-    console.warn("[WARN] ChangeNOW failed:", e);
-    return [];
-  }
-}
-
-async function getKraken(pair="XBTUSD") {
-  try {
-    const res = await fetch(`${KRAKEN_API}?pair=${pair}`);
-    const d = await res.json();
-    const ticker = d.result[pair];
-    return { symbol: pair, lastPrice: parseFloat(ticker.c[0]) };
-  } catch (e) {
-    console.warn("[WARN] Kraken failed:", e);
-    return null;
-  }
-}
-
-// === Gas Fee Fetcher ===
-async function getGasFees(network="eth") {
-  try {
-    const url = network === "bsc" ? BSC_GAS : ETHERSCAN_GAS;
-    const res = await fetch(url);
-    const d = await res.json();
-    const gasPrice = parseFloat(d.result.SafeGasPrice); // gwei
-    const ethPrice = await getCoingecko("ethereum","usd");
-    const bnbPrice = await getCoingecko("binancecoin","usd");
-    const basePrice = network === "bsc" ? bnbPrice.lastPrice : ethPrice.lastPrice;
-    const usdCost = (gasPrice * 21000 * 1e-9) * basePrice;
-    return { network, gasPrice, usdCost };
-  } catch (e) {
-    console.warn("[WARN] Gas fee fetch failed:", e);
-    return { network, gasPrice: null, usdCost: null };
-  }
-}
-
-// === PancakeSwap Fee Tier Mapper ===
-function getPancakeFeeTier(symbol) {
-  if (/USDT|USDC|BUSD/.test(symbol)) return 0.01;
-  if (/BTC|ETH|BNB/.test(symbol)) return 0.05;
-  return 0.25;
-}
-
-// === Effective Trade Cost Calculator ===
-async function calculateTradeCost(symbol, tradeValueUSD, network="bsc") {
-  const gas = await getGasFees(network);
-  const feeTier = getPancakeFeeTier(symbol);
-  const swapFee = tradeValueUSD * (feeTier / 100);
-  const totalCost = (gas.usdCost || 0) + swapFee;
-  return { symbol, tradeValueUSD, feeTier, gasFeeUSD: gas.usdCost, totalCost };
-}
-
-// === Dynamic Coin Address Fetcher ===
-async function getTokenAddress(symbol) {
-  try {
-    const res = await fetch(CHANGENOW_API);
-    const list = await res.json();
-    const base = symbol.replace("USDT","").toLowerCase();
-    const entry = list.find(c => c.ticker.toLowerCase() === base);
-    return entry ? entry.tokenContract : null;
-  } catch (e) {
-    console.warn("[WARN] Token address fetch failed:", e);
-    return null;
-  }
-}
-
-// === Expose globally ===
-window.getBinancePairs = getBinancePairs;
-window.getBinanceStats = getBinanceStats;
-window.getBinanceHistory = getBinanceHistory;
-window.evaluateCoin = evaluateCoin;
-window.categorizeCoins = categorizeCoins;
-window.getCoingecko = getCoingecko;
-window.getChangenow = getChangenow;
-window.getKraken = getKraken;
-window.getGasFees = getGasFees;
-window.getPancakeFeeTier = getPancakeFeeTier;
-window.calculateTradeCost = calculateTradeCost;
-window.getTokenAddress = getTokenAddress;
+})();
