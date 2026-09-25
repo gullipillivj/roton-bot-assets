@@ -1,99 +1,309 @@
 // ==================================================================
-// 🚀 FIXED SIMULATION RUNTIME ENGINES
+// 🚀 FULL SIMULATION RUNTIME ENGINE
 // ==================================================================
+
 window.logToPanel("simulate.txt loaded");
 
-currentCycle = 1;
- cycleTimer = null;
+let currentCycle = 1;
+let cycleTimer = null;
+let cumulativeProfit = 0;
+let botRunning = false;
 
+// ======================================================
+// STOP BUTTON SUPPORT
+// ======================================================
 
+function stopBot() {
+
+    botRunning = false;
+
+    if (cycleTimer) {
+        clearInterval(cycleTimer);
+        cycleTimer = null;
+    }
+
+    window.logToPanel(
+        `[INFO] ${new Date().toLocaleTimeString()} — Simulation stopped`
+    );
+}
+
+window.stopBot = stopBot;
+
+// ======================================================
+// PICK RANDOM COIN
+// ======================================================
+
+async function pickRandomCoin() {
+
+    try {
+
+        const pairs =
+            await window.getBinancePairs();
+
+        if (!pairs || !pairs.length) {
+            return "CAKEUSDT";
+        }
+
+        return pairs[
+            Math.floor(
+                Math.random() * pairs.length
+            )
+        ];
+
+    } catch (err) {
+
+        return "CAKEUSDT";
+
+    }
+}
+
+// ======================================================
+// LIVE PROFIT UI
+// ======================================================
+
+function updateLiveProfit(value) {
+
+    const el =
+        document.getElementById(
+            "liveProfitValue"
+        );
+
+    if (el) {
+
+        if (value >= 0) {
+
+            el.style.color =
+                "#00cc66";
+
+            el.textContent =
+                `+${value.toFixed(2)} USDT`;
+
+        } else {
+
+            el.style.color =
+                "#ff4444";
+
+            el.textContent =
+                `${value.toFixed(2)} USDT`;
+
+        }
+    }
+}
+
+// ======================================================
+// SINGLE CYCLE
+// ======================================================
 
 async function simulateCycle(cycle) {
-    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) started`);
 
-    // Pick coin from Binance pairs
-    const coin = await pickRandomCoin();
-    const stats = await window.getBinanceStats(coin);
+    if (!botRunning) return;
 
-    if (!stats) {
-        window.logToPanel(`[WARN] Cycle ${cycle}: No stats for ${coin}, skipping`);
+    window.logToPanel(
+        `[INFO] Cycle ${cycle} started`
+    );
+
+    const pair =
+        await pickRandomCoin();
+
+    const coin =
+        pair.replace(
+            "USDT",
+            ""
+        );
+
+    const coinInfo =
+        await window.evaluateCoin(pair);
+
+    if (!coinInfo) {
+
+        window.logToPanel(
+            `[WARN] Unable to load ${coin}`
+        );
+
         return;
     }
 
-    const buyPrice = parseFloat(stats.lastPrice);
-    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Bought ${coin} at ${buyPrice} USDT`);
+    // Simulated entry price
+    const buyPrice =
+        Number(
+            (
+                Math.random() * 100 +
+                1
+            ).toFixed(4)
+        );
 
-    // Profit/loss based on actual 24hr % change
-    const result = calculatePnL(buyPrice, parseFloat(stats.priceChangePercent));
+    window.logToPanel(
+        `[BUY] ${coin} @ ${buyPrice} USDT`
+    );
 
-    // Update the live profit label
-    updateLiveProfit(result);
+    await new Promise(
+        resolve =>
+            setTimeout(resolve, 1200)
+    );
 
-    if (result >= 0) {
-        window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Profit +${result.toFixed(2)} USDT`);
+    // Use market trend if available
+    let marketMove =
+        Number(
+            (
+                (Math.random() * 12) - 6
+            ).toFixed(2)
+        );
+
+    if (
+        typeof coinInfo.change24h !==
+        "undefined"
+    ) {
+        marketMove =
+            Number(
+                coinInfo.change24h
+            );
+    }
+
+    const profit =
+        buyPrice *
+        (marketMove / 100);
+
+    cumulativeProfit +=
+        profit;
+
+    await new Promise(
+        resolve =>
+            setTimeout(resolve, 1000)
+    );
+
+    window.logToPanel(
+        `[SELL] ${coin}`
+    );
+
+    if (profit >= 0) {
+
+        window.logToPanel(
+            `[PROFIT] +${profit.toFixed(2)} USDT`
+        );
+
     } else {
-        window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Cycle ${cycle}: Loss ${result.toFixed(2)} USDT`);
+
+        window.logToPanel(
+            `[LOSS] ${profit.toFixed(2)} USDT`
+        );
+
     }
 
-    // Chart update integration
-    if (typeof window.updateChart === "function") {
-        window.updateChart(buyPrice, result);
+    updateLiveProfit(
+        cumulativeProfit
+    );
+
+    // Chart update
+    if (
+        typeof window.updateChart ===
+        "function"
+    ) {
+
+        window.updateChart(
+            buyPrice,
+            cumulativeProfit
+        );
+
     }
 
-    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — simulateCycle(${cycle}) complete`);
+    window.logToPanel(
+        `[TOTAL PNL] ${cumulativeProfit.toFixed(2)} USDT`
+    );
+
+    window.logToPanel(
+        `[INFO] Cycle ${cycle} completed`
+    );
 }
 
-function startSimulation(totalCycles) {
-    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — initBot started for ${totalCycles} cycles (1‑minute interval)`);
+// ======================================================
+// START BOT
+// ======================================================
+
+function startSimulation(
+    totalCycles = 10
+) {
+
+    stopBot();
+
+    botRunning = true;
 
     currentCycle = 1;
-    if (cycleTimer) clearInterval(cycleTimer);
 
-    // 🌟 STEP 1: Execute Cycle 1 immediately on click
+    cumulativeProfit = 0;
+
+    updateLiveProfit(0);
+
+    window.logToPanel(
+        `[BOT START] ${totalCycles} cycles`
+    );
+
+    // run first cycle immediately
+
     simulateCycle(currentCycle);
+
     currentCycle++;
 
-    // 🌟 STEP 2: Queue up subsequent intervals
-    cycleTimer = setInterval(async () => {
-        if (currentCycle > totalCycles) {
-            clearInterval(cycleTimer);
-            window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation complete`);
-            return;
-        }
+    cycleTimer = setInterval(
+        async () => {
 
-        await simulateCycle(currentCycle);
-        currentCycle++;
-    }, 60000);
+            if (!botRunning) {
+                clearInterval(cycleTimer);
+                return;
+            }
+
+            if (
+                currentCycle >
+                totalCycles
+            ) {
+
+                clearInterval(
+                    cycleTimer
+                );
+
+                botRunning = false;
+
+                window.logToPanel(
+                    `[BOT FINISHED] Final Profit = ${cumulativeProfit.toFixed(2)} USDT`
+                );
+
+                return;
+            }
+
+            await simulateCycle(
+                currentCycle
+            );
+
+            currentCycle++;
+
+        },
+        60000
+    );
 }
 
-function initBot(totalCycles = 10) {
-    startSimulation(totalCycles);
+// ======================================================
+// INIT
+// ======================================================
+
+function initBot(
+    totalCycles = 10
+) {
+    startSimulation(
+        totalCycles
+    );
 }
 
-// === Helpers ===
-async function pickRandomCoin() {
-    try {
-        const pairs = await window.getBinancePairs();
-        if (!pairs || pairs.length === 0) return "BTCUSDT";
-        return pairs[Math.floor(Math.random() * pairs.length)];
-    } catch (e) {
-        return "BTCUSDT";
-    }
-}
+// ======================================================
+// GLOBAL EXPORTS
+// ======================================================
 
-function updateLiveProfit(value) {
-    const el = document.getElementById("liveProfitValue");
-    if (el) {
-        el.textContent = `${value.toFixed(2)} USDT`;
-    }
-}
+window.simulateCycle =
+    simulateCycle;
 
-function calculatePnL(price, percentChange) {
-    if (!percentChange) return 0;
-    return price * (percentChange / 100);
-}
+window.startSimulation =
+    startSimulation;
 
-// Expose globally
-window.startSimulation = startSimulation;
-window.simulateCycle = simulateCycle;
-window.initBot = initBot;
+window.initBot =
+    initBot;
+
+window.stopBot =
+    stopBot;
