@@ -1,40 +1,61 @@
 // =====================================================
-// 🎛️ GLOBAL CORE LOGGER & INITIALIZER
+// 🎛️ GLOBAL LIVE CHART UPDATE HANDLER
 // =====================================================
+function updateChart(balance, profit = null) {
+    // ✅ DYNAMIC: Directly use the existing Chart object instantiated by your HTML template
+    const chartInstance = window.balanceChart;
+    if (!chartInstance) {
+        console.warn("[CHART] Native chart context object balanceChart not yet initialized.");
+        return;
+    }
+
+    const nextIndex = chartInstance.data.labels.length + 1;
+    
+    // Push new coordinate values directly into your template's layout datasets
+    chartInstance.data.labels.push(`Trade ${nextIndex}`);
+    
+    // Dataset 0: Account Equity balance track line
+    chartInstance.data.datasets[0].data.push(Number(balance.toFixed(2)));
+    
+    // Dataset 1: Cumulative Profit metric tracking curve
+    if (profit !== null) {
+        chartInstance.data.datasets[1].data.push(Number(profit.toFixed(2)));
+    }
+
+    // Force the active UI canvas layout to repaint the vectors instantly
+    chartInstance.update();
+}
+window.updateChart = updateChart;
+
+// Helper framework mapping layer to direct string dumps right inside your HTML textarea element
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) {
-        panel.innerText += "\n" + msg;
-        panel.scrollTop = panel.scrollHeight;
+        panel.value += `[TRADER] ${msg}\n`;
+        panel.scrollTop = panel.scrollHeight; // Auto-scroll to latest event logs
     } else {
         console.log(msg);
     }
 }
 window.logToPanel = logToPanel;
-logToPanel("Core framework components loaded.");
-
-function updateChart(balance, profit = null) {
-    const canvas = document.getElementById("balanceChart");
-    if (!canvas) return;
-    console.log(`[CHART UPDATE] Rendering metrics — Current Balance: ${balance}`);
-}
-window.updateChart = updateChart;
 
 // ==================================================================
-// 🚀 FULL SIMULATION RUNTIME ENGINE
+// 🚀 DYNAMIC SIMULATION RUNTIME RUNTIME ENGINE
 // ==================================================================
 let currentCycle = 1;
 let cycleTimer = null;
 let cumulativeProfit = 0;
-let botRunning = false; 
+let botRunning = false;
+let trackingBalance = 1000; 
 
 function stopBot() {
+    if (!botRunning) return;
     botRunning = false;
     if (cycleTimer) {
         clearInterval(cycleTimer);
         cycleTimer = null;
     }
-    window.logToPanel(`[INFO] ${new Date().toLocaleTimeString()} — Simulation stopped`);
+    window.logToPanel("⚠️ STOP SIGNAL RECEIVED — Real-time execution halted.");
 }
 window.stopBot = stopBot;
 
@@ -54,98 +75,123 @@ function updateLiveProfit(value) {
 async function simulateCycle(cycle) {
     if (!botRunning) return;
 
-    window.logToPanel(`[INFO] Cycle ${cycle} started`);
+    window.logToPanel(`⏳ Initiating Cycle #${cycle} trade scanning loop...`);
     
-    // 📡 Pull active rising token arrays directly from the server endpoint
+    // 1. Live backend query via context analysis endpoint
     const marketData = await window.categorizeCoins();
-    
-    // Combine all currently rising pools into an open actionable index list
     const activeGreenPool = [
         ...(marketData.short_term || []),
         ...(marketData.mid_term || []),
         ...(marketData.long_term || [])
     ];
 
-    // 🛑 CYCLE PROTECTION SIGNAL: Skip loop if market data contains 0 rising metrics
+    // Capital Shield break check if broader market has no rising assets
     if (activeGreenPool.length === 0) {
-        window.logToPanel(`[SKIPPED] Capital Protection Triggered: 0 rising assets found across market. Cycle ${cycle} skipped.`);
-        window.logToPanel(`[TOTAL PNL] ${cumulativeProfit.toFixed(2)} USDT`);
-        window.logToPanel(`[INFO] Cycle ${cycle} completed`);
+        window.logToPanel("❌ [SKIPPED] Protection Mode: 0 rising tokens found. Skipping execution to shield liquidity.");
         return; 
     }
 
-    // 🚀 DYNAMIC RUNTIME MATCHING: Pick directly out of whatever tokens are climbing
+    // 2. Extract configuration boundary limits typed directly into your HTML inputs
+    const investmentAmt = Number(document.getElementById("investBalance")?.value) || 500;
+    const profitTargetPct = Number(document.getElementById("profitTarget")?.value) || 1;
+    const stopLossPct = Number(document.getElementById("stopLoss")?.value) || 0.5;
+
+    // 3. Select target assets out of live climbing categories
     const selectedToken = activeGreenPool[Math.floor(Math.random() * activeGreenPool.length)];
     const coin = selectedToken.symbol;
+    
+    window.logToPanel(`🔍 [RADAR] Detected high-velocity token: ${coin} (+${selectedToken.change24h}%)`);
+    
+    // Simulated market execution calculation values
+    const entryPrice = selectedToken.lastPrice || Number((Math.random() * 50 + 1).toFixed(4));
+    window.logToPanel(`🛒 [BUY] Allocation initialized: Swapping ${investmentAmt} USDT into ${coin} @ ${entryPrice} USDT`);
 
-    const buyPrice = Number((Math.random() * 100 + 1).toFixed(4));
-    window.logToPanel(`[BUY] Dynamic Target: ${coin} @ ${buyPrice} USDT`);
+    // UI Step Delay to cleanly follow transaction states visually
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (!botRunning) return;
 
-    await new Promise(resolve => setTimeout(resolve, 1200));
+    // 4. Processing profit outcomes bound by configured percentages
+    const marketMove = Number(selectedToken.change24h);
+    let tradeProfit = investmentAmt * (marketMove / 100);
 
-    // Map true real-time metric change passed dynamically out of the python API instances
-    let marketMove = Number(selectedToken.change24h);
+    const maxGain = investmentAmt * (profitTargetPct / 100);
+    const maxLoss = -investmentAmt * (stopLossPct / 100);
 
-    const profit = buyPrice * (marketMove / 100);
-    cumulativeProfit += profit;
+    // Apply dashboard constraint limits
+    if (tradeProfit > maxGain) tradeProfit = maxGain;
+    if (tradeProfit < maxLoss) tradeProfit = maxLoss;
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    window.logToPanel(`[SELL] ${coin}`);
+    // Re-adjust account values
+    cumulativeProfit += tradeProfit;
+    trackingBalance += tradeProfit;
 
-    if (profit >= 0) {
-        window.logToPanel(`[PROFIT] +${profit.toFixed(2)} USDT`);
+    window.logToPanel(`📦 [SELL] Order executed: Liquidating asset holdings for ${coin}.`);
+    
+    if (tradeProfit >= 0) {
+        window.logToPanel(`📈 [PROFIT] Realized Return: +${tradeProfit.toFixed(2)} USDT.`);
     } else {
-        window.logToPanel(`[LOSS] ${profit.toFixed(2)} USDT`);
+        window.logToPanel(`📉 [LOSS] Realized Risk Correction: ${tradeProfit.toFixed(2)} USDT.`);
     }
 
+    // 5. Force elements to match calculated adjustments instantly
     updateLiveProfit(cumulativeProfit);
+    window.updateChart(trackingBalance, cumulativeProfit);
 
-    if (typeof window.updateChart === "function") {
-        window.updateChart(buyPrice, cumulativeProfit);
-    }
-
-    window.logToPanel(`[TOTAL PNL] ${cumulativeProfit.toFixed(2)} USDT`);
-    window.logToPanel(`[INFO] Cycle ${cycle} completed`);
+    window.logToPanel(`📊 [SUMMARY] Balance: ${trackingBalance.toFixed(2)} USDT | Net PnL: ${cumulativeProfit.toFixed(2)} USDT`);
+    window.logToPanel(`✅ Cycle ${cycle} completed.\n-----------------------------------`);
 }
 
-function startSimulation(totalCycles = 10) {
+function startSimulation() {
     stopBot();
+    
+    // Capture base start line value defined directly on your template input container
+    const initialDeposit = Number(document.getElementById("startBalance")?.value) || 1000;
+    
+    // Clear and reset systemic tracking variables
     botRunning = true;
     currentCycle = 1;
     cumulativeProfit = 0;
+    trackingBalance = initialDeposit;
+
+    // Reset layout elements
+    const panel = document.getElementById("logPanel");
+    if (panel) panel.value = "";
     updateLiveProfit(0);
 
-    window.logToPanel(`[BOT START] Requesting ${totalCycles} cycles`);
+    // Clear structural vector data on the existing chart instance
+    const chartInstance = window.balanceChart;
+    if (chartInstance) {
+        chartInstance.data.labels = ['Start'];
+        chartInstance.data.datasets[0].data = [initialDeposit];
+        chartInstance.data.datasets[1].data =;
+        chartInstance.update();
+    }
 
-    // Asynchronously schedule execution so DOM thread isn't blocked
+    window.logToPanel(`🚀 SYSTEM ONLINE — Processing loops at automated 15-second tracking blocks.`);
+
+    // Start cycle 1 right away
     setTimeout(() => {
         simulateCycle(currentCycle);
         currentCycle++;
-    }, 50);
+    }, 100);
 
+    // Dynamic looping interval setup (Configured to 15 seconds so you can watch execution feed updates live)
     cycleTimer = setInterval(async () => {
         if (!botRunning) {
             clearInterval(cycleTimer);
             return;
         }
-        if (currentCycle > totalCycles) {
-            clearInterval(cycleTimer);
-            botRunning = false;
-            window.logToPanel(`[BOT FINISHED] Final Profit = ${cumulativeProfit.toFixed(2)} USDT`);
-            return;
-        }
         await simulateCycle(currentCycle);
         currentCycle++;
-    }, 60000);
+    }, 15000); 
 }
 
-// Global scope initialization
 window.simulateCycle = simulateCycle;
 window.startSimulation = startSimulation;
 window.stopBot = stopBot;
 
 // ==================================================================
-// 🎛️ COINS FRONTEND MANAGEMENT CONTEXT INTERFACE
+// 🎛&nbsp;COINS FRONTEND MANAGEMENT CONTEXT INTERFACE
 // ==================================================================
 (function () {
     async function categorizeCoins() {
@@ -153,80 +199,35 @@ window.stopBot = stopBot;
             const baseApiUrl = window.API_BASE || window.location.origin;
             const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
             const data = await res.json();
-
-            // Return pure responsive state pools directly
             return {
                 short_term: data.short_term || [],
                 mid_term: data.mid_term || [],
                 long_term: data.long_term || []
             };
         } catch (err) {
-            console.error("Market analysis connection failure:", err);
+            console.error("Market analysis endpoint connection error:", err);
             return { short_term: [], mid_term: [], long_term: [] };
         }
     }
-
-    // Dynamic resolution context mapping layer
-    window.evaluateCoin = async function (symbol) {
-        try {
-            const marketData = await categorizeCoins();
-            const allTokens = [
-                ...(marketData.short_term || []),
-                ...(marketData.mid_term || []),
-                ...(marketData.long_term || [])
-            ];
-            const cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
-            const token = allTokens.find(x => String(x.symbol).toUpperCase().trim() === cleanSymbol);
-
-            if (!token) return null;
-            return { 
-                symbol: token.symbol, 
-                network: "bep20", 
-                router: "pancakeswap", 
-                change24h: token.change24h 
-            };
-        } catch (err) {
-            return null;
-        }
-    };
-    
     window.categorizeCoins = categorizeCoins;
 })();
 
 // =====================================================
-// 💻 UI DOM INTERACTION EVENT BINDINGS
+// 💻 HTML CLICK HANDLER CAPTURE LISTENERS
 // =====================================================
 document.addEventListener("DOMContentLoaded", function () {
-    logToPanel("UI ready");
     const startBtn = document.getElementById("startBtn");
     const stopBtn = document.getElementById("stopBtn");
 
-    if (!startBtn) {
-        logToPanel("ERROR: startBtn element missing in HTML");
-    } else {
-        logToPanel("Start button attached");
+    if (startBtn) {
         startBtn.onclick = function () {
-            logToPanel("[BUTTON] Start Trading clicked");
-            
-            const targetStart = window.startSimulation || startSimulation;
-            if (typeof targetStart === "function") {
-                logToPanel("[BOT] Executing simulation sequence...");
-                targetStart(10);
-            } else {
-                logToPanel("ERROR: startSimulation function runtime execution failed");
-            }
+            window.startSimulation();
         };
     }
 
     if (stopBtn) {
         stopBtn.onclick = function () {
-            logToPanel("[BUTTON] Stop Trading clicked");
-            const targetStop = window.stopBot || stopBot;
-            if (typeof targetStop === "function") {
-                targetStop();
-            } else {
-                logToPanel("ERROR: stopBot function missing");
-            }
+            window.stopBot();
         };
     }
 });
