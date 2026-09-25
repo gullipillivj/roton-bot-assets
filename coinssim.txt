@@ -38,16 +38,6 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
-async function pickRandomCoin() {
-    try {
-        const pairs = await window.getBinancePairs();
-        if (!pairs || !pairs.length) return "CAKEUSDT";
-        return pairs[Math.floor(Math.random() * pairs.length)];
-    } catch (err) {
-        return "CAKEUSDT";
-    }
-}
-
 function updateLiveProfit(value) {
     const el = document.getElementById("liveProfitValue");
     if (el) {
@@ -65,31 +55,36 @@ async function simulateCycle(cycle) {
     if (!botRunning) return;
 
     window.logToPanel(`[INFO] Cycle ${cycle} started`);
-    const pair = await pickRandomCoin();
-    const coin = pair.replace("USDT", "");
     
-    // Explicitly safe global lookup
-    const evaluateCoinFn = window.evaluateCoin;
-    if (typeof evaluateCoinFn !== "function") {
-        window.logToPanel(`[WARN] Core market module loading... Retrying next cycle.`);
-        return;
+    // 📡 Pull active rising token arrays directly from the server endpoint
+    const marketData = await window.categorizeCoins();
+    
+    // Combine all currently rising pools into an open actionable index list
+    const activeGreenPool = [
+        ...(marketData.short_term || []),
+        ...(marketData.mid_term || []),
+        ...(marketData.long_term || [])
+    ];
+
+    // 🛑 CYCLE PROTECTION SIGNAL: Skip loop if market data contains 0 rising metrics
+    if (activeGreenPool.length === 0) {
+        window.logToPanel(`[SKIPPED] Capital Protection Triggered: 0 rising assets found across market. Cycle ${cycle} skipped.`);
+        window.logToPanel(`[TOTAL PNL] ${cumulativeProfit.toFixed(2)} USDT`);
+        window.logToPanel(`[INFO] Cycle ${cycle} completed`);
+        return; 
     }
 
-    const coinInfo = await evaluateCoinFn(pair);
-    if (!coinInfo) {
-        window.logToPanel(`[WARN] Unable to load ${coin} data pool.`);
-        return;
-    }
+    // 🚀 DYNAMIC RUNTIME MATCHING: Pick directly out of whatever tokens are climbing
+    const selectedToken = activeGreenPool[Math.floor(Math.random() * activeGreenPool.length)];
+    const coin = selectedToken.symbol;
 
     const buyPrice = Number((Math.random() * 100 + 1).toFixed(4));
-    window.logToPanel(`[BUY] ${coin} @ ${buyPrice} USDT`);
+    window.logToPanel(`[BUY] Dynamic Target: ${coin} @ ${buyPrice} USDT`);
 
     await new Promise(resolve => setTimeout(resolve, 1200));
 
-    let marketMove = Number((Math.random() * 12 - 6).toFixed(2));
-    if (coinInfo && typeof coinInfo.change24h !== "undefined") {
-        marketMove = Number(coinInfo.change24h);
-    }
+    // Map true real-time metric change passed dynamically out of the python API instances
+    let marketMove = Number(selectedToken.change24h);
 
     const profit = buyPrice * (marketMove / 100);
     cumulativeProfit += profit;
@@ -122,7 +117,7 @@ function startSimulation(totalCycles = 10) {
 
     window.logToPanel(`[BOT START] Requesting ${totalCycles} cycles`);
 
-    // ✅ Asynchronously schedule execution so DOM thread isn't blocked
+    // Asynchronously schedule execution so DOM thread isn't blocked
     setTimeout(() => {
         simulateCycle(currentCycle);
         currentCycle++;
@@ -159,29 +154,19 @@ window.stopBot = stopBot;
             const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
             const data = await res.json();
 
-            if (data && Array.isArray(data.short_term) && data.short_term.length > 0) {
-                return {
-                    short_term: data.short_term,
-                    mid_term: data.mid_term || data.short_term,
-                    long_term: data.long_term || data.short_term
-                };
-            }
-            throw new Error("Empty structure");
+            // Return pure responsive state pools directly
+            return {
+                short_term: data.short_term || [],
+                mid_term: data.mid_term || [],
+                long_term: data.long_term || []
+            };
         } catch (err) {
-            const fallbackPool = [
-                { symbol: "CAKE", tokenAddress: "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82", network: "bep20", change24h: 3.1 },
-                { symbol: "XVS", tokenAddress: "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64E86902", network: "bep20", change24h: 2.4 },
-                { symbol: "LINK", tokenAddress: "0xF8aEe1784988F6E59c1664195e67042c244514d8", network: "bep20", change24h: 1.8 }
-            ];
-            return { short_term: fallbackPool, mid_term: fallbackPool, long_term: fallbackPool };
+            console.error("Market analysis connection failure:", err);
+            return { short_term: [], mid_term: [], long_term: [] };
         }
     }
 
-    window.getBinancePairs = async () => [
-        "CAKEUSDT", "XVSUSDT", "LINKUSDT", "DOTUSDT", "ADAUSDT", 
-        "DOGEUSDT", "MATICUSDT", "XRPUSDT", "FILUSDT", "LTCUSDT"
-    ];
-
+    // Dynamic resolution context mapping layer
     window.evaluateCoin = async function (symbol) {
         try {
             const marketData = await categorizeCoins();
@@ -194,11 +179,17 @@ window.stopBot = stopBot;
             const token = allTokens.find(x => String(x.symbol).toUpperCase().trim() === cleanSymbol);
 
             if (!token) return null;
-            return { symbol: token.symbol, tokenAddress: token.tokenAddress, network: "bep20", router: "pancakeswap", change24h: token.change24h };
+            return { 
+                symbol: token.symbol, 
+                network: "bep20", 
+                router: "pancakeswap", 
+                change24h: token.change24h 
+            };
         } catch (err) {
             return null;
         }
     };
+    
     window.categorizeCoins = categorizeCoins;
 })();
 
@@ -217,7 +208,6 @@ document.addEventListener("DOMContentLoaded", function () {
         startBtn.onclick = function () {
             logToPanel("[BUTTON] Start Trading clicked");
             
-            // Checking both local and window namespaces
             const targetStart = window.startSimulation || startSimulation;
             if (typeof targetStart === "function") {
                 logToPanel("[BOT] Executing simulation sequence...");
