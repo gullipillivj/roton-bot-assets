@@ -1,30 +1,90 @@
-// main.txt — UI glue
+// =====================================================
+// main.txt
+// =====================================================
+
 logToPanel("main.txt loaded");
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function () {
+
     logToPanel("UI ready");
 
-    // Start Trading button
-    const startBtn = document.getElementById("startBtn");
-    if (startBtn) {
-        startBtn.addEventListener("click", () => {
-            if (typeof window.initBot === "function") {
-                window.startSimulation(10); // always run 10 cycles
+    const startBtn =
+        document.getElementById("startBtn");
+
+    const stopBtn =
+        document.getElementById("stopBtn");
+
+    if (!startBtn) {
+        logToPanel(
+            "ERROR: startBtn not found"
+        );
+    } else {
+
+        logToPanel(
+            "Start button attached"
+        );
+
+        startBtn.onclick = function () {
+
+            logToPanel(
+                "[BUTTON] Start Trading clicked"
+            );
+
+            logToPanel(
+                "startSimulation type = " +
+                typeof window.startSimulation
+            );
+
+            if (
+                typeof window.startSimulation ===
+                "function"
+            ) {
+
+                logToPanel(
+                    "[BOT] Starting simulation"
+                );
+
+                window.startSimulation(10);
+
             } else {
-                logToPanel("ERROR: initBot not found");
+
+                logToPanel(
+                    "ERROR: startSimulation function missing"
+                );
+
             }
-        });
+        };
     }
 
-    // Stop Trading button
-    const stopBtn = document.getElementById("stopBtn");
-    if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-            if (typeof window.stopBot === "function") {
+    if (!stopBtn) {
+
+        logToPanel(
+            "ERROR: stopBtn not found"
+        );
+
+    } else {
+
+        stopBtn.onclick = function () {
+
+            logToPanel(
+                "[BUTTON] Stop Trading clicked"
+            );
+
+            if (
+                typeof window.stopBot ===
+                "function"
+            ) {
+
                 window.stopBot();
+
             } else {
-                logToPanel("ERROR: stopBot not found");
+
+                logToPanel(
+                    "ERROR: stopBot function missing"
+                );
+
             }
-        });
+        };
     }
+
 });
