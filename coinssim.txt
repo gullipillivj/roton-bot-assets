@@ -15,12 +15,12 @@ function updateChart(balance, profit = null) {
     chartInstance.data.labels.push(`Trade ${nextIndex}`);
     
     // Dataset 0: Investment Balance track line plot points
-    if (chartInstance.data.datasets[0] && chartInstance.data.datasets[0].data) {
+    if (chartInstance.data.datasets && chartInstance.data.datasets[0]) {
         chartInstance.data.datasets[0].data.push(Number(balance.toFixed(2)));
     }
     
     // Dataset 1: Profit/Loss metric tracking curve line points
-    if (chartInstance.data.datasets[1] && chartInstance.data.datasets[1].data && profit !== null) {
+    if (chartInstance.data.datasets && chartInstance.data.datasets[1] && profit !== null) {
         chartInstance.data.datasets[1].data.push(Number(profit.toFixed(2)));
     }
 
@@ -127,7 +127,7 @@ async function simulateCycle(cycle) {
     cumulativeProfit += tradeProfit;
     trackingBalance += tradeProfit;
 
-    window.logToPanel(`Box [SELL] Order executed: Liquidating asset positions for ${coin}.`);
+    window.logToPanel(`📦 [SELL] Order executed: Liquidating asset positions for ${coin}.`);
     
     if (tradeProfit >= 0) {
         window.logToPanel(`📈 [PROFIT] Realized Return: +${tradeProfit.toFixed(2)} USDT.`);
@@ -166,13 +166,13 @@ function startSimulation() {
         chartInstance.data.labels = ['Start'];
         
         // Reset Dataset 0 (Investment Balance array)
-        if (chartInstance.data.datasets[0] && chartInstance.data.datasets[0].data) {
+        if (chartInstance.data.datasets && chartInstance.data.datasets[0]) {
             chartInstance.data.datasets[0].data = [initialDeposit];
         }
         
         // Reset Dataset 1 (Profit/Loss tracking array)
-        if (chartInstance.data.datasets[1] && chartInstance.data.datasets[1].data) {
-            chartInstance.data.datasets[1].data =;
+        if (chartInstance.data.datasets && chartInstance.data.datasets[1]) {
+            chartInstance.data.datasets[1].data = [];
         }
         
         chartInstance.update();
