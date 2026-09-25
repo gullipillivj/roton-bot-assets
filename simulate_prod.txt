@@ -162,6 +162,9 @@ async function swapRR(amount) {
 // =====================================================
 // SINGLE TRADING CYCLE
 // =====================================================
+// =====================================================
+// SINGLE TRADING CYCLE (FULLY CORRECTED FOR DYNAMIC API)
+// =====================================================
 async function simulateCycle(
     cycle,
     totalCycles,
@@ -207,6 +210,7 @@ async function simulateCycle(
             totalCycles - (cycle - 1)
         );
 
+    // 🔒 STAGE PROTECTION GATE: Cycle 6 strictly forced to RR circulation swap
     if (cycle === 6) {
         logToPanel(
             "[RR SUPPORT] Dedicated RR circulation cycle."
@@ -217,12 +221,10 @@ async function simulateCycle(
     // =====================================
     // LOAD CURRENT TOKEN FROM DB
     // =====================================
-
     let currentToken =
         "0x55d398326f99059fF775485246999027B3197955";
 
     try {
-
         const tokenResp = await fetch(
             "/prodbot/tokens/get",
             {
@@ -257,30 +259,44 @@ async function simulateCycle(
         }
 
     } catch (err) {
-
         logToPanel(
             `[TOKEN LOAD ERROR] ${err.message}`
         );
-
     }
 
-    const selectedCoin =
-        await pickRandomCoin();
+    // ==================================================================
+    // 🔀 DYNAMIC MARKET POOL EVALUATION & RR FALLBACK INJECTION
+    // ==================================================================
+    
+    // Quick look to verify your live API market arrays contain running candidates
+    const marketData = await window.categorizeCoins();
+    const activeGreenPool = [
+        ...(marketData.short_term || []),
+        ...(marketData.mid_term || []),
+        ...(marketData.long_term || [])
+    ];
 
-    const targetSymbol =
-        `${selectedCoin}USDT`;
-
-    const coinInfo =
-        await window.evaluateCoin(
-            targetSymbol
+    // 🚨 EMERGENCY FALLBACK LAYER 1: Market scan completely empty -> Route to RR
+    if (activeGreenPool.length === 0) {
+        logToPanel(
+            "[MARKET FLATLINE] 0 rising assets found across exchange. Routing capital to RR fallback pipeline."
         );
+        return await swapRR(allocationUSD);
+    }
 
+    // Dynamic retrieval of one of the top momentum tokens
+    const selectedCoin = await pickRandomCoin();
+
+    // 🛠️ FIXED: Decoupled lookup pattern from rigid USDT suffixes to allow dynamic cross-asset routing
+    const coinInfo = await window.evaluateCoin(selectedCoin);
+
+    // 🚨 EMERGENCY FALLBACK LAYER 2: Token found but metadata/address lookup failed -> Route to RR
     if (
         !coinInfo ||
         !coinInfo.tokenAddress
     ) {
         logToPanel(
-            `[WARN] Could not resolve ${targetSymbol}`
+            `[WARN] Resolution failed for target ticket ${selectedCoin}. Routing capital to RR fallback pipeline to preserve thread.`
         );
 
         return await swapRR(
@@ -289,7 +305,10 @@ async function simulateCycle(
     }
 
     logToPanel(
-        `[TARGET] ${coinInfo.symbol}`
+        `[TARGET DISCOVERED] Token: ${coinInfo.symbol} | Contract: ${coinInfo.tokenAddress}`
+    );
+    logToPanel(
+        `📋 ROUTE MAP: [TokenIn: ${currentToken}] ➡️ [TokenOut: ${coinInfo.tokenAddress}]`
     );
 
     const beforeBalance =
@@ -297,7 +316,6 @@ async function simulateCycle(
         tradingBalance;
 
     try {
-
         const swapResp =
             await window.runSwapUniswap(
                 window.USER_ADDR,
@@ -310,7 +328,6 @@ async function simulateCycle(
             swapResp &&
             swapResp.tx_hash
         ) {
-
             logToPanel(
                 `🎉 Swap Success: ${swapResp.tx_hash}`
             );
@@ -318,22 +335,18 @@ async function simulateCycle(
             // =====================================
             // UPDATE TOKEN TABLE
             // =====================================
-
             await updateTokenRecord(
                 currentToken,
                 coinInfo.tokenAddress
             );
 
             logToPanel(
-                `[TOKEN UPDATED]
-LAST=${currentToken}
-CURRENT=${coinInfo.tokenAddress}`
+                `[TOKEN UPDATED]\nLAST=${currentToken}\nCURRENT=${coinInfo.tokenAddress}`
             );
 
         } else {
-
             logToPanel(
-                "[WARN] Swap failed."
+                "[WARN] Swap failed or rejected by network provider. Triggering RR safety route."
             );
 
             return await swapRR(
@@ -366,9 +379,8 @@ CURRENT=${coinInfo.tokenAddress}`
         }
 
     } catch (err) {
-
         logToPanel(
-            `[ERROR] ${err.message}`
+            `[ERROR] Execution exception hit: ${err.message}. Safely bouncing to RR swap path.`
         );
 
         return await swapRR(
@@ -406,6 +418,8 @@ CURRENT=${coinInfo.tokenAddress}`
 
     return "CONTINUE";
 }
+
+
 
 // =====================================================
 // BOT START
