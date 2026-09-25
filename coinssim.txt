@@ -122,7 +122,7 @@ window.logToPanel("simulate.txt loaded");
 const currentCycle = 1;
 const cycleTimer = null;
 const cumulativeProfit = 0;
-const botRunning = false;
+bool botRunning = false;
 
 // ======================================================
 // STOP BUTTON SUPPORT
