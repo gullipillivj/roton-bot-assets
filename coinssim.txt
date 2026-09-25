@@ -102,8 +102,9 @@ async function simulateCycle(cycle) {
     const selectedToken = activeGreenPool[Math.floor(Math.random() * activeGreenPool.length)];
     const coin = selectedToken.symbol;
     
-    window.logToPanel(`🔍 [RADAR] Detected high-velocity token: ${coin} (+${selectedToken.change24h}%)`);
-    
+    // Modify this line in your coinssim.txt file to view the addresses live:
+window.logToPanel(`🔍 [RADAR] Detected high-velocity token: ${coin} (${selectedToken.address}) (+${selectedToken.change24h}%)`);
+
     // Execution entry target calculation points
     const entryPrice = selectedToken.lastPrice || Number((Math.random() * 50 + 1).toFixed(4));
     window.logToPanel(`🛒 [BUY] Allocation initialized: Swapping ${investmentAmt} USDT into ${coin} @ ${entryPrice} USDT`);
