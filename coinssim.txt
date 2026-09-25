@@ -90,6 +90,315 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 
+// ==================================================================
+// 🚀 FULL SIMULATION RUNTIME ENGINE
+// ==================================================================
+
+window.logToPanel("simulate.txt loaded");
+
+let currentCycle = 1;
+let cycleTimer = null;
+let cumulativeProfit = 0;
+let botRunning = false;
+
+// ======================================================
+// STOP BUTTON SUPPORT
+// ======================================================
+
+function stopBot() {
+
+    botRunning = false;
+
+    if (cycleTimer) {
+        clearInterval(cycleTimer);
+        cycleTimer = null;
+    }
+
+    window.logToPanel(
+        `[INFO] ${new Date().toLocaleTimeString()} — Simulation stopped`
+    );
+}
+
+window.stopBot = stopBot;
+
+// ======================================================
+// PICK RANDOM COIN
+// ======================================================
+
+async function pickRandomCoin() {
+
+    try {
+
+        const pairs =
+            await window.getBinancePairs();
+
+        if (!pairs || !pairs.length) {
+            return "CAKEUSDT";
+        }
+
+        return pairs[
+            Math.floor(
+                Math.random() * pairs.length
+            )
+        ];
+
+    } catch (err) {
+
+        return "CAKEUSDT";
+
+    }
+}
+
+// ======================================================
+// LIVE PROFIT UI
+// ======================================================
+
+function updateLiveProfit(value) {
+
+    const el =
+        document.getElementById(
+            "liveProfitValue"
+        );
+
+    if (el) {
+
+        if (value >= 0) {
+
+            el.style.color =
+                "#00cc66";
+
+            el.textContent =
+                `+${value.toFixed(2)} USDT`;
+
+        } else {
+
+            el.style.color =
+                "#ff4444";
+
+            el.textContent =
+                `${value.toFixed(2)} USDT`;
+
+        }
+    }
+}
+
+// ======================================================
+// SINGLE CYCLE
+// ======================================================
+
+async function simulateCycle(cycle) {
+
+    if (!botRunning) return;
+
+    window.logToPanel(
+        `[INFO] Cycle ${cycle} started`
+    );
+
+    const pair =
+        await pickRandomCoin();
+
+    const coin =
+        pair.replace(
+            "USDT",
+            ""
+        );
+
+    const coinInfo =
+        await window.evaluateCoin(pair);
+
+    if (!coinInfo) {
+
+        window.logToPanel(
+            `[WARN] Unable to load ${coin}`
+        );
+
+        return;
+    }
+
+    // Simulated entry price
+    const buyPrice =
+        Number(
+            (
+                Math.random() * 100 +
+                1
+            ).toFixed(4)
+        );
+
+    window.logToPanel(
+        `[BUY] ${coin} @ ${buyPrice} USDT`
+    );
+
+    await new Promise(
+        resolve =>
+            setTimeout(resolve, 1200)
+    );
+
+    // Use market trend if available
+    let marketMove =
+        Number(
+            (
+                (Math.random() * 12) - 6
+            ).toFixed(2)
+        );
+
+    if (
+        typeof coinInfo.change24h !==
+        "undefined"
+    ) {
+        marketMove =
+            Number(
+                coinInfo.change24h
+            );
+    }
+
+    const profit =
+        buyPrice *
+        (marketMove / 100);
+
+    cumulativeProfit +=
+        profit;
+
+    await new Promise(
+        resolve =>
+            setTimeout(resolve, 1000)
+    );
+
+    window.logToPanel(
+        `[SELL] ${coin}`
+    );
+
+    if (profit >= 0) {
+
+        window.logToPanel(
+            `[PROFIT] +${profit.toFixed(2)} USDT`
+        );
+
+    } else {
+
+        window.logToPanel(
+            `[LOSS] ${profit.toFixed(2)} USDT`
+        );
+
+    }
+
+    updateLiveProfit(
+        cumulativeProfit
+    );
+
+    // Chart update
+    if (
+        typeof window.updateChart ===
+        "function"
+    ) {
+
+        window.updateChart(
+            buyPrice,
+            cumulativeProfit
+        );
+
+    }
+
+    window.logToPanel(
+        `[TOTAL PNL] ${cumulativeProfit.toFixed(2)} USDT`
+    );
+
+    window.logToPanel(
+        `[INFO] Cycle ${cycle} completed`
+    );
+}
+
+// ======================================================
+// START BOT
+// ======================================================
+
+function startSimulation(
+    totalCycles = 10
+) {
+
+    stopBot();
+
+    botRunning = true;
+
+    currentCycle = 1;
+
+    cumulativeProfit = 0;
+
+    updateLiveProfit(0);
+
+    window.logToPanel(
+        `[BOT START] ${totalCycles} cycles`
+    );
+
+    // run first cycle immediately
+
+    simulateCycle(currentCycle);
+
+    currentCycle++;
+
+    cycleTimer = setInterval(
+        async () => {
+
+            if (!botRunning) {
+                clearInterval(cycleTimer);
+                return;
+            }
+
+            if (
+                currentCycle >
+                totalCycles
+            ) {
+
+                clearInterval(
+                    cycleTimer
+                );
+
+                botRunning = false;
+
+                window.logToPanel(
+                    `[BOT FINISHED] Final Profit = ${cumulativeProfit.toFixed(2)} USDT`
+                );
+
+                return;
+            }
+
+            await simulateCycle(
+                currentCycle
+            );
+
+            currentCycle++;
+
+        },
+        60000
+    );
+}
+
+// ======================================================
+// INIT
+// ======================================================
+
+function initBot(
+    totalCycles = 10
+) {
+    startSimulation(
+        totalCycles
+    );
+}
+
+// ======================================================
+// GLOBAL EXPORTS
+// ======================================================
+
+window.simulateCycle =
+    simulateCycle;
+
+window.startSimulation =
+    startSimulation;
+
+window.initBot =
+    initBot;
+
+window.stopBot =
+    stopBot;
 
 
 // ==================================================================
