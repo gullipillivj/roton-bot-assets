@@ -1,3 +1,97 @@
+// =====================================================
+// main.txt
+// =====================================================
+
+logToPanel("main.txt loaded");
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    logToPanel("UI ready");
+
+    const startBtn =
+        document.getElementById("startBtn");
+
+    const stopBtn =
+        document.getElementById("stopBtn");
+
+    if (!startBtn) {
+        logToPanel(
+            "ERROR: startBtn not found"
+        );
+    } else {
+
+        logToPanel(
+            "Start button attached"
+        );
+
+        startBtn.onclick = function () {
+
+            logToPanel(
+                "[BUTTON] Start Trading clicked"
+            );
+
+            logToPanel(
+                "startSimulation type = " +
+                typeof window.startSimulation
+            );
+
+            if (
+                typeof window.startSimulation ===
+                "function"
+            ) {
+
+                logToPanel(
+                    "[BOT] Starting simulation"
+                );
+
+                window.startSimulation(10);
+
+            } else {
+
+                logToPanel(
+                    "ERROR: startSimulation function missing"
+                );
+
+            }
+        };
+    }
+
+    if (!stopBtn) {
+
+        logToPanel(
+            "ERROR: stopBtn not found"
+        );
+
+    } else {
+
+        stopBtn.onclick = function () {
+
+            logToPanel(
+                "[BUTTON] Stop Trading clicked"
+            );
+
+            if (
+                typeof window.stopBot ===
+                "function"
+            ) {
+
+                window.stopBot();
+
+            } else {
+
+                logToPanel(
+                    "ERROR: stopBot function missing"
+                );
+
+            }
+        };
+    }
+
+});
+
+
+
+
 // ==================================================================
 // 🎛️ COINS FRONTEND MANAGEMENT CONTEXT INTERFACE
 // ==================================================================
