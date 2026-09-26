@@ -1,13 +1,17 @@
 // ==================================================================
-// 🎛️ COINS FRONTEND MANAGEMENT CONTEXT INTERFACE (DYNAMIC PROD)
+// 🎛️ COST-AWARE COIN SELECTION ENGINE
 // ==================================================================
 
 (function () {
 
     window.logToPanel("coins.txt loaded safely.");
 
+    const MIN_PROFIT_MOVE = 3.0;
+    const MAX_PROFIT_MOVE = 20.0;
+    const TOP_POOL_SIZE = 5;
+
     // ==============================================================
-    // 📊 Market Analysis Loader
+    // MARKET DATA
     // ==============================================================
 
     async function categorizeCoins() {
@@ -22,7 +26,8 @@
                 `${baseApiUrl}/prodbot/market-analysis`
             );
 
-            const data = await res.json();
+            const data =
+                await res.json();
 
             return {
                 short_term:
@@ -35,24 +40,82 @@
 
         } catch (err) {
 
-            console.error(
-                "Market analysis failure:",
-                err
-            );
+            console.error(err);
 
             return {
                 short_term: [],
                 mid_term: [],
                 long_term: []
             };
+
         }
+
     }
 
     window.categorizeCoins =
         categorizeCoins;
 
     // ==============================================================
-    // 🪙 PAIRS
+    // BUILD PROFITABLE TOKEN POOL
+    // ==============================================================
+
+    async function getTradeCandidates() {
+
+        const marketData =
+            await categorizeCoins();
+
+        let allTokens = [
+
+            ...(marketData.short_term || []),
+
+            ...(marketData.mid_term || []),
+
+            ...(marketData.long_term || [])
+
+        ];
+
+        allTokens = allTokens.filter(
+            token => {
+
+                const move =
+                    Number(
+                        token.change24h || 0
+                    );
+
+                return (
+                    move >= MIN_PROFIT_MOVE &&
+                    move <= MAX_PROFIT_MOVE &&
+                    token.address
+                );
+
+            }
+        );
+
+        allTokens.sort(
+            (a, b) =>
+                Number(
+                    b.change24h || 0
+                ) -
+                Number(
+                    a.change24h || 0
+                )
+        );
+
+        const finalPool =
+            allTokens.slice(
+                0,
+                TOP_POOL_SIZE
+            );
+
+        window.logToPanel(
+            `[POOL] ${finalPool.length} cost-aware candidates`
+        );
+
+        return finalPool;
+    }
+
+    // ==============================================================
+    // PAIRS
     // ==============================================================
 
     window.getBinancePairs =
@@ -60,27 +123,19 @@
 
             try {
 
-                const marketData =
-                    await categorizeCoins();
-
-                const allTokens = [
-
-                    ...(marketData.short_term || []),
-
-                    ...(marketData.mid_term || []),
-
-                    ...(marketData.long_term || [])
-                ];
+                const candidates =
+                    await getTradeCandidates();
 
                 if (
-                    allTokens &&
-                    allTokens.length > 0
+                    candidates &&
+                    candidates.length > 0
                 ) {
 
-                    return allTokens.map(
-                        token =>
-                        `${token.symbol}USDT`
+                    return candidates.map(
+                        coin =>
+                            `${coin.symbol}USDT`
                     );
+
                 }
 
             } catch (err) {
@@ -90,10 +145,11 @@
             }
 
             return ["CAKEUSDT"];
+
         };
 
     // ==============================================================
-    // 🔍 TOKEN LOOKUP
+    // TOKEN LOOKUP
     // ==============================================================
 
     window.evaluateCoin =
@@ -101,63 +157,54 @@
 
             try {
 
-                const marketData =
-                    await categorizeCoins();
-
-                const allTokens = [
-
-                    ...(marketData.short_term || []),
-
-                    ...(marketData.mid_term || []),
-
-                    ...(marketData.long_term || [])
-                ];
+                const candidates =
+                    await getTradeCandidates();
 
                 const cleanSymbol =
                     String(symbol)
-                    .replace("USDT", "")
-                    .toUpperCase()
-                    .trim();
+                        .replace("USDT", "")
+                        .toUpperCase()
+                        .trim();
 
                 const token =
-                    allTokens.find(
-                        t =>
-                            String(t.symbol)
-                                .toUpperCase()
-                                .trim() ===
+                    candidates.find(
+                        x =>
+                            String(
+                                x.symbol
+                            )
+                            .toUpperCase()
+                            .trim() ===
                             cleanSymbol
                     );
 
                 if (!token) {
 
                     window.logToPanel(
-                        `[TOKEN NOT FOUND] ${cleanSymbol}`
+                        `[SKIP] ${cleanSymbol} failed profitability filter`
                     );
 
                     return null;
+
                 }
 
-                // ==================================================
-                // IMPORTANT FIX
-                // Backend returns "address"
-                // ==================================================
-
-                const tokenAddress =
+                const address =
                     token.address ||
-                    token.tokenAddress ||
-                    null;
+                    token.tokenAddress;
 
-                if (!tokenAddress) {
+                if (!address) {
 
                     window.logToPanel(
-                        `[TOKEN ADDRESS MISSING] ${cleanSymbol}`
+                        `[INVALID] Missing contract address for ${cleanSymbol}`
                     );
 
                     return null;
                 }
 
                 window.logToPanel(
-                    `[TOKEN RESOLVED] ${cleanSymbol} -> ${tokenAddress}`
+                    `[TARGET]
+${cleanSymbol}
+MOVE=${token.change24h}%
+ADDR=${address}`
                 );
 
                 return {
@@ -166,7 +213,7 @@
                         token.symbol,
 
                     tokenAddress:
-                        tokenAddress,
+                        address,
 
                     network:
                         "bep20",
@@ -183,20 +230,23 @@
                         Number(
                             token.lastPrice || 0
                         )
+
                 };
 
             } catch (err) {
 
                 window.logToPanel(
-                    `[EVALUATE ERROR] ${err.message}`
+                    `[ERROR] evaluateCoin: ${err.message}`
                 );
 
                 return null;
+
             }
+
         };
 
     // ==============================================================
-    // 📈 MARKET STATS
+    // MARKET STATS
     // ==============================================================
 
     window.getBinanceStats =
@@ -206,28 +256,21 @@
 
                 const cleanSymbol =
                     String(symbol)
-                    .replace("USDT", "")
-                    .toUpperCase()
-                    .trim();
+                        .replace("USDT", "")
+                        .toUpperCase()
+                        .trim();
 
-                const marketData =
-                    await categorizeCoins();
-
-                const allTokens = [
-
-                    ...(marketData.short_term || []),
-
-                    ...(marketData.mid_term || []),
-
-                    ...(marketData.long_term || [])
-                ];
+                const tokens =
+                    await getTradeCandidates();
 
                 const token =
-                    allTokens.find(
+                    tokens.find(
                         t =>
-                            String(t.symbol)
-                                .toUpperCase()
-                                .trim() ===
+                            String(
+                                t.symbol
+                            )
+                            .toUpperCase()
+                            .trim() ===
                             cleanSymbol
                     );
 
@@ -238,31 +281,37 @@
                 return {
 
                     symbol:
-                        cleanSymbol,
+                        token.symbol,
 
                     lastPrice:
                         Number(
-                            token.lastPrice || 1
+                            token.lastPrice || 0
                         ),
 
                     priceChangePercent:
                         Number(
                             token.change24h || 0
                         )
+
                 };
 
             } catch (err) {
 
                 window.logToPanel(
-                    `[getBinanceStats ERROR] ${err.message}`
+                    `[ERROR] getBinanceStats: ${err.message}`
                 );
 
                 return null;
+
             }
+
         };
 
     window.logToPanel(
-        "coins.txt initialized successfully (BEP20 mode)."
+        `coins.txt initialized.
+Min Move=${MIN_PROFIT_MOVE}%
+Max Move=${MAX_PROFIT_MOVE}%
+Top Pool=${TOP_POOL_SIZE}`
     );
 
 })();
