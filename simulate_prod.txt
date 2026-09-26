@@ -203,12 +203,13 @@ async function simulateCycle(
         return await swapRR(0);
     }
 
-    const allocationUSD =
-        tradingBalance /
-        Math.max(
-            1,
-            totalCycles - (cycle - 1)
-        );
+   // const allocationUSD =
+       // tradingBalance /
+      //  Math.max(
+        //    1,
+         //   totalCycles - (cycle - 1)
+       // );
+       const allocationUSD = document.getElementById("startBalance").value.toString().trim();
 
     // 🔒 STAGE PROTECTION GATE: Cycle 6 strictly forced to RR circulation swap
     if (cycle === 6) {
