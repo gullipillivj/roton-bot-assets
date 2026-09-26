@@ -9,92 +9,260 @@
     // ==============================================================
     // 📊 Market Analysis Loader
     // ==============================================================
+
     async function categorizeCoins() {
+
         try {
-            const baseApiUrl = window.API_BASE || window.location.origin;
-            const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
+
+            const baseApiUrl =
+                window.API_BASE ||
+                window.location.origin;
+
+            const res = await fetch(
+                `${baseApiUrl}/prodbot/market-analysis`
+            );
+
             const data = await res.json();
 
             return {
-                short_term: data.short_term || [],
-                mid_term: data.mid_term || [],
-                long_term: data.long_term || []
+                short_term:
+                    data.short_term || [],
+                mid_term:
+                    data.mid_term || [],
+                long_term:
+                    data.long_term || []
             };
+
         } catch (err) {
-            console.error("Market analysis connection failure:", err);
-            return { short_term: [], mid_term: [], long_term: [] };
+
+            console.error(
+                "Market analysis failure:",
+                err
+            );
+
+            return {
+                short_term: [],
+                mid_term: [],
+                long_term: []
+            };
         }
     }
 
+    window.categorizeCoins =
+        categorizeCoins;
+
     // ==============================================================
-    // 🪙 Supported Trading Pairs Mirror Loop
+    // 🪙 PAIRS
     // ==============================================================
-    window.getBinancePairs = async () => {
-        try {
-            const marketData = await categorizeCoins();
-            const allTokens = [
-                ...(marketData.short_term || []),
-                ...(marketData.mid_term || []),
-                ...(marketData.long_term || [])
-            ];
-            
-            if (allTokens.length > 0) {
-                return allTokens.map(t => t.marketPair || `${t.symbol}USDT`);
+
+    window.getBinancePairs =
+        async function () {
+
+            try {
+
+                const marketData =
+                    await categorizeCoins();
+
+                const allTokens = [
+
+                    ...(marketData.short_term || []),
+
+                    ...(marketData.mid_term || []),
+
+                    ...(marketData.long_term || [])
+                ];
+
+                if (
+                    allTokens &&
+                    allTokens.length > 0
+                ) {
+
+                    return allTokens.map(
+                        token =>
+                        `${token.symbol}USDT`
+                    );
+                }
+
+            } catch (err) {
+
+                console.error(err);
+
             }
-        } catch (e) {
-            console.error(e);
-        }
-        return ["CAKEUSDT"];
-    };
+
+            return ["CAKEUSDT"];
+        };
 
     // ==============================================================
-    // 🔍 Token Resolver (Bridges Address vectors safely to simulate_prod)
+    // 🔍 TOKEN LOOKUP
     // ==============================================================
-    window.evaluateCoin = async function (symbol) {
-        try {
-            const marketData = await categorizeCoins();
-            const allTokens = [
-                ...(marketData.short_term || []),
-                ...(marketData.mid_term || []),
-                ...(marketData.long_term || [])
-            ];
 
-            // Strip out base trading extensions to cleanly check ticker symbols
-            const cleanSymbol = String(symbol)
-                .replace("USDT", "")
-                .toUpperCase()
-                .trim();
+    window.evaluateCoin =
+        async function(symbol) {
 
-            const token = allTokens.find(
-                x => String(x.symbol).toUpperCase().trim() === cleanSymbol
-            );
+            try {
 
-            if (!token) {
-                window.logToPanel(`[WARN] Token not discovered inside active pools: ${cleanSymbol}`);
+                const marketData =
+                    await categorizeCoins();
+
+                const allTokens = [
+
+                    ...(marketData.short_term || []),
+
+                    ...(marketData.mid_term || []),
+
+                    ...(marketData.long_term || [])
+                ];
+
+                const cleanSymbol =
+                    String(symbol)
+                    .replace("USDT", "")
+                    .toUpperCase()
+                    .trim();
+
+                const token =
+                    allTokens.find(
+                        t =>
+                            String(t.symbol)
+                                .toUpperCase()
+                                .trim() ===
+                            cleanSymbol
+                    );
+
+                if (!token) {
+
+                    window.logToPanel(
+                        `[TOKEN NOT FOUND] ${cleanSymbol}`
+                    );
+
+                    return null;
+                }
+
+                // ==================================================
+                // IMPORTANT FIX
+                // Backend returns "address"
+                // ==================================================
+
+                const tokenAddress =
+                    token.address ||
+                    token.tokenAddress ||
+                    null;
+
+                if (!tokenAddress) {
+
+                    window.logToPanel(
+                        `[TOKEN ADDRESS MISSING] ${cleanSymbol}`
+                    );
+
+                    return null;
+                }
+
+                window.logToPanel(
+                    `[TOKEN RESOLVED] ${cleanSymbol} -> ${tokenAddress}`
+                );
+
+                return {
+
+                    symbol:
+                        token.symbol,
+
+                    tokenAddress:
+                        tokenAddress,
+
+                    network:
+                        "bep20",
+
+                    router:
+                        "pancakeswap",
+
+                    change24h:
+                        Number(
+                            token.change24h || 0
+                        ),
+
+                    lastPrice:
+                        Number(
+                            token.lastPrice || 0
+                        )
+                };
+
+            } catch (err) {
+
+                window.logToPanel(
+                    `[EVALUATE ERROR] ${err.message}`
+                );
+
                 return null;
             }
+        };
 
-            // 🚀 SUCCESS: Extract the verified contract address string provided directly by the backend response
-            const verifiedContractAddress = token.tokenAddress;
+    // ==============================================================
+    // 📈 MARKET STATS
+    // ==============================================================
 
-            if (!verifiedContractAddress) {
-                window.logToPanel(`[WARN] Payload vector is missing tokenAddress string properties for token: ${cleanSymbol}`);
+    window.getBinanceStats =
+        async function(symbol) {
+
+            try {
+
+                const cleanSymbol =
+                    String(symbol)
+                    .replace("USDT", "")
+                    .toUpperCase()
+                    .trim();
+
+                const marketData =
+                    await categorizeCoins();
+
+                const allTokens = [
+
+                    ...(marketData.short_term || []),
+
+                    ...(marketData.mid_term || []),
+
+                    ...(marketData.long_term || [])
+                ];
+
+                const token =
+                    allTokens.find(
+                        t =>
+                            String(t.symbol)
+                                .toUpperCase()
+                                .trim() ===
+                            cleanSymbol
+                    );
+
+                if (!token) {
+                    return null;
+                }
+
+                return {
+
+                    symbol:
+                        cleanSymbol,
+
+                    lastPrice:
+                        Number(
+                            token.lastPrice || 1
+                        ),
+
+                    priceChangePercent:
+                        Number(
+                            token.change24h || 0
+                        )
+                };
+
+            } catch (err) {
+
+                window.logToPanel(
+                    `[getBinanceStats ERROR] ${err.message}`
+                );
+
                 return null;
             }
+        };
 
-            return {
-                symbol: token.symbol,
-                tokenAddress: verifiedContractAddress, // Passed securely down to simulateCycle()
-                network: "bep20",
-                router: "pancakeswap",
-                change24h: token.change24h
-            };
+    window.logToPanel(
+        "coins.txt initialized successfully (BEP20 mode)."
+    );
 
-        } catch (err) {
-            window.logToPanel(`[ERROR] evaluateCoin resolution crashed: ${err.message}`);
-            return null;
-        }
-    };
-
-    window.categorizeCoins = categorizeCoins;
 })();
