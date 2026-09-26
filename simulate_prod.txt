@@ -171,6 +171,7 @@ async function simulateCycle(
     profitTargetPct,
     stopLossPct
 ) {
+
     logToPanel(
         `[INFO] Cycle ${cycle}/${totalCycles}`
     );
@@ -183,9 +184,11 @@ async function simulateCycle(
         await syncBalanceFromFund();
 
     if (syncedBalance === null) {
+
         logToPanel(
             "[WARN] Balance sync failed."
         );
+
         return await swapRR(0);
     }
 
@@ -197,52 +200,86 @@ async function simulateCycle(
         ) || 0;
 
     if (tradingBalance <= 0) {
+
         logToPanel(
             "[WARN] No trading balance."
         );
+
         return await swapRR(0);
     }
 
-   // const allocationUSD =
-       // tradingBalance /
-      //  Math.max(
-        //    1,
-         //   totalCycles - (cycle - 1)
-       // );
-       const allocationUSD = document.getElementById("startBalance").value.toString().trim();
+    // ==========================================
+    // PER-CYCLE ALLOCATION
+    // ==========================================
 
-    // 🔒 STAGE PROTECTION GATE: Cycle 6 strictly forced to RR circulation swap
-    if (cycle === 6) {
-        logToPanel(
-            "[RR SUPPORT] Dedicated RR circulation cycle."
+    const totalBalance =
+        BigInt(
+            document
+                .getElementById(
+                    "startBalance"
+                )
+                .value
+                .toString()
+                .trim()
         );
-        return await swapRR(allocationUSD);
+
+    const remainingCycles =
+        Math.max(
+            1,
+            totalCycles - cycle + 1
+        );
+
+    const allocationUSD =
+        (
+            totalBalance /
+            BigInt(remainingCycles)
+        ).toString();
+
+    logToPanel(
+        `[ALLOCATION]
+TOTAL=${totalBalance}
+ALLOCATED=${allocationUSD}`
+    );
+
+    // ==========================================
+    // RR SUPPORT CYCLE
+    // ==========================================
+
+    if (cycle === 6) {
+
+        logToPanel(
+            "[RR SUPPORT] Dedicated RR cycle."
+        );
+
+        return await swapRR(
+            allocationUSD
+        );
     }
 
-    // =====================================
-    // LOAD CURRENT TOKEN FROM DB
-    // =====================================
+    // ==========================================
+    // LOAD CURRENT TOKEN
+    // ==========================================
+
     let currentToken =
         "0x55d398326f99059fF775485246999027B3197955";
 
     try {
-        const tokenResp = await fetch(
-            "/prodbot/tokens/get",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-                body: JSON.stringify({
-                    userid:
-                        window.USER_ID ||
-                        localStorage.getItem(
-                            "userid"
-                        )
-                })
-            }
-        );
+
+        const tokenResp =
+            await fetch(
+                "/prodbot/tokens/get",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+                    body: JSON.stringify({
+                        userid:
+                            window.USER_ID
+                    })
+                }
+            );
 
         const tokenData =
             await tokenResp.json();
@@ -251,53 +288,44 @@ async function simulateCycle(
             tokenData &&
             tokenData.currenttoken
         ) {
+
             currentToken =
                 tokenData.currenttoken;
 
             logToPanel(
-                `[TOKEN LOAD] Current Token = ${currentToken}`
+                `[TOKEN LOAD]
+${currentToken}`
             );
         }
 
     } catch (err) {
+
         logToPanel(
-            `[TOKEN LOAD ERROR] ${err.message}`
+            `[TOKEN LOAD ERROR]
+${err.message}`
         );
+
     }
 
-    // ==================================================================
-    // 🔀 DYNAMIC MARKET POOL EVALUATION & RR FALLBACK INJECTION
-    // ==================================================================
-    
-    // Quick look to verify your live API market arrays contain running candidates
-    const marketData = await window.categorizeCoins();
-    const activeGreenPool = [
-        ...(marketData.short_term || []),
-        ...(marketData.mid_term || []),
-        ...(marketData.long_term || [])
-    ];
+    // ==========================================
+    // PICK COIN
+    // ==========================================
 
-    // 🚨 EMERGENCY FALLBACK LAYER 1: Market scan completely empty -> Route to RR
-    if (activeGreenPool.length === 0) {
-        logToPanel(
-            "[MARKET FLATLINE] 0 rising assets found across exchange. Routing capital to RR fallback pipeline."
+    const selectedCoin =
+        await pickRandomCoin();
+
+    const coinInfo =
+        await window.evaluateCoin(
+            selectedCoin
         );
-        return await swapRR(allocationUSD);
-    }
 
-    // Dynamic retrieval of one of the top momentum tokens
-    const selectedCoin = await pickRandomCoin();
-
-    // 🛠️ FIXED: Decoupled lookup pattern from rigid USDT suffixes to allow dynamic cross-asset routing
-    const coinInfo = await window.evaluateCoin(selectedCoin);
-
-    // 🚨 EMERGENCY FALLBACK LAYER 2: Token found but metadata/address lookup failed -> Route to RR
     if (
         !coinInfo ||
         !coinInfo.tokenAddress
     ) {
+
         logToPanel(
-            `[WARN] Resolution failed for target ticket ${selectedCoin}. Routing capital to RR fallback pipeline to preserve thread.`
+            "[WARN] Invalid target token."
         );
 
         return await swapRR(
@@ -305,18 +333,48 @@ async function simulateCycle(
         );
     }
 
+    // ==========================================
+    // COST-AWARE FILTER
+    // ==========================================
+
+    if (
+        Number(
+            coinInfo.change24h || 0
+        ) < 3
+    ) {
+
+        logToPanel(
+            `[SKIP]
+${coinInfo.symbol}
+MOVE=${coinInfo.change24h}%`
+        );
+
+        return "CONTINUE";
+    }
+
     logToPanel(
-        `[TARGET DISCOVERED] Token: ${coinInfo.symbol} | Contract: ${coinInfo.tokenAddress}`
-    );
-    logToPanel(
-        `📋 ROUTE MAP: [TokenIn: ${currentToken}] ➡️ [TokenOut: ${coinInfo.tokenAddress}]`
+        `[TARGET]
+${coinInfo.symbol}
+MOVE=${coinInfo.change24h}%
+ADDRESS=${coinInfo.tokenAddress}`
     );
 
     const beforeBalance =
-        window.SolidarityFundBalance ||
-        tradingBalance;
+        document.getElementById(
+            "investBalance"
+        ).value
+        .toString()
+        .trim();
 
     try {
+
+        logToPanel(
+            `[SWAP REQUEST]
+FROM=${currentToken}
+TO=${coinInfo.tokenAddress}
+AMOUNT=${allocationUSD}`
+        );
+
         const swapResp =
             await window.runSwapUniswap(
                 window.USER_ADDR,
@@ -326,28 +384,12 @@ async function simulateCycle(
             );
 
         if (
-            swapResp &&
-            swapResp.tx_hash
+            !swapResp ||
+            !swapResp.tx_hash
         ) {
-            logToPanel(
-                `🎉 Swap Success: ${swapResp.tx_hash}`
-            );
-
-            // =====================================
-            // UPDATE TOKEN TABLE
-            // =====================================
-            await updateTokenRecord(
-                currentToken,
-                coinInfo.tokenAddress
-            );
 
             logToPanel(
-                `[TOKEN UPDATED]\nLAST=${currentToken}\nCURRENT=${coinInfo.tokenAddress}`
-            );
-
-        } else {
-            logToPanel(
-                "[WARN] Swap failed or rejected by network provider. Triggering RR safety route."
+                "[SWAP FAILED]"
             );
 
             return await swapRR(
@@ -355,24 +397,133 @@ async function simulateCycle(
             );
         }
 
+        logToPanel(
+            `[TX SENT]
+${swapResp.tx_hash}`
+        );
+
+        // ==========================================
+        // WAIT FOR ACTUAL BALANCE CHANGE
+        // ==========================================
+
+        let balanceChanged = false;
+
+        for (
+            let attempt = 1;
+            attempt <= 30;
+            attempt++
+        ) {
+
+            await blockDelay(
+                10000
+            );
+
+            await syncBalanceFromFund();
+
+            const currentBalance =
+                document
+                    .getElementById(
+                        "investBalance"
+                    )
+                    .value
+                    .toString()
+                    .trim();
+
+            logToPanel(
+                `[VERIFY ${attempt}/30]
+START=${beforeBalance}
+NOW=${currentBalance}`
+            );
+
+            if (
+                currentBalance !==
+                beforeBalance
+            ) {
+
+                balanceChanged =
+                    true;
+
+                logToPanel(
+                    `[BALANCE VERIFIED]
+${beforeBalance}
+➡
+${currentBalance}`
+                );
+
+                break;
+            }
+        }
+
+        // ==========================================
+        // NO MOVEMENT -> RR FALLBACK
+        // ==========================================
+
+        if (!balanceChanged) {
+
+            logToPanel(
+                "[NO BALANCE MOVEMENT]"
+            );
+
+            logToPanel(
+                "[TOKEN TABLE UNCHANGED]"
+            );
+
+            logToPanel(
+                "[RR FALLBACK]"
+            );
+
+            return await swapRR(
+                allocationUSD
+            );
+        }
+
+        // ==========================================
+        // UPDATE TOKENS TABLE
+        // ==========================================
+
+        await updateTokenRecord(
+            currentToken,
+            coinInfo.tokenAddress
+        );
+
+        logToPanel(
+            `[TOKEN UPDATED]
+LAST=${currentToken}
+CURRENT=${coinInfo.tokenAddress}`
+        );
+
         await syncBalanceFromFund();
 
         const afterBalance =
-            window.SolidarityFundBalance ||
-            beforeBalance;
+            parseFloat(
+                document
+                    .getElementById(
+                        "investBalance"
+                    )
+                    .value
+            ) || 0;
+
+        const beforeFloat =
+            parseFloat(
+                beforeBalance
+            ) || 0;
 
         const profitDelta =
             afterBalance -
-            beforeBalance;
+            beforeFloat;
 
         window.cumulativePnL =
-            (window.cumulativePnL || 0) +
+            (
+                window.cumulativePnL ||
+                0
+            ) +
             profitDelta;
 
         if (
             typeof updateChart ===
             "function"
         ) {
+
             updateChart(
                 afterBalance,
                 window.cumulativePnL
@@ -380,8 +531,10 @@ async function simulateCycle(
         }
 
     } catch (err) {
+
         logToPanel(
-            `[ERROR] Execution exception hit: ${err.message}. Safely bouncing to RR swap path.`
+            `[ERROR]
+${err.message}`
         );
 
         return await swapRR(
@@ -392,13 +545,17 @@ async function simulateCycle(
     const totalChangePct =
         (
             window.cumulativePnL /
-            tradingBalance
+            Math.max(
+                tradingBalance,
+                1
+            )
         ) * 100;
 
     if (
         totalChangePct >=
         profitTargetPct
     ) {
+
         logToPanel(
             "[TARGET REACHED]"
         );
@@ -410,6 +567,7 @@ async function simulateCycle(
         totalChangePct <=
         -stopLossPct
     ) {
+
         logToPanel(
             "[STOP LOSS HIT]"
         );
@@ -419,6 +577,7 @@ async function simulateCycle(
 
     return "CONTINUE";
 }
+
 
 
 
