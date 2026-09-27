@@ -23,16 +23,21 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         const base = window.API_BASE || "";
         const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
         
+        // Locked constant for Pancake Router V2 address
+        const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+        const amountOutMin = "0"; // 0 for strict path matching/slippage
+        
         logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
         
         const res = await fetch(`${base}/prodbot/swap/uniswap`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ 
-                user_address: userAddr, 
-                amount: cleanAmount, 
-                from_token: fromToken, 
-                to_token: toToken 
+                router: pancakeRouterAddress,
+                tokenIn: fromToken, 
+                tokenOut: toToken,
+                amountIn: cleanAmount, 
+                amountOutMin: amountOutMin
             })
         });
         
@@ -43,8 +48,8 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
                 method: 'eth_sendTransaction',
                 params: [{ 
                     from: userAddr, 
-                    to: data.to_contract, 
-                    data: data.compiled_data, 
+                    to: data.to_contract,    // Resolves cleanly to V12_ADDR
+                    data: data.compiled_data, // Resolves cleanly to the exact 5-param calldata hex
                     value: '0x0' 
                 }]
             });
@@ -58,5 +63,6 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
     }
 }
 window.runSwapUniswap = runSwapUniswap;
+
 
 
