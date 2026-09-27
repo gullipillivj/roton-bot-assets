@@ -23,11 +23,11 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         const base = window.API_BASE || "";
         const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
         
-        // Locked constant for Pancake Router V2 address
+        // Locked immutable constant for Pancake Router V2 address
         const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-        const amountOutMin = "0"; // 0 for strict path matching/slippage
-        
-        logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
+        const amountOutMin = "0"; // Force 0 to clear router threshold checks
+
+        logToPanel(`[PIPELINE] Passing ${cleanAmount} units directly down the data channel...`);
         
         const res = await fetch(`${base}/prodbot/swap/uniswap`, {
             method: "POST",
@@ -44,27 +44,24 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         const data = await res.json();
         
         if (data && data.status === "ok") {
-            logToPanel(`[INFO] Sending transaction payload directly to browser extension...`);
-            
-            // ✅ LIVE BROADCAST ACTIVE: Directly triggers the wallet popup inside the built-in browser
+            // Direct pass-through execution straight into the wallet provider framework
             const txHash = await window.ethereum.request({
                 method: 'eth_sendTransaction',
                 params: [{ 
                     from: userAddr, 
-                    to: data.to_contract,    // Deployed contract address (V12_ADDR)
-                    data: data.compiled_data, // Correctly encoded 5-parameter calldata hex
+                    to: data.to_contract,    
+                    data: data.compiled_data, 
                     value: '0x0' 
                 }]
             });
             
-            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
+            logToPanel(`✅ Transaction broadcasted: ${txHash}`);
             return { status: "ok", tx_hash: txHash };
         }
         return data;
     } catch (err) { 
-        logToPanel(`❌ Uniswap Pipeline Error: ${err.message}`);
+        logToPanel(`❌ Pipeline Error: ${err.message}`);
         return { status: "error", message: err.message }; 
     }
 }
 window.runSwapUniswap = runSwapUniswap;
-
