@@ -13,68 +13,6 @@ function logToPanel(msg) {
   }
 }
 
-// ==================================================================
-// 🔄 UNIVERSAL TRANSACTION PIPELINE DISPATCH ENGINE
-// ==================================================================
-async function runSwap(userAddr, amountWei, fromTokenAddress, toTokenAddressOrObject) {
-    try {
-        const baseApiUrl = window.API_BASE || "";
-        const USDT_ADDRESS = "0x55d398326f99059fF775485246999027B3197955";
-
-        let sourceToken = fromTokenAddress || USDT_ADDRESS;
-        
-        let targetToken = toTokenAddressOrObject && typeof toTokenAddressOrObject === "object"
-            ? toTokenAddressOrObject.tokenAddress 
-            : (toTokenAddressOrObject || "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-            
-        let targetNetwork = toTokenAddressOrObject && typeof toTokenAddressOrObject === "object"
-            ? toTokenAddressOrObject.network 
-            : "bep20";
-
-        // Enforce absolute raw value forwarding without modifying decimal bounds
-        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
-
-        logToPanel(`[ROUTE] Compiling standard payload: ${sourceToken} ➡️ ${targetToken} (Units: ${cleanAmount})`);
-
-        const res = await fetch(`${baseApiUrl}/prodbot/swap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                user_address: userAddr,
-                from_token: sourceToken,       
-                to_token: targetToken,         
-                amount: cleanAmount,           
-                network: targetNetwork
-            })
-        });
-
-        const data = await res.json();
-        
-        if (data && data.status === "ok") {
-            logToPanel(`[INFO] Requesting secure signature from your browser wallet...`);
-            
-            const txHash = await window.ethereum.request({
-                method: 'eth_sendTransaction',
-                params: [{
-                    from: userAddr,
-                    to: data.to_contract,         
-                    data: data.compiled_data,     
-                    value: '0x0'
-                }],
-            });
-
-            logToPanel(`✅ Live Transaction Sent! Hash: ${txHash}`);
-            return { status: "ok", tx_hash: txHash, txHash: txHash };
-        }
-
-        return data;
-
-    } catch(err) {
-        logToPanel(`❌ Swap Error: ${err.message}`);
-        return { status: "error", message: err.message };
-    }
-}
-window.runSwap = runSwap;
 
 
 // ==================================================================
