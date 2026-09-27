@@ -27,17 +27,6 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
         const amountOutMin = "0"; // 0 for strict path matching/slippage
         
-        // 📊 DIAGNOSTIC TRACE 1: Log raw variables before dispatching to backend
-        logToPanel("==================================================");
-        logToPanel("[FRONTEND DIAGNOSTIC] Step 1: Local Data Parameters");
-        logToPanel(`• userAddr (Implicit Signer):   ${userAddr}`);
-        logToPanel(`• router (Pancake V2 Constant): ${pancakeRouterAddress}`);
-        logToPanel(`• tokenIn (fromToken):          ${fromToken}`);
-        logToPanel(`• tokenOut (toToken):           ${toToken}`);
-        logToPanel(`• amountIn (Raw 18-digit Input):${cleanAmount}`);
-        logToPanel(`• amountOutMin (Slippage Gate): ${amountOutMin}`);
-        logToPanel("--------------------------------------------------");
-        
         logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
         
         const res = await fetch(`${base}/prodbot/swap/uniswap`, {
@@ -54,46 +43,22 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
         
         const data = await res.json();
         
-        // 📊 DIAGNOSTIC TRACE 2: Log values received back from backend API
-        logToPanel("--------------------------------------------------");
-        logToPanel("[FRONTEND DIAGNOSTIC] Step 2: Backend JSON Payload");
-        logToPanel(`• Response API Status:    ${data.status}`);
-        logToPanel(`• Target Engine Contract: ${data.to_contract}`);
-        logToPanel(`• Compiled Calldata Hex:  ${data.compiled_data}`);
-        
         if (data && data.status === "ok") {
-            // Verify the generated 4-byte selector method fingerprint matches the contract laws
-            if (data.compiled_data && data.compiled_data.startsWith("0x")) {
-                const methodId = data.compiled_data.substring(0, 10);
-                logToPanel(`• Extracted EVM MethodID: ${methodId}`);
-                if (methodId === "0xa4fc6110") {
-                    logToPanel("✅ Success: MethodID matches executeERC20SwapUniswap exactly.");
-                } else {
-                    logToPanel("❌ Mismatch: Fingerprint deviates from target contract deployment specification!");
-                }
-            }
-            
             logToPanel(`[INFO] Sending transaction payload directly to browser extension...`);
             
-            // 🌟 SAFE BALT GATEWAY: Intercept broadcast loop completely to shield balance from gas consumption
-            logToPanel("🛑 BROADCAST INTERCEPTED: Live signing suppressed to analyze raw values.");
-            logToPanel("==================================================");
-            
-            /* 
+            // ✅ LIVE BROADCAST ACTIVE: Directly triggers the wallet popup inside the built-in browser
             const txHash = await window.ethereum.request({
                 method: 'eth_sendTransaction',
                 params: [{ 
                     from: userAddr, 
-                    to: data.to_contract,    
-                    data: data.compiled_data, 
+                    to: data.to_contract,    // Deployed contract address (V12_ADDR)
+                    data: data.compiled_data, // Correctly encoded 5-parameter calldata hex
                     value: '0x0' 
                 }]
             });
+            
             logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
             return { status: "ok", tx_hash: txHash };
-            */
-            
-            return { status: "diagnostic_halt", tx_hash: "0x_DIAGNOSTIC_DATA_LOCK_ACTIVE", compiled_bytes: data.compiled_data };
         }
         return data;
     } catch (err) { 
@@ -102,5 +67,4 @@ async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
     }
 }
 window.runSwapUniswap = runSwapUniswap;
-
 
