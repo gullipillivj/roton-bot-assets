@@ -169,10 +169,6 @@ async function swapRR(amount) {
 // SINGLE TRADING CYCLE (FULLY STRIPPED OF RR FALLBACK CALLS)
 // =====================================================================
 async function simulateCycle(
-// =====================================================================
-// SINGLE TRADING CYCLE (FULLY FIXED & RE-ALIGNED)
-// =====================================================================
-async function simulateCycle(
     cycle,
     totalCycles,
     profitTargetPct,
@@ -194,7 +190,7 @@ async function simulateCycle(
         logToPanel(
             "[WARN] Balance sync failed. Skipping loop cycle."
         );
-        return "CONTINUE";
+        return "CONTINUE"; // 🌟 RR REMOVED
     }
 
     let tradingBalance =
@@ -208,7 +204,7 @@ async function simulateCycle(
         logToPanel(
             "[WARN] No trading balance available."
         );
-        return "CONTINUE";
+        return "CONTINUE"; // 🌟 RR REMOVED
     }
 
     // ==========================================
@@ -261,10 +257,10 @@ ALLOCATED=${allocationUSD}`
                     headers: {
                         "Content-Type":
                             "application/json"
-                    },
+                },
                     body: JSON.stringify({
                         userid:
-                            window.USER_ID || "gvjvb"
+                            window.USER_ID
                     })
                 }
             );
@@ -311,7 +307,7 @@ ${err.message}`
         logToPanel(
             "[WARN] Invalid or unprofiled target token. Proceeding..."
         );
-        return "CONTINUE";
+        return "CONTINUE"; // 🌟 RR REMOVED
     }
 
     // ==========================================
@@ -321,7 +317,7 @@ ${err.message}`
     if (
         Number(
             coinInfo.change24h || 0
-        ) < 0.0
+        ) < 3
     ) {
         logToPanel(
             `[SKIP]
@@ -346,29 +342,21 @@ ADDRESS=${coinInfo.tokenAddress}`
         .trim();
 
     try {
-        // 🌟 FAIL-SAFE ACCOUNT ALIGNMENT LAYER
-        let activeUserWallet = window.USER_ADDR || localStorage.getItem("userAddress");
-        
-        // Direct absolute backup mapping to bypass runtime memory drops
-        if (!activeUserWallet || activeUserWallet === "") {
-            activeUserWallet = "0x4c3fd75ddb6289f819a346856ac25a04c31a9738";
-        }
 
         logToPanel(
             `[SWAP REQUEST]
 FROM=${currentToken}
 TO=${coinInfo.tokenAddress}
-AMOUNT=${allocationUSD}
-SIGNER=${activeUserWallet}`
+AMOUNT=${allocationUSD}`
         );
 
-        // Dispatches directly down your functional, unmutated pass-through frontend/backend pipeline
-        const swapResp = await window.runSwapUniswap(
-            activeUserWallet,      // Corrected safe variable string
-            allocationUSD,         // Preserved exact 18-digit sequence text
-            currentToken,          // From token (USDT base layer)
-            coinInfo.tokenAddress  // To token (Cost-aware candidate address)
-        );
+        const swapResp =
+            await window.runSwapUniswap(
+                window.USER_ADDR,
+                allocationUSD,
+                currentToken,
+                coinInfo.tokenAddress
+            );
 
         if (
             !swapResp ||
@@ -377,7 +365,7 @@ SIGNER=${activeUserWallet}`
             logToPanel(
                 "[SWAP PIPELINE SKIPPED OR REJECTED]"
             );
-            return "CONTINUE";
+            return "CONTINUE"; // 🌟 RR REMOVED
         }
 
         logToPanel(
@@ -443,7 +431,7 @@ ${currentBalance}`
             logToPanel(
                 "[NO BALANCE MOVEMENT DETECTED — PASSING TO NEXT LOOP]"
             );
-            return "CONTINUE";
+            return "CONTINUE"; // 🌟 RR REMOVED
         }
 
         // ==========================================
@@ -503,7 +491,7 @@ CURRENT=${coinInfo.tokenAddress}`
             `[RUNTIME RUN EXCEPTION]
 ${err.message}`
         );
-        return "CONTINUE";
+        return "CONTINUE"; // 🌟 RR REMOVED
     }
 
     const totalChangePct =
@@ -537,6 +525,7 @@ ${err.message}`
 
     return "CONTINUE";
 }
+
 
 
 
