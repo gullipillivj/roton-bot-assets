@@ -6,8 +6,8 @@
 
     window.logToPanel("coins.txt loaded safely.");
 
-    const MIN_PROFIT_MOVE = 1.0;
-    const MAX_PROFIT_MOVE = 20.0;
+    const MIN_PROFIT_MOVE = -100.0;
+    const MAX_PROFIT_MOVE = 100.0;
     const TOP_POOL_SIZE = 5;
 
     // ==============================================================
