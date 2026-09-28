@@ -317,7 +317,7 @@ ${err.message}`
     if (
         Number(
             coinInfo.change24h || 0
-        ) < 3
+        ) < -100
     ) {
         logToPanel(
             `[SKIP]
