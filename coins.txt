@@ -74,37 +74,45 @@
         });
     };
 
+    // FIXED: Removed .find() to bypass script injection engine constraints
     window.evaluateCoin = async function (symbol) {
         var candidates = await window.getTradeCandidates();
         var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
-        var token = candidates.find(function (x) {
-            return String(x.symbol).toUpperCase().trim() === cleanSymbol;
-        });
-        if (!token) return null;
-
-        return {
-            symbol: token.symbol,
-            tokenAddress: token.address,
-            network: "bep20",
-            router: "pancakeswap",
-            change24h: Number(token.change24h || 0),
-            lastPrice: Number(token.lastPrice || 0)
-        };
+        var i;
+        
+        for (i = 0; i < candidates.length; i++) {
+            if (String(candidates[i].symbol).toUpperCase().trim() === cleanSymbol) {
+                var token = candidates[i];
+                return {
+                    symbol: token.symbol,
+                    tokenAddress: token.address,
+                    network: "bep20",
+                    router: "pancakeswap",
+                    change24h: Number(token.change24h || 0),
+                    lastPrice: Number(token.lastPrice || 0)
+                };
+            }
+        }
+        return null;
     };
 
+    // FIXED: Removed .find() to maximize execution security stability
     window.getBinanceStats = async function (symbol) {
         var tokens = await window.getTradeCandidates();
         var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
-        var token = tokens.find(function (t) {
-            return String(t.symbol).toUpperCase().trim() === cleanSymbol;
-        });
-        if (!token) return null;
-        
-        return { 
-            symbol: token.symbol, 
-            lastPrice: Number(token.lastPrice || 0), 
-            priceChangePercent: Number(token.change24h || 0) 
-        };
+        var i;
+
+        for (i = 0; i < tokens.length; i++) {
+            if (String(tokens[i].symbol).toUpperCase().trim() === cleanSymbol) {
+                var token = tokens[i];
+                return { 
+                    symbol: token.symbol, 
+                    lastPrice: Number(token.lastPrice || 0), 
+                    priceChangePercent: Number(token.change24h || 0) 
+                };
+            }
+        }
+        return null;
     };
 
 })();
