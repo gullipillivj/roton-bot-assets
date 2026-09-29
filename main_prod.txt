@@ -361,6 +361,7 @@ async function syncBalanceFromFund() {
         }
 
         return window.SolidarityFundBalance;
+      }
     } catch (err) {
         logToPanel("❌ Balance Sync Error: " + err.message);
         return null;
