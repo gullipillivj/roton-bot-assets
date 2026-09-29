@@ -40,43 +40,36 @@
     // BUILD PROFITABLE TOKEN POOL
     // ==============================================================
     async function getTradeCandidates() {
-        try {
-            const marketData = await categorizeCoins();
-            
-            let allTokens = [
-                ...(marketData.short_term || []),
-                ...(marketData.mid_term || []),
-                ...(marketData.long_term || [])
-            ];
+    try {
+        const marketData = await categorizeCoins();
+        
+        // 🌟 FIXED: categorizeCoins() now returns the flat list directly in short_term
+        let allTokens = marketData.short_term || [];
 
-            if (!allTokens || allTokens.length === 0) {
-                window.logToPanel("⚠️ [DEBUG POOL ALERT] Array compiled completely empty. Using CAKE fallback.");
-                const emergencyFallback = [
-                    { symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }
-                ];
-                return emergencyFallback;
-            }
+        // 🔍 IN-APP BROWSER PANEL LOG CHECK: 
+        window.logToPanel("[DEBUG POOL] Processing candidate pool size: " + allTokens.length);
 
-            allTokens = allTokens.filter(token => {
-                const move = Number(token.change24h || 0);
-                return (move >= MIN_PROFIT_MOVE && move <= MAX_PROFIT_MOVE && (token.address || token.tokenAddress));
-            });
-
-            allTokens.sort((a, b) => Number(b.change24h || 0) - Number(a.change24h || 0));
-            const finalPool = allTokens.slice(0, TOP_POOL_SIZE);
-            
-            if (finalPool.length === 0) {
-                return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
-            }
-
-            window.logToPanel(`[POOL] ${finalPool.length} active candidates verified inside compilation window.`);
-            return finalPool;
-        } catch (err) {
-            window.logToPanel("❌ Exception inside candidates loop: " + err.message);
+        if (!allTokens || allTokens.length === 0) {
+            window.logToPanel("⚠️ [DEBUG POOL ALERT] Data stream is empty. Reverting to local CAKE backup.");
             return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
         }
+
+        allTokens = allTokens.filter(token => {
+            const move = Number(token.change24h || 0);
+            return (move >= MIN_PROFIT_MOVE && move <= MAX_PROFIT_MOVE && (token.address || token.tokenAddress));
+        });
+
+        allTokens.sort((a, b) => Number(b.change24h || 0) - Number(a.change24h || 0));
+        const finalPool = allTokens.slice(0, TOP_POOL_SIZE);
+        
+        window.logToPanel(`[POOL] Successfully compiled ${finalPool.length} active wallet candidates.`);
+        return finalPool;
+    } catch (err) {
+        window.logToPanel("❌ Candidates block crashed: " + err.message);
+        return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
     }
-    window.getTradeCandidates = getTradeCandidates;
+}
+
 
     // ==============================================================
     // PAIRS MAPPING
