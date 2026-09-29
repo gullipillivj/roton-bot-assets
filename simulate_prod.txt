@@ -2,7 +2,6 @@ logToPanel("simulate_prod.txt loaded (BEP20 Mode)");
 
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
-
     if (panel) {
         panel.innerText += "\n" + msg;
         panel.scrollTop = panel.scrollHeight;
@@ -10,175 +9,162 @@ function logToPanel(msg) {
         console.log(msg);
     }
 }
-
 window.logToPanel = logToPanel;
 
-const blockDelay = ms =>
-    new Promise(resolve => setTimeout(resolve, ms));
+const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// ==========================================
-// TOKEN DB SYNC
-// ==========================================
-async function updateTokenRecord(
-    lastToken,
-    currentToken
-) {
+async function updateTokenRecord(lastToken, currentToken) {
     try {
-        const userid =
-            window.USER_ID ||
-            localStorage.getItem("userid");
-
+        const userid = window.USER_ID || localStorage.getItem("userid");
         if (!userid) {
-            logToPanel(
-                "[TOKEN SYNC] Missing userid"
-            );
+            logToPanel("[TOKEN SYNC] Missing userid");
             return;
         }
-
-        const resp = await fetch(
-            "/prodbot/tokens/update",
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-                body: JSON.stringify({
-                    userid: userid,
-                    lasttoken: lastToken,
-                    currenttoken: currentToken
-                })
-            }
-        );
-
+        const resp = await fetch("/prodbot/tokens/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: userid, lasttoken: lastToken, currenttoken: currentToken })
+        });
         const data = await resp.json();
-
-        logToPanel(
-            `[TOKEN SYNC] ${data.message}`
-        );
+        logToPanel(`[TOKEN SYNC] ${data.message}`);
     } catch (err) {
-        logToPanel(
-            `[TOKEN SYNC ERROR] ${err.message}`
-        );
-   
+        logToPanel(`[TOKEN SYNC ERROR] ${err.message}`);
+    }
 }
-}
-
 
 async function pickRandomCoin() {
-
     try {
-
         if (typeof window.getBinancePairs === "function") {
-
-            const pairs =
-                await window.getBinancePairs();
-
+            const pairs = await window.getBinancePairs();
             if (pairs && pairs.length > 0) {
-
-                return pairs[
-                    Math.floor(
-                        Math.random() * pairs.length
-                    )
-                ].replace("USDT", "");
+                return pairs[Math.floor(Math.random() * pairs.length)].replace("USDT", "");
             }
         }
-
     } catch (err) {
         console.log(err);
     }
-
     return "CAKE";
 }
 
-// =====================================================
-// STATUS FUNCTIONS
-// =====================================================
-
 function setStatus(msg) {
-
-    const statusLabel =
-        document.querySelector(".status-label");
-
+    const statusLabel = document.querySelector(".status-label");
     if (statusLabel) {
         statusLabel.textContent = msg;
     } else {
         logToPanel(`[STATUS] ${msg}`);
     }
 }
-
 window.setStatus = setStatus;
 
 function stopBot() {
-
     window.isBotRunning = false;
-
     setStatus("STOPPED");
-
-    logToPanel(
-        "[BOT STOPPED] Trading halted by user."
-    );
+    logToPanel("[BOT STOPPED] Trading halted by user.");
 }
-
 window.stopBot = stopBot;
 
 // =====================================================
-// FALLBACK SWAP
+// SINGLE TRADING CYCLE (FULLY STRIPPED OF STOP LOSS & TARGET EXTRACTIONS)
 // =====================================================
+async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
+    logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
+    setStatus(`RUNNING ${cycle}/${totalCycles}`);
 
-async function swapRR(amount) {
-
-    try {
-
-        const resp =
-            await window.runSwapUniswap(
-
-                window.USER_ADDR,
-
-                amount,
-
-                "0xba67186fd454D0256a0D3744783538bE08C58feD",
-
-                "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9"
-            );
-
-        if (resp && resp.tx_hash) {
-
-            logToPanel(
-                `[RR_FALLBACK] Swap Executed - ${resp.tx_hash}`
-            );
-        }
-
-    } catch (err) {
-
-        logToPanel(
-            `[RR_FALLBACK ERROR] ${err.message}`
-        );
+    const syncedBalance = await syncBalanceFromFund();
+    if (syncedBalance === null) {
+        logToPanel("[WARN] Balance sync failed. Skipping loop cycle.");
+        return "CONTINUE"; 
     }
 
-    return "CONTINUE";
-}
+    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    if (tradingBalance <= 0) {
+        logToPanel("[WARN] No trading balance available.");
+        return "CONTINUE"; 
+    }
 
-// =====================================================
-// SINGLE TRADING CYCLE
-// =====================================================
-// =====================================================
-// SINGLE TRADING CYCLE (FULLY CORRECTED FOR DYNAMIC API)
-// =====================================================
-// =====================================================================
-// SINGLE TRADING CYCLE (FULLY STRIPPED OF RR FALLBACK CALLS)
-// =====================================================================
-        // [YOUR EXISTING CODE REMAINING IN PLACE ABOVE...]
+    // Capture baseline metrics before executing transaction routines
+    window.beforeBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
+    if (cycle === 1) {
+        window.initialSimulationUSD = window.beforeBalanceUSD;
+    }
+
+    const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
+    const remainingCycles = Math.max(1, totalCycles - cycle + 1);
+    const allocationUSD = (totalBalance / BigInt(remainingCycles)).toString();
+
+    logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
+
+    let currentToken = "0x55d398326f99059fF775485246999027B3197955";
+    try {
+        const tokenResp = await fetch("/prodbot/tokens/get", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: window.USER_ID })
+        });
+        const tokenData = await tokenResp.json();
+        if (tokenData && tokenData.currenttoken) {
+            currentToken = tokenData.currenttoken;
+            logToPanel(`[TOKEN LOAD]\n${currentToken}`);
+        }
+    } catch (err) {
+        logToPanel(`[TOKEN LOAD ERROR]\n${err.message}`);
+    }
+
+    const selectedCoin = await pickRandomCoin();
+    const coinInfo = await window.evaluateCoin(selectedCoin);
+
+    if (!coinInfo || !coinInfo.tokenAddress) {
+        logToPanel("[WARN] Invalid or unprofiled target token. Proceeding...");
+        return "CONTINUE"; 
+    }
+
+    logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
+    const beforeBalance = document.getElementById("investBalance").value.toString().trim();
+
+    try {
+        logToPanel(`[SWAP REQUEST]\nFROM=${currentToken}\nTO=${coinInfo.tokenAddress}\nAMOUNT=${allocationUSD}`);
+        const swapResp = await window.runSwapUniswap(
+            window.USER_ADDR,
+            allocationUSD,
+            currentToken,
+            coinInfo.tokenAddress
+        );
+
+        if (!swapResp || !swapResp.tx_hash) {
+            logToPanel("[SWAP PIPELINE SKIPPED OR REJECTED]");
+            return "CONTINUE"; 
+        }
+
+        logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
+
+        let balanceChanged = false;
+        for (let attempt = 1; attempt <= 30; attempt++) {
+            await blockDelay(10000);
+            await syncBalanceFromFund();
+            const currentBalance = document.getElementById("investBalance").value.toString().trim();
+            logToPanel(`[VERIFY ${attempt}/30]\nSTART=${beforeBalance}\nNOW=${currentBalance}`);
+
+            if (currentBalance !== beforeBalance) {
+                balanceChanged = true;
+                logToPanel(`[BALANCE VERIFIED]\n${beforeBalance}\n➡\n${currentBalance}`);
+                break;
+            }
+        }
+
+        if (!balanceChanged) {
+            logToPanel("[NO BALANCE MOVEMENT DETECTED — PASSING TO NEXT LOOP]");
+            return "CONTINUE"; 
+        }
+
+        await updateTokenRecord(currentToken, coinInfo.tokenAddress);
+        logToPanel(`[TOKEN UPDATED]\nLAST=${currentToken}\nCURRENT=${coinInfo.tokenAddress}`);
+
         await syncBalanceFromFund();
-
-        // 🌟 FIXED: Pull human-readable metrics directly from the authenticated USD window
+        
         const afterBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
-        const beforeFloatUSD = window.beforeBalanceUSD || afterBalanceUSD;
-        const profitDeltaUSD = afterBalanceUSD - beforeFloatUSD;
-
+        const profitDeltaUSD = afterBalanceUSD - window.beforeBalanceUSD;
         window.cumulativePnL = (window.cumulativePnL || 0) + profitDeltaUSD;
 
-        // Sync visual live indicators instantly
         const liveProfitText = document.getElementById("liveProfitValue");
         if (liveProfitText) {
             liveProfitText.innerText = window.cumulativePnL.toFixed(4) + " USDT";
@@ -194,107 +180,31 @@ async function swapRR(amount) {
         return "CONTINUE"; 
     }
 
-    // 🌟 FIXED: Enforce percentage calculations entirely on USD values to prevent Wei overflows
-    const baseTradingVolumeUSD = window.initialSimulationUSD || parseFloat(document.getElementById("usd").value) || 1.0;
-    const totalChangePct = (window.cumulativePnL / Math.max(baseTradingVolumeUSD, 0.001)) * 100;
-
-    logToPanel(`📊 Loop Performance Evaluation: Net PnL = $${window.cumulativePnL.toFixed(4)} USD (${totalChangePct.toFixed(2)}%)`);
-
-    if (totalChangePct >= profitTargetPct) {
-        logToPanel("[TARGET REACHED] Exiting orchestration loop.");
-        return "STOP_PROFIT";
-    }
-
-    if (totalChangePct <= -stopLossPct) {
-        logToPanel("[STOP LOSS HIT] Risk threshold reached. Halting simulation loop.");
-        return "STOP_LOSS";
-    }
-
+    // Stripped of early exits to force all 10 continuous cycles to compile
     return "CONTINUE";
-
-
-
-
-// =====================================================
-// BOT START
-// =====================================================
-
-async function startSimulation(
-    totalCycles
-) {
-
-    if (window.isBotRunning)
-        return;
-
-    window.isBotRunning = true;
-
-    window.cumulativePnL = 0;
-
-    const pTarget =
-        parseFloat(
-            document.getElementById(
-                "profitTarget"
-            ).value
-        ) || 1.0;
-
-    const sLoss =
-        parseFloat(
-            document.getElementById(
-                "stopLoss"
-            ).value
-        ) || 0.5;
-
-    logToPanel(
-        `[BOT START] ${totalCycles} cycles`
-    );
-
-    for (
-        let i = 1;
-        i <= totalCycles;
-        i++
-    ) {
-
-        if (!window.isBotRunning)
-            break;
-
-        const signal =
-            await simulateCycle(
-                i,
-                totalCycles,
-                pTarget,
-                sLoss
-            );
-
-        if (
-            signal === "STOP_PROFIT" ||
-            signal === "STOP_LOSS"
-        ) {
-            break;
-        }
-
-        if (i < totalCycles) {
-
-            setStatus(
-                "WAITING"
-            );
-
-            await blockDelay(
-                10000
-            );
-        }
-    }
-
-    window.isBotRunning = false;
-
-    setStatus("STOPPED");
-
-    logToPanel(
-        "[BOT FINISHED]"
-    );
 }
 
-window.startSimulation =
-    startSimulation;
+async function startSimulation(totalCycles) {
+    if (window.isBotRunning) return;
+    window.isBotRunning = true;
+    window.cumulativePnL = 0;
 
-window.simulateCycle =
-    simulateCycle;
+    const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
+    const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
+
+    logToPanel(`[BOT START] ${totalCycles} cycles`);
+
+    for (let i = 1; i <= totalCycles; i++) {
+        if (!window.isBotRunning) break;
+        const signal = await simulateCycle(i, totalCycles, pTarget, sLoss);
+        if (i < totalCycles) {
+            setStatus("WAITING");
+            await blockDelay(10000);
+        }
+    }
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT FINISHED]");
+}
+window.startSimulation = startSimulation;
+window.simulateCycle = simulateCycle;
