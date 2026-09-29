@@ -15,290 +15,157 @@
     // ==============================================================
 
     async function categorizeCoins() {
-
         try {
-
-            const baseApiUrl =
-                window.API_BASE ||
-                window.location.origin;
-
-            const res = await fetch(
-                `${baseApiUrl}/prodbot/market-analysis`
-            );
-
-            const data =
-                await res.json();
+            const baseApiUrl = window.API_BASE || window.location.origin;
+            const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
+            const data = await res.json();
 
             return {
-                short_term:
-                    data.short_term || [],
-                mid_term:
-                    data.mid_term || [],
-                long_term:
-                    data.long_term || []
+                short_term: data.short_term || [],
+                mid_term: data.mid_term || [],
+                long_term: data.long_term || []
             };
-
         } catch (err) {
-
-            console.error(err);
-
-            return {
-                short_term: [],
-                mid_term: [],
-                long_term: []
-            };
-
+            console.error("[COINS API HANG ERROR]", err);
+            return { short_term: [], mid_term: [], long_term: [] };
         }
-
     }
 
-    window.categorizeCoins =
-        categorizeCoins;
+    window.categorizeCoins = categorizeCoins;
 
     // ==============================================================
-    // BUILD PROFITABLE TOKEN POOL
+    // BUILD PROFITABLE TOKEN POOL (🌟 FIXED: ASSIGNED TO WINDOW CONTEXT)
     // ==============================================================
-
     async function getTradeCandidates() {
-    try {
-        const marketData = await categorizeCoins();
-        
-        // 🌟 Safeguard 1: Ensure marketData object arrays exist before expanding them
-        let allTokens = [
-            ...(marketData.short_term || []),
-            ...(marketData.mid_term || []),
-            ...(marketData.long_term || [])
-        ];
-
-        // 🌟 Safeguard 2: Immediate break-glass execution escape if backend pool is dry
-        if (!allTokens || allTokens.length === 0) {
-            console.warn("[WARN] Market analysis payload dry. Deploying active fallback tokens.");
-            return [
-                { symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 },
-                { symbol: "BABYDOGE", address: "0xc748673057861a797275cd8a068abb95a902e8de", change24h: 2.2, lastPrice: 0.000000002 }
+        try {
+            const marketData = await categorizeCoins();
+            
+            // Safeguard 1: Ensure structural data matrices resolve cleanly
+            let allTokens = [
+                ...(marketData.short_term || []),
+                ...(marketData.mid_term || []),
+                ...(marketData.long_term || [])
             ];
-        }
 
-        allTokens = allTokens.filter(token => {
-            const move = Number(token.change24h || 0);
-            return (move >= MIN_PROFIT_MOVE && move <= MAX_PROFIT_MOVE && token.address);
-        });
+            // Safeguard 2: Break-glass recovery payload mapping if server is stagnant
+            if (!allTokens || allTokens.length === 0) {
+                console.warn("[WARN] Market analysis endpoint dry. Triggering static backup assets.");
+                const emergencyFallback = [
+                    { symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 },
+                    { symbol: "BABYDOGE", address: "0xc748673057861a797275cd8a068abb95a902e8de", change24h: 2.2, lastPrice: 0.000000002 }
+                ];
+                window.logToPanel(`[POOL] ${emergencyFallback.length} fallback candidates forced.`);
+                return emergencyFallback;
+            }
 
-        allTokens.sort((a, b) => Number(b.change24h || 0) - Number(a.change24h || 0));
+            allTokens = allTokens.filter(token => {
+                const move = Number(token.change24h || 0);
+                return (move >= MIN_PROFIT_MOVE && move <= MAX_PROFIT_MOVE && (token.address || token.tokenAddress));
+            });
 
-        const finalPool = allTokens.slice(0, TOP_POOL_SIZE);
-        
-        // Return fallback if filter metrics stripped out every single candidate
-        if (finalPool.length === 0) {
+            allTokens.sort((a, b) => Number(b.change24h || 0) - Number(a.change24h || 0));
+
+            const finalPool = allTokens.slice(0, TOP_POOL_SIZE);
+            
+            if (finalPool.length === 0) {
+                return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
+            }
+
+            window.logToPanel(`[POOL] ${finalPool.length} cost-aware candidates compiled.`);
+            return finalPool;
+        } catch (err) {
+            window.logToPanel("❌ Critical breakdown inside candidates engine loop: " + err.message);
             return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
         }
-
-        return finalPool;
-    } catch (err) {
-        window.logToPanel("❌ Critical breakdown inside candidates engine loop: " + err.message);
-        // Clean engineering recovery target mapping
-        return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
     }
-}
+    
+    // Explicit global binding layout export
+    window.getTradeCandidates = getTradeCandidates;
 
     // ==============================================================
     // PAIRS
     // ==============================================================
 
-    window.getBinancePairs =
-        async function () {
-
-            try {
-
-                const candidates =
-                    await getTradeCandidates();
-
-                if (
-                    candidates &&
-                    candidates.length > 0
-                ) {
-
-                    return candidates.map(
-                        coin =>
-                            `${coin.symbol}USDT`
-                    );
-
-                }
-
-            } catch (err) {
-
-                console.error(err);
-
+    window.getBinancePairs = async function () {
+        try {
+            const candidates = await window.getTradeCandidates();
+            if (candidates && candidates.length > 0) {
+                return candidates.map(coin => `${coin.symbol}USDT`);
             }
-
-            return ["CAKEUSDT"];
-
-        };
+        } catch (err) {
+            console.error(err);
+        }
+        return ["CAKEUSDT"];
+    };
 
     // ==============================================================
     // TOKEN LOOKUP
     // ==============================================================
 
-    window.evaluateCoin =
-        async function(symbol) {
+    window.evaluateCoin = async function(symbol) {
+        try {
+            const candidates = await window.getTradeCandidates();
+            const cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
 
-            try {
+            const token = candidates.find(x => 
+                String(x.symbol).toUpperCase().trim() === cleanSymbol
+            );
 
-                const candidates =
-                    await getTradeCandidates();
-
-                const cleanSymbol =
-                    String(symbol)
-                        .replace("USDT", "")
-                        .toUpperCase()
-                        .trim();
-
-                const token =
-                    candidates.find(
-                        x =>
-                            String(
-                                x.symbol
-                            )
-                            .toUpperCase()
-                            .trim() ===
-                            cleanSymbol
-                    );
-
-                if (!token) {
-
-                    window.logToPanel(
-                        `[SKIP] ${cleanSymbol} failed profitability filter`
-                    );
-
-                    return null;
-
-                }
-
-                const address =
-                    token.address ||
-                    token.tokenAddress;
-
-                if (!address) {
-
-                    window.logToPanel(
-                        `[INVALID] Missing contract address for ${cleanSymbol}`
-                    );
-
-                    return null;
-                }
-
-                window.logToPanel(
-                    `[TARGET]
-${cleanSymbol}
-MOVE=${token.change24h}%
-ADDR=${address}`
-                );
-
-                return {
-
-                    symbol:
-                        token.symbol,
-
-                    tokenAddress:
-                        address,
-
-                    network:
-                        "bep20",
-
-                    router:
-                        "pancakeswap",
-
-                    change24h:
-                        Number(
-                            token.change24h || 0
-                        ),
-
-                    lastPrice:
-                        Number(
-                            token.lastPrice || 0
-                        )
-
-                };
-
-            } catch (err) {
-
-                window.logToPanel(
-                    `[ERROR] evaluateCoin: ${err.message}`
-                );
-
+            if (!token) {
+                window.logToPanel(`[SKIP] ${cleanSymbol} failed profitability filter verification.`);
                 return null;
-
             }
 
-        };
+            const address = token.address || token.tokenAddress;
+            if (!address) {
+                window.logToPanel(`[INVALID] Missing contract target location address mapping for ${cleanSymbol}`);
+                return null;
+            }
+
+            window.logToPanel(`[TARGET]\n${cleanSymbol}\nMOVE=${token.change24h}%\nADDR=${address}`);
+
+            return {
+                symbol: token.symbol,
+                tokenAddress: address,
+                network: "bep20",
+                router: "pancakeswap",
+                change24h: Number(token.change24h || 0),
+                lastPrice: Number(token.lastPrice || 0)
+            };
+        } catch (err) {
+            window.logToPanel(`[ERROR] evaluateCoin tracking error loop: ${err.message}`);
+            return null;
+        }
+    };
 
     // ==============================================================
     // MARKET STATS
     // ==============================================================
 
-    window.getBinanceStats =
-        async function(symbol) {
+    window.getBinanceStats = async function(symbol) {
+        try {
+            const cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
+            const tokens = await window.getTradeCandidates();
 
-            try {
+            const token = tokens.find(t => 
+                String(t.symbol).toUpperCase().trim() === cleanSymbol
+            );
 
-                const cleanSymbol =
-                    String(symbol)
-                        .replace("USDT", "")
-                        .toUpperCase()
-                        .trim();
+            if (!token) return null;
 
-                const tokens =
-                    await getTradeCandidates();
-
-                const token =
-                    tokens.find(
-                        t =>
-                            String(
-                                t.symbol
-                            )
-                            .toUpperCase()
-                            .trim() ===
-                            cleanSymbol
-                    );
-
-                if (!token) {
-                    return null;
-                }
-
-                return {
-
-                    symbol:
-                        token.symbol,
-
-                    lastPrice:
-                        Number(
-                            token.lastPrice || 0
-                        ),
-
-                    priceChangePercent:
-                        Number(
-                            token.change24h || 0
-                        )
-
-                };
-
-            } catch (err) {
-
-                window.logToPanel(
-                    `[ERROR] getBinanceStats: ${err.message}`
-                );
-
-                return null;
-
-            }
-
-        };
+            return {
+                symbol: token.symbol,
+                lastPrice: Number(token.lastPrice || 0),
+                priceChangePercent: Number(token.change24h || 0)
+            };
+        } catch (err) {
+            window.logToPanel(`[ERROR] getBinanceStats exception layer: ${err.message}`);
+            return null;
+        }
+    };
 
     window.logToPanel(
-        `coins.txt initialized.
-Min Move=${MIN_PROFIT_MOVE}%
-Max Move=${MAX_PROFIT_MOVE}%
-Top Pool=${TOP_POOL_SIZE}`
+        `coins.txt initialized.\nMin Move=${MIN_PROFIT_MOVE}%\nMax Move=${MAX_PROFIT_MOVE}%\nTop Pool=${TOP_POOL_SIZE}`
     );
 
 })();
