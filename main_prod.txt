@@ -306,6 +306,10 @@ async function syncBalanceFromFund() {
         window.SolidarityFundBalance = parseFloat(finalWeiString);
 
         // 🟢 STEP 5: Inject authenticated backend data directly into user forms
+            logToPanel("[LEDGER SYNC] Process complete. Final active balance: " + finalWeiString);
+        window.SolidarityFundBalance = parseFloat(finalWeiString);
+
+        // 🟢 STEP 5: Apply variables directly to dashboard input forms with real token conversion
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
         const usdBox = document.getElementById("usd");
@@ -314,53 +318,52 @@ async function syncBalanceFromFund() {
         if (investBox) investBox.value = finalWeiString;
         
         if (usdBox) {
+            // Default baseline configuration mapping (Fallback to USDT assumptions)
+            let tokenDecimals = 18;
+            let tokenPriceUSD = 1.0; 
+
+            // 1. Handle specialized decimal structures for unique alternative tokens
+            const lowerAddress = resolvedTokenAddress.toLowerCase();
+            if (lowerAddress === "0xc748673057861a797275cd8a068abb95a902e8de") { 
+                tokenDecimals = 9; // BabyDoge natively operates on 9 decimals
+            }
+
             try {
-                // 1. Grab the authentic market evaluation metrics map from your server
+                // 2. Query your backend's market tracker to get the live value updates
                 const marketRes = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
                 const marketData = await marketRes.json();
                 
-                // Flatten the structural category groupings (short, mid, and long term arrays)
-                const activeTickerList = [
+                // Flatten the multi-tier candidate tracking array
+                const allMarketTokens = [
                     ...(marketData.short_term || []),
                     ...(marketData.mid_term || []),
                     ...(marketData.long_term || [])
                 ];
 
-                const lowerAddress = resolvedTokenAddress.toLowerCase();
-                
-                // 2. Locate the active token asset tracking profile directly inside the pool
-                const matchedToken = activeTickerList.find(token => 
-                    token.address && token.address.toLowerCase() === lowerAddress
+                // Locate the active holding profile within the candidate pool
+                const activeTokenProfile = allMarketTokens.find(t => 
+                    t.address && t.address.toLowerCase() === lowerAddress
                 );
 
-                if (matchedToken && matchedToken.lastPrice) {
-                    // 3. For tokens with specialized decimals like BabyDoge, safely format them
-                    let decimals = 18;
-                    if (lowerAddress === "0xc748673057861a797275cd8a068abb95a902e8de") {
-                        decimals = 9; 
-                    }
-
-                    const tokenCount = parseFloat(finalWeiString) / Math.pow(10, decimals);
-                    const trueUsdValuation = tokenCount * parseFloat(matchedToken.lastPrice);
-                    
-                    // Populate field directly using your live token configuration
-                    usdBox.value = trueUsdValuation.toFixed(4);
-                    logToPanel(`📈 Authenticated Ticker Price: 1 ${matchedToken.symbol} = $${matchedToken.lastPrice}. Wallet Value updated.`);
-                    
-                } else if (lowerAddress === "0x55d398326f99059ff775485246999027b3197955") {
-                    // Fallback baseline for default standard USDT positions
-                    usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
-                } else {
-                    // General system fallback preservation link
-                    usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
+                if (activeTokenProfile && activeTokenProfile.lastPrice) {
+                    tokenPriceUSD = parseFloat(activeTokenProfile.lastPrice);
                 }
-            } catch (apiErr) {
-                console.error("Failed to query authenticated metrics:", apiErr);
-                usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
+            } catch (marketPriceErr) {
+                console.warn("Could not fetch live market prices, utilizing baseline presets:", marketPriceErr);
             }
+
+            // 3. Compute accurate human units adjusted for individual asset decimal bounds
+            const humanReadableTokens = parseFloat(finalWeiString) / Math.pow(10, tokenDecimals);
+            
+            // 4. Calculate total real-world USD valuation matrix position
+            const calculatedUSDValuation = humanReadableTokens * tokenPriceUSD;
+            
+            usdBox.value = calculatedUSDValuation.toFixed(4);
+            logToPanel(`📊 Real USD Conversion: ${humanReadableTokens.toFixed(2)} tokens @ $${tokenPriceUSD} = $${usdBox.value}`);
         }
 
         return window.SolidarityFundBalance;
+
 
 
 
