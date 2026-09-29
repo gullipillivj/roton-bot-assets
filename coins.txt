@@ -14,32 +14,27 @@
     // MARKET DATA INTERCEPTOR
     // ==============================================================
     async function categorizeCoins() {
-        try {
-            const baseApiUrl = window.API_BASE || window.location.origin;
-            window.logToPanel("📡 [DEBUG] Requesting market metrics from server...");
-            
-            const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
-            const data = await res.json();
+    try {
+        const baseApiUrl = window.API_BASE || window.location.origin;
+        window.logToPanel("[DEBUG] Sending background fetch request to backend...");
 
-            // 🔍 LIVE ARRAY INSPECTION LOG LAYER
-            window.logToPanel(`🔍 [DEBUG DATA RECEIVED]\nKEYS FOUND: ${Object.keys(data || {}).join(", ") || "NONE"}\nSHORT_TERM COUNT: ${(data.short_term || []).length}\nMID_TERM COUNT: ${(data.mid_term || []).length}\nLONG_TERM COUNT: ${(data.long_term || []).length}`);
-            
-            if (data.short_term && data.short_term.length > 0) {
-                window.logToPanel(`💡 [DEBUG SAMPLE] First token parsed: ${data.short_term[0].symbol || "UNKNOWN"} | Address: ${data.short_term[0].address || "NONE"} | 24h: ${data.short_term[0].change24h}%`);
-            }
+        const res = await fetch(baseApiUrl + "/prodbot/market-analysis");
+        const jsonResult = await res.json();
 
-            return {
-                short_term: data.short_term || [],
-                mid_term: data.mid_term || [],
-                long_term: data.long_term || []
-            };
-        } catch (err) {
-            window.logToPanel(`❌ [DEBUG RESURGENCE ERROR] Fetch failure: ${err.message}`);
-            return { short_term: [], mid_term: [], long_term: [] };
-        }
+        // Process the flat data array cleanly
+        let flatList = jsonResult.data || [];
+        window.logToPanel("[DEBUG ANALYSIS] Total raw tokens processed from flat payload: " + flatList.length);
+        
+        return {
+            short_term: flatList, 
+            mid_term: [],
+            long_term: []
+        };
+    } catch (err) {
+        window.logToPanel("[DEBUG ERROR] Pipeline mapping failed: " + err.message);
+        return { short_term: [], mid_term: [], long_term: [] };
     }
-
-    window.categorizeCoins = categorizeCoins;
+}
 
     // ==============================================================
     // BUILD PROFITABLE TOKEN POOL
