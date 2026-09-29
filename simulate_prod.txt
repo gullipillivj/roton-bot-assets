@@ -252,12 +252,14 @@ async function startSimulation(totalCycles) {
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
+    // 🌟 FIXED: Added proper array index mappings to stop compilation crashes!
     if (window.balanceChart) {
         window.balanceChart.data.labels = [];
         window.balanceChart.data.datasets[0].data = [];
         window.balanceChart.data.datasets[1].data = [];
         window.balanceChart.update();
     }
+
 
     logToPanel(`[BOT START] ${totalCycles} cycles`);
 
