@@ -3,6 +3,7 @@
 // ==================================================================
 
 (function () {
+    "use strict";
 
     window.logToPanel("coins.txt loaded safely via Open-Source DeFiLlama API Engine Layer.");
 
@@ -11,23 +12,20 @@
     // ==============================================================
     async function categorizeCoins() {
         try {
-            // Queries your new open-source endpoint that handles proxies, retries, and TVL filters
-            const backendUrl = "/prodbot/market-analysis";
-            const res = await fetch(backendUrl);
-            const responseData = await res.json();
+            var backendUrl = "/prodbot/market-analysis";
+            var res = await fetch(backendUrl);
+            var responseData = await res.json();
 
-            // Failover check if the response status is not flagged as ok
             if (!responseData || responseData.status !== "ok") {
                 throw new Error("Backend response status failed or data malformed.");
             }
 
-            const rawData = responseData.data || [];
-            let flatList = [];
+            var rawData = responseData.data || [];
+            var flatList = [];
+            var i;
 
-            for (let i = 0; i < rawData.length; i++) {
-                let item = rawData[i];
-                
-                // Maps the unified backend structure straight to operational layout frames
+            for (i = 0; i < rawData.length; i++) {
+                var item = rawData[i];
                 flatList.push({
                     symbol: String(item.symbol || "UNKNOWN").toUpperCase(),
                     address: item.address || "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
@@ -37,14 +35,11 @@
                 });
             }
 
-            window.logToPanel(`🎉 [DIRECT SUCCESS] Synchronized ${flatList.length} real-time open-source tokens from DeFiLlama!`);
-            
-            // Maintains the exact return signature object structure
+            window.logToPanel("🎉 [DIRECT SUCCESS] Synchronized " + flatList.length + " real-time open-source tokens from DeFiLlama!");
             return { short_term: flatList, mid_term: [], long_term: [] };
 
         } catch (err) {
-            window.logToPanel(`⚠️ Open-Source Network Fetch stalled: ${err.message}. Reverting to emergency backup.`);
-            // Mirroring your authoritative error layout structures exactly
+            window.logToPanel("⚠️ Open-Source Network Fetch stalled: " + err.message + ". Reverting to emergency backup.");
             return { 
                 short_term: [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95, volume: 55000.0 }], 
                 mid_term: [], 
@@ -59,11 +54,12 @@
     // ==============================================================
     async function getTradeCandidates() {
         try {
-            const marketData = await categorizeCoins();
-            let allTokens = marketData.short_term || [];
+            var marketData = await categorizeCoins();
+            var allTokens = marketData.short_term || [];
 
-            // Filters and structures items based on the active 24h change values
-            allTokens.sort((a, b) => Number(b.change24h || 0) - Number(a.change24h || 0));
+            allTokens.sort(function (a, b) {
+                return Number(b.change24h || 0) - Number(a.change24h || 0);
+            });
             return allTokens;
         } catch (err) {
             return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
@@ -71,17 +67,19 @@
     }
     window.getTradeCandidates = getTradeCandidates;
 
-    // Expected by pickRandomCoin() in simulate_prod.txt -> appends USDT to match legacy filter layers
     window.getBinancePairs = async function () {
-        const candidates = await window.getTradeCandidates();
-        return candidates.map(coin => `${coin.symbol}USDT`);
+        var candidates = await window.getTradeCandidates();
+        return candidates.map(function (coin) {
+            return coin.symbol + "USDT";
+        });
     };
 
-    // Expected by evaluateCoin() in simulate_prod.txt -> resolves token metadata arrays
-    window.evaluateCoin = async function(symbol) {
-        const candidates = await window.getTradeCandidates();
-        const cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
-        const token = candidates.find(x => String(x.symbol).toUpperCase().trim() === cleanSymbol);
+    window.evaluateCoin = async function (symbol) {
+        var candidates = await window.getTradeCandidates();
+        var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
+        var token = candidates.find(function (x) {
+            return String(x.symbol).toUpperCase().trim() === cleanSymbol;
+        });
         if (!token) return null;
 
         return {
@@ -94,11 +92,12 @@
         };
     };
 
-    // Maintained hook for statistical monitoring engines
-    window.getBinanceStats = async function(symbol) {
-        const tokens = await window.getTradeCandidates();
-        const cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
-        const token = tokens.find(t => String(t.symbol).toUpperCase().trim() === cleanSymbol);
+    window.getBinanceStats = async function (symbol) {
+        var tokens = await window.getTradeCandidates();
+        var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
+        var token = tokens.find(function (t) {
+            return String(t.symbol).toUpperCase().trim() === cleanSymbol;
+        });
         if (!token) return null;
         
         return { 
