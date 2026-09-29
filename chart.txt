@@ -1,21 +1,46 @@
-logToPanel("chart.txt loaded");
-// ✅ Global logger
-function logToPanel(msg) {
-  const panel = document.getElementById("logPanel");
-  if (panel) {
-    panel.innerText += "\n" + msg;
-    panel.scrollTop = panel.scrollHeight;
-  } else {
-    console.log(msg);
-  }
+logToPanel("chart.txt loaded successfully. Live visualization matrix tracking active.");
+
+// Ensure clean global log mapping parameters
+if (typeof window.logToPanel !== "function") {
+    window.logToPanel = function(msg) { console.log(msg); };
 }
-window.logToPanel = logToPanel;
 
-function updateChart(balance, profit = null) {
-    const canvas = document.getElementById("balanceChart");
-    if (!canvas) return;
+/**
+ * Updates the global Chart.js instance with real-time session parameters
+ * @param {number} currentBalanceUSD - The current human-readable valuation straight from the #usd field
+ * @param {number} cumulativeProfitUSD - The current global rolling PnL value (window.cumulativePnL)
+ */
+function updateChart(currentBalanceUSD, cumulativeProfitUSD = 0) {
+    const chartInstance = window.balanceChart;
+    if (!chartInstance) {
+        console.warn("[CHART ERROR] window.balanceChart container instance is missing from the global context.");
+        return;
+    }
 
-    console.log(`[CHART UPDATE] Rendering metrics — Current Balance: ${balance}`);
+    try {
+        // 1. Generate an incremental label based on the current data array length
+        const currentDataPointsCount = chartInstance.data.labels.length;
+        const targetLabel = currentDataPointsCount === 0 ? "Start" : "Cycle " + currentDataPointsCount;
+        
+        // 2. Safely parse and append values to clear raw string data skews
+        const safeBalance = parseFloat(currentBalanceUSD) || 0;
+        const safeProfit = parseFloat(cumulativeProfitUSD) || 0;
+
+        chartInstance.data.labels.push(targetLabel);
+        
+        // Dataset 0: Investment Balance (Yellow line)
+        chartInstance.data.datasets[0].data.push(safeBalance);
+        
+        // Dataset 1: Profit/Loss Tracker (Green/Red line)
+        chartInstance.data.datasets[1].data.push(safeProfit);
+
+        // 3. Trigger a visual re-render boundary cycle update on the HTML canvas element
+        chartInstance.update();
+        
+        console.log(`[CHART SYNC SUCCESS] Label: ${targetLabel} | Bal: $${safeBalance.toFixed(4)} | PnL: $${safeProfit.toFixed(4)}`);
+    } catch (chartRenderErr) {
+        console.error("Critical breakdown inside Chart rendering pipeline:", chartRenderErr);
+    }
 }
 
 window.updateChart = updateChart;
