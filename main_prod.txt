@@ -354,14 +354,19 @@ async function syncBalanceFromFund() {
                     // General system fallback preservation link
                     usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
                 }
-            } catch (apiErr) {
+                 } catch (apiErr) {
                 console.error("Failed to query authenticated metrics:", apiErr);
                 usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
             }
         }
 
         return window.SolidarityFundBalance;
-
+    } catch (err) {
+        logToPanel("❌ Balance Sync Error: " + err.message);
+        return null;
+    }
+} // 🌟 FIXED: Explicitly terminates syncBalanceFromFund function structure cleanly
+window.syncBalanceFromFund = syncBalanceFromFund;
 
 
 // Secure page entry setup executor function container loop mapping 
@@ -376,6 +381,7 @@ function initDashboardPipeline() {
       logToPanel("💡 Active context ready: Connect extension to parse state maps.");
   }
 }
+
 
 // Clean initialization call wrapping to resolve layout script errors completely
 window.addEventListener("DOMContentLoaded", () => {
