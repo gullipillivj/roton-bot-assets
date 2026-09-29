@@ -22,9 +22,7 @@ async function updateTokenRecord(lastToken, currentToken) {
         }
         const resp = await fetch("/prodbot/tokens/update", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userid: userid, lasttoken: lastToken, currenttoken: currentToken })
         });
         const data = await resp.json();
@@ -72,7 +70,7 @@ window.stopBot = stopBot;
 
 
 // =====================================================================
-// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED WITH AUTO-USDT SETTLE)
+// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED WITH FULL-AMOUNT MATH & ECONOMIC GAS GATES)
 // =====================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
@@ -96,11 +94,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         window.initialSimulationUSD = window.beforeBalanceUSD;
     }
 
-    // =====================================================================
-    // 🌟 FIXED: REMOVED FRACTIONAL LOOP ALLOCATION — NOW COMITTING 100% CAPITAL
-    // =====================================================================
+    // 🌟 FULL POSITION COMMITTED (REMOVED 10% FRACTIONAL SIMULATION SLICES)
     const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
-    const allocationUSD = totalBalance.toString(); // Uses the entire 100% full balance cleanly
+    const allocationUSD = totalBalance.toString();
 
     logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
 
@@ -145,6 +141,20 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
+
+    // =====================================================================
+    // 📊 🌟 NEW ECONOMIC PROFIT THRESHOLD VERIFIER GATEWAY
+    // =====================================================================
+    const maxGasOverheadUSD = 0.07; // \$0.01 Approve + \$0.06 Swap
+    const projectedProfitUSD = window.beforeBalanceUSD * (parseFloat(coinInfo.change24h) / 100);
+
+    logToPanel(`[ECONOMICS EVALUATION]\nPORTFOLIO VALUE=$${window.beforeBalanceUSD.toFixed(4)}\nPROJECTED MOVE PROCEEDS=$${projectedProfitUSD.toFixed(4)}\nESTIMATED NETWORK FEES=$${maxGasOverheadUSD.toFixed(2)}`);
+
+    if (projectedProfitUSD <= maxGasOverheadUSD) {
+        logToPanel(`[CYCLE SKIPPED] Expected profit ($${projectedProfitUSD.toFixed(4)}) is below gas/approval overhead thresholds ($${maxGasOverheadUSD}). Advancing engine loop...`);
+        return "SKIP"; 
+    }
+
     const beforeBalance = document.getElementById("investBalance").value.toString().trim();
 
 
@@ -164,7 +174,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
         logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
 
-        // STEP A: AWAIT LOGICAL BALANCE CHANGE CONFIRMATION
         let balanceChanged = false;
         for (let attempt = 1; attempt <= 45; attempt++) {
             await blockDelay(10000);
@@ -184,21 +193,18 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             return "STOP_ERROR"; 
         }
 
-        // STEP B: UPDATE THE RUNTIME LEDGER MAPPING FOR ACCOUNTING PURPOSES
         logToPanel("⏳ Synchronizing database token allocation tracking...");
         await updateTokenRecord(currentToken, coinInfo.tokenAddress);
 
         // =====================================================================
-        // 🌟 AUTOMATED POST-TRADE STABLE SETTLE PIPELINE (THE VOLATILITY SHIELD)
+        // 🛡️ AUTOMATED POST-TRADE STABLE SETTLE PIPELINE (THE VOLATILITY SHIELD)
         // =====================================================================
         const usdtAddress = "0x55d398326f99059fF775485246999027B3197955";
         
         if (coinInfo.tokenAddress.toLowerCase() !== usdtAddress.toLowerCase()) {
             logToPanel(`🛡️ [VOLATILITY SHIELD] Volatile asset parsed (${coinInfo.symbol}). Repatriating capital straight back to USDT...`);
             
-            // Read fresh balance configuration arrays from the canvas forms
             const volatileWeiBalance = document.getElementById("investBalance").value.toString().trim();
-            
             logToPanel(`[SHIELD SWAP REQUEST]\nFROM=${coinInfo.tokenAddress}\nTO=${usdtAddress}\nAMOUNT=${volatileWeiBalance}`);
             
             const settleResp = await window.runSwapUniswap(
@@ -210,14 +216,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             
             if (settleResp && settleResp.tx_hash) {
                 logToPanel(`✅ [SHIELD SETTLED] Capital securely locked in USDT. Settle Hash: ${settleResp.tx_hash}`);
-                // Re-write mapping logs back to baseline track configuration parameters
                 await updateTokenRecord(coinInfo.tokenAddress, usdtAddress);
             } else {
                 logToPanel("⚠️ [SHIELD WARNING] Stable conversion skipped or rejected by extension layout provider. Holding raw assets.");
             }
         }
 
-        // STEP C: RESYNC DATA AND CALCULATE ROLLING PERFORMANCE
         await syncBalanceFromFund();
         
         const afterBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
@@ -251,7 +255,6 @@ async function startSimulation(totalCycles) {
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
-    // Reset chart array layout buffers to clean up the bar canvas elements
     if (window.balanceChart) {
         window.balanceChart.data.labels = [];
         window.balanceChart.data.datasets[0].data = [];
@@ -269,6 +272,12 @@ async function startSimulation(totalCycles) {
         if (signal === "STOP_ERROR") {
             logToPanel("🛑 State alignment check failed. Aborting full orchestration loop execution.");
             break;
+        }
+
+        // 🌟 If cycle is skipped, it outputs the skip message, increments loop index i, and proceeds
+        if (signal === "SKIP") {
+            await blockDelay(1000); // Small brief yield to allow layout screen painting
+            continue;
         }
 
         if (i < totalCycles) {
