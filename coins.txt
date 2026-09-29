@@ -1,24 +1,32 @@
 // ==================================================================
-// 🎛️ COST-AWARE COIN SELECTION ENGINE
+// 🎛️ COST-AWARE COIN SELECTION ENGINE (DIAGNOSTIC MODE)
 // ==================================================================
 
 (function () {
 
-    window.logToPanel("coins.txt loaded safely.");
+    window.logToPanel("coins.txt loaded safely with diagnostics.");
 
     const MIN_PROFIT_MOVE = -100.0;
     const MAX_PROFIT_MOVE = 100.0;
     const TOP_POOL_SIZE = 30;
 
     // ==============================================================
-    // MARKET DATA
+    // MARKET DATA INTERCEPTOR
     // ==============================================================
-
     async function categorizeCoins() {
         try {
             const baseApiUrl = window.API_BASE || window.location.origin;
+            window.logToPanel("📡 [DEBUG] Requesting market metrics from server...");
+            
             const res = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
             const data = await res.json();
+
+            // 🔍 LIVE ARRAY INSPECTION LOG LAYER
+            window.logToPanel(`🔍 [DEBUG DATA RECEIVED]\nKEYS FOUND: ${Object.keys(data || {}).join(", ") || "NONE"}\nSHORT_TERM COUNT: ${(data.short_term || []).length}\nMID_TERM COUNT: ${(data.mid_term || []).length}\nLONG_TERM COUNT: ${(data.long_term || []).length}`);
+            
+            if (data.short_term && data.short_term.length > 0) {
+                window.logToPanel(`💡 [DEBUG SAMPLE] First token parsed: ${data.short_term[0].symbol || "UNKNOWN"} | Address: ${data.short_term[0].address || "NONE"} | 24h: ${data.short_term[0].change24h}%`);
+            }
 
             return {
                 short_term: data.short_term || [],
@@ -26,7 +34,7 @@
                 long_term: data.long_term || []
             };
         } catch (err) {
-            console.error("[COINS API HANG ERROR]", err);
+            window.logToPanel(`❌ [DEBUG RESURGENCE ERROR] Fetch failure: ${err.message}`);
             return { short_term: [], mid_term: [], long_term: [] };
         }
     }
@@ -34,27 +42,23 @@
     window.categorizeCoins = categorizeCoins;
 
     // ==============================================================
-    // BUILD PROFITABLE TOKEN POOL (🌟 FIXED: ASSIGNED TO WINDOW CONTEXT)
+    // BUILD PROFITABLE TOKEN POOL
     // ==============================================================
     async function getTradeCandidates() {
         try {
             const marketData = await categorizeCoins();
             
-            // Safeguard 1: Ensure structural data matrices resolve cleanly
             let allTokens = [
                 ...(marketData.short_term || []),
                 ...(marketData.mid_term || []),
                 ...(marketData.long_term || [])
             ];
 
-            // Safeguard 2: Break-glass recovery payload mapping if server is stagnant
             if (!allTokens || allTokens.length === 0) {
-                console.warn("[WARN] Market analysis endpoint dry. Triggering static backup assets.");
+                window.logToPanel("⚠️ [DEBUG POOL ALERT] Array compiled completely empty. Using CAKE fallback.");
                 const emergencyFallback = [
-                    { symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 },
-                    { symbol: "BABYDOGE", address: "0xc748673057861a797275cd8a068abb95a902e8de", change24h: 2.2, lastPrice: 0.000000002 }
+                    { symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }
                 ];
-                window.logToPanel(`[POOL] ${emergencyFallback.length} fallback candidates forced.`);
                 return emergencyFallback;
             }
 
@@ -64,28 +68,24 @@
             });
 
             allTokens.sort((a, b) => Number(b.change24h || 0) - Number(a.change24h || 0));
-
             const finalPool = allTokens.slice(0, TOP_POOL_SIZE);
             
             if (finalPool.length === 0) {
                 return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
             }
 
-            window.logToPanel(`[POOL] ${finalPool.length} cost-aware candidates compiled.`);
+            window.logToPanel(`[POOL] ${finalPool.length} active candidates verified inside compilation window.`);
             return finalPool;
         } catch (err) {
-            window.logToPanel("❌ Critical breakdown inside candidates engine loop: " + err.message);
+            window.logToPanel("❌ Exception inside candidates loop: " + err.message);
             return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
         }
     }
-    
-    // Explicit global binding layout export
     window.getTradeCandidates = getTradeCandidates;
 
     // ==============================================================
-    // PAIRS
+    // PAIRS MAPPING
     // ==============================================================
-
     window.getBinancePairs = async function () {
         try {
             const candidates = await window.getTradeCandidates();
@@ -99,9 +99,8 @@
     };
 
     // ==============================================================
-    // TOKEN LOOKUP
+    // COIN EVALUATION STRATIFICATION 
     // ==============================================================
-
     window.evaluateCoin = async function(symbol) {
         try {
             const candidates = await window.getTradeCandidates();
@@ -112,16 +111,11 @@
             );
 
             if (!token) {
-                window.logToPanel(`[SKIP] ${cleanSymbol} failed profitability filter verification.`);
+                window.logToPanel(`[SKIP] ${cleanSymbol} dropped by pool filters.`);
                 return null;
             }
 
             const address = token.address || token.tokenAddress;
-            if (!address) {
-                window.logToPanel(`[INVALID] Missing contract target location address mapping for ${cleanSymbol}`);
-                return null;
-            }
-
             window.logToPanel(`[TARGET]\n${cleanSymbol}\nMOVE=${token.change24h}%\nADDR=${address}`);
 
             return {
@@ -133,39 +127,27 @@
                 lastPrice: Number(token.lastPrice || 0)
             };
         } catch (err) {
-            window.logToPanel(`[ERROR] evaluateCoin tracking error loop: ${err.message}`);
+            window.logToPanel(`[ERROR] evaluateCoin tracking logic error: ${err.message}`);
             return null;
         }
     };
-
-    // ==============================================================
-    // MARKET STATS
-    // ==============================================================
 
     window.getBinanceStats = async function(symbol) {
         try {
             const cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
             const tokens = await window.getTradeCandidates();
-
-            const token = tokens.find(t => 
-                String(t.symbol).toUpperCase().trim() === cleanSymbol
-            );
-
+            const token = tokens.find(t => String(t.symbol).toUpperCase().trim() === cleanSymbol);
             if (!token) return null;
-
             return {
                 symbol: token.symbol,
                 lastPrice: Number(token.lastPrice || 0),
                 priceChangePercent: Number(token.change24h || 0)
             };
         } catch (err) {
-            window.logToPanel(`[ERROR] getBinanceStats exception layer: ${err.message}`);
             return null;
         }
     };
 
-    window.logToPanel(
-        `coins.txt initialized.\nMin Move=${MIN_PROFIT_MOVE}%\nMax Move=${MAX_PROFIT_MOVE}%\nTop Pool=${TOP_POOL_SIZE}`
-    );
+    window.logToPanel(`coins.txt fully initialized.\nMin Move=${MIN_PROFIT_MOVE}%\nMax Move=${MAX_PROFIT_MOVE}%\nTop Pool=${TOP_POOL_SIZE}`);
 
 })();
