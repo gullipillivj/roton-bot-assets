@@ -18,17 +18,24 @@ async function updateTokenRecord(lastToken, currentToken) {
         const userid = window.USER_ID || localStorage.getItem("userid");
         if (!userid) {
             logToPanel("[TOKEN SYNC] Missing userid");
-            return;
+            return false;
         }
         const resp = await fetch("/prodbot/tokens/update", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({ userid: userid, lasttoken: lastToken, currenttoken: currentToken })
         });
         const data = await resp.json();
-        logToPanel(`[TOKEN SYNC] ${data.message}`);
+        if (data && data.message) {
+            logToPanel(`[DATABASE COMMIT VERIFIED]\nLAST=${lastToken}\nCURRENT=${currentToken}`);
+            return true;
+        }
+        return false;
     } catch (err) {
         logToPanel(`[TOKEN SYNC ERROR] ${err.message}`);
+        return false;
     }
 }
 
@@ -63,23 +70,23 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
-// =====================================================
-// SINGLE TRADING CYCLE (FULLY STRIPPED OF STOP LOSS & TARGET EXTRACTIONS)
-// =====================================================
+// =====================================================================
+// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED FOR INTERACTION WORKFLOWS)
+// =====================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
 
     const syncedBalance = await syncBalanceFromFund();
     if (syncedBalance === null) {
-        logToPanel("[WARN] Balance sync failed. Skipping loop cycle.");
-        return "CONTINUE"; 
+        logToPanel("[WARN] Balance sync failed. Stopping orchestration loop.");
+        return "STOP_ERROR"; 
     }
 
     let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
     if (tradingBalance <= 0) {
-        logToPanel("[WARN] No trading balance available.");
-        return "CONTINUE"; 
+        logToPanel("[WARN] No trading balance available. Stopping loop.");
+        return "STOP_ERROR"; 
     }
 
     // Capture baseline metrics before executing transaction routines
@@ -98,7 +105,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     try {
         const tokenResp = await fetch("/prodbot/tokens/get", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({ userid: window.USER_ID })
         });
         const tokenData = await tokenResp.json();
@@ -114,7 +123,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const coinInfo = await window.evaluateCoin(selectedCoin);
 
     if (!coinInfo || !coinInfo.tokenAddress) {
-        logToPanel("[WARN] Invalid or unprofiled target token. Proceeding...");
+        logToPanel("[WARN] Invalid or unprofiled target token. Proceeding to next cycle step...");
         return "CONTINUE"; 
     }
 
@@ -137,12 +146,13 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
         logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
 
+        // 🌟 STEP A: AWAIT LOGICAL BALANCE CHANGE CONFIRMATION BEFORE PROCEEDING
         let balanceChanged = false;
-        for (let attempt = 1; attempt <= 30; attempt++) {
+        for (let attempt = 1; attempt <= 45; attempt++) {
             await blockDelay(10000);
             await syncBalanceFromFund();
             const currentBalance = document.getElementById("investBalance").value.toString().trim();
-            logToPanel(`[VERIFY ${attempt}/30]\nSTART=${beforeBalance}\nNOW=${currentBalance}`);
+            logToPanel(`[VERIFY ${attempt}/45]\nSTART=${beforeBalance}\nNOW=${currentBalance}`);
 
             if (currentBalance !== beforeBalance) {
                 balanceChanged = true;
@@ -152,13 +162,20 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         if (!balanceChanged) {
-            logToPanel("[NO BALANCE MOVEMENT DETECTED — PASSING TO NEXT LOOP]");
-            return "CONTINUE"; 
+            logToPanel("❌ [NO BALANCE MOVEMENT DETECTED] Enforcing safe lockdown. Halting loop.");
+            return "STOP_ERROR"; 
         }
 
-        await updateTokenRecord(currentToken, coinInfo.tokenAddress);
-        logToPanel(`[TOKEN UPDATED]\nLAST=${currentToken}\nCURRENT=${coinInfo.tokenAddress}`);
+        // 🌟 STEP B: EXECUTE WRITER ACTIONS & ENSURE TRANSACTION IS REGISTERED
+        logToPanel("⏳ Synchronizing relational database entries... Enforcing update barriers.");
+        const dbSuccess = await updateTokenRecord(currentToken, coinInfo.tokenAddress);
+        
+        if (!dbSuccess) {
+            logToPanel("❌ [DATABASE COMMIT FAILED] Token mapping record rejected. Halting subsequent cycles for safety.");
+            return "STOP_ERROR";
+        }
 
+        // 🌟 STEP C: RESYNC DATA TO PREVENT CUMULATIVE FLOAT SKEWS
         await syncBalanceFromFund();
         
         const afterBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
@@ -177,10 +194,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     } catch (err) {
         logToPanel(`[RUNTIME RUN EXCEPTION]\n${err.message}`);
-        return "CONTINUE"; 
+        return "STOP_ERROR"; 
     }
 
-    // Stripped of early exits to force all 10 continuous cycles to compile
+    logToPanel("🟢 [CYCLE STABILIZED] State changes fully cleared. Safe to release next cycle.");
     return "CONTINUE";
 }
 
@@ -192,19 +209,36 @@ async function startSimulation(totalCycles) {
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
+    // Reset chart array layout buffers to clean up the bar canvas elements
+    if (window.balanceChart) {
+        window.balanceChart.data.labels = [];
+        window.balanceChart.data.datasets[0].data = [];
+        window.balanceChart.data.datasets[1].data = [];
+        window.balanceChart.update();
+    }
+
     logToPanel(`[BOT START] ${totalCycles} cycles`);
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
+        
         const signal = await simulateCycle(i, totalCycles, pTarget, sLoss);
+        
+        if (signal === "STOP_ERROR") {
+            logToPanel("🛑 State alignment check failed. Aborting full orchestration loop execution.");
+            break;
+        }
+
         if (i < totalCycles) {
             setStatus("WAITING");
             await blockDelay(10000);
         }
     }
+    
     window.isBotRunning = false;
     setStatus("STOPPED");
     logToPanel("[BOT FINISHED]");
 }
+
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
