@@ -1,3 +1,5 @@
+logToPanel("main_prod.txt loaded (BEP20 Mode)");
+
 // ========================================================
 // 📱 PART A: DASHBOARD INITIALIZATION & UTILITIES
 // ========================================================
