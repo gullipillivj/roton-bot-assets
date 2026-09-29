@@ -530,7 +530,8 @@ const stpBtn = document.getElementById("stopBtn");
 if (stpBtn) {
   stpBtn.onclick = function() {
     logToPanel("⏹ Safety Stop loop activation sequence engaged.");
-    window.isBotRunning = false;
-    if (typeof window.setStatus === "function") window.setStatus("STOPPED");
-  };
+    //window.isBotRunning = false;
+  //  if (typeof window.setStatus === "function")
+//window.setStatus("STOPPED");
+ // };
 }
