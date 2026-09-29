@@ -70,11 +70,9 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
+
 // =====================================================================
-// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED FOR INTERACTION WORKFLOWS)
-// =====================================================================
-// =====================================================================
-// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED WITH AUTO-USDT SETTLE PIPELINE)
+// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED WITH AUTO-USDT SETTLE)
 // =====================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
@@ -98,9 +96,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         window.initialSimulationUSD = window.beforeBalanceUSD;
     }
 
+    // =====================================================================
+    // 🌟 FIXED: REMOVED FRACTIONAL LOOP ALLOCATION — NOW COMITTING 100% CAPITAL
+    // =====================================================================
     const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
-    const remainingCycles = Math.max(1, totalCycles - cycle + 1);
-    const allocationUSD = (totalBalance / BigInt(remainingCycles)).toString();
+    const allocationUSD = totalBalance.toString(); // Uses the entire 100% full balance cleanly
 
     logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
 
@@ -146,6 +146,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
     const beforeBalance = document.getElementById("investBalance").value.toString().trim();
+
 
     try {
         logToPanel(`[SWAP REQUEST]\nFROM=${currentToken}\nTO=${coinInfo.tokenAddress}\nAMOUNT=${allocationUSD}`);
@@ -242,8 +243,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
-
-
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
@@ -285,3 +284,4 @@ async function startSimulation(totalCycles) {
 
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
+
