@@ -347,26 +347,22 @@ async function syncBalanceFromFund() {
                     usdBox.value = trueUsdValuation.toFixed(4);
                     logToPanel(`📈 Authenticated Ticker Price: 1 ${matchedToken.symbol} = $${matchedToken.lastPrice}. Wallet Value updated.`);
                     
-                } else if (lowerAddress === "0x55d398326f99059ff775485246999027b3197955") {
-                    // Fallback baseline for default standard USDT positions
+                         } else if (lowerAddress === "0x55d398326f99059ff775485246999027b3197955") {
                     usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
                 } else {
-                    // General system fallback preservation link
                     usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
                 }
-                 } catch (apiErr) {
+            } catch (apiErr) {
                 console.error("Failed to query authenticated metrics:", apiErr);
                 usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
             }
         }
-
         return window.SolidarityFundBalance;
-      }
     } catch (err) {
         logToPanel("❌ Balance Sync Error: " + err.message);
         return null;
     }
-} // 🌟 FIXED: Explicitly terminates syncBalanceFromFund function structure cleanly
+} // 🌟 FIXED: Terminates syncBalanceFromFund syntax matrix accurately
 window.syncBalanceFromFund = syncBalanceFromFund;
 
 
