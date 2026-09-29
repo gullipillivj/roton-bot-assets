@@ -43,6 +43,8 @@ async function updateTokenRecord(lastToken, currentToken) {
         return false;
     }
 }
+
+
 async function pickRandomCoin() {
     try {
         if (typeof window.getBinancePairs === "function") {
@@ -67,7 +69,6 @@ function setStatus(msg) {
 }
 window.setStatus = setStatus;
 
-// 🌟 GRACEFUL DEFERRED SHUTDOWN HANDLER
 function stopBot() {
     if (!window.isBotRunning) {
         logToPanel("[INFO] Bot is already completely idle.");
@@ -78,6 +79,8 @@ function stopBot() {
     logToPanel("⏹️ [STOP REQUESTED] Graceful exit active. Enforcing stablecoin checks before shutting down...");
 }
 window.stopBot = stopBot;
+
+
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
@@ -108,6 +111,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     let currentToken = "0x55d398326f99059fF775485246999027B3197955"; 
     const usdtAddress = "0x55d398326f99059fF775485246999027B3197955";
 
+
     try {
         const tokenResp = await fetch("/prodbot/tokens/get", {
             method: "POST",
@@ -136,10 +140,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             tokenAddress: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
             change24h: 1.8,
             lastPrice: 1.95
-        };
+            };
     }
 
-    // 🌟 PREVENTION GATE: Alternate path if target matches current asset holding
     if (coinInfo.tokenAddress.toLowerCase() === currentToken.toLowerCase()) {
         logToPanel("🔄 Target asset matches current holding token profile. Alternating destination target...");
         if (currentToken.toLowerCase() === usdtAddress.toLowerCase()) {
@@ -151,6 +154,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
     const beforeBalance = document.getElementById("investBalance").value.toString().trim();
+
+
     try {
         logToPanel(`[SWAP REQUEST]\nFROM=${currentToken}\nTO=${coinInfo.tokenAddress}\nAMOUNT=${allocationUSD}`);
         const swapResp = await window.runSwapUniswap(
@@ -166,6 +171,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
+        
         let balanceChanged = false;
         for (let attempt = 1; attempt <= 45; attempt++) {
             await blockDelay(10000);
@@ -189,9 +195,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         await updateTokenRecord(currentToken, coinInfo.tokenAddress);
         currentToken = coinInfo.tokenAddress;
 
-        // =====================================================================
-        // 🌟 AUTOMATED MULTI-CYCLE DEFERRED USDT SETTLEMENT SHIELD
-        // =====================================================================
+
         if (cycle === totalCycles || window.stopRequested) {
             if (currentToken.toLowerCase() !== usdtAddress.toLowerCase()) {
                 logToPanel(`🛡️ [SETTLEMENT REQUIRED] Returning final cycle portfolio to safe USDT reserves...`);
@@ -243,6 +247,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     return "CONTINUE";
 }
+
+
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
@@ -252,7 +258,6 @@ async function startSimulation(totalCycles) {
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
-    // 🌟 FIXED: Added proper array index mappings to stop compilation crashes!
     if (window.balanceChart) {
         window.balanceChart.data.labels = [];
         window.balanceChart.data.datasets[0].data = [];
@@ -260,11 +265,9 @@ async function startSimulation(totalCycles) {
         window.balanceChart.update();
     }
 
-
     logToPanel(`[BOT START] ${totalCycles} cycles`);
 
     for (let i = 1; i <= totalCycles; i++) {
-        // DEFERRED SHUTDOWN GATEWAY CHECK
         if (window.stopRequested) {
             logToPanel("🛑 [GRACEFUL EXIT CONFIRMED] Execution track safe. Terminating simulation engine.");
             break;
