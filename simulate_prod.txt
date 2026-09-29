@@ -168,364 +168,49 @@ async function swapRR(amount) {
 // =====================================================================
 // SINGLE TRADING CYCLE (FULLY STRIPPED OF RR FALLBACK CALLS)
 // =====================================================================
-async function simulateCycle(
-    cycle,
-    totalCycles,
-    profitTargetPct,
-    stopLossPct
-) {
-
-    logToPanel(
-        `[INFO] Cycle ${cycle}/${totalCycles}`
-    );
-
-    setStatus(
-        `RUNNING ${cycle}/${totalCycles}`
-    );
-
-    const syncedBalance =
+        // [YOUR EXISTING CODE REMAINING IN PLACE ABOVE...]
         await syncBalanceFromFund();
 
-    if (syncedBalance === null) {
-        logToPanel(
-            "[WARN] Balance sync failed. Skipping loop cycle."
-        );
-        return "CONTINUE"; // 🌟 RR REMOVED
-    }
+        // 🌟 FIXED: Pull human-readable metrics directly from the authenticated USD window
+        const afterBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
+        const beforeFloatUSD = window.beforeBalanceUSD || afterBalanceUSD;
+        const profitDeltaUSD = afterBalanceUSD - beforeFloatUSD;
 
-    let tradingBalance =
-        parseFloat(
-            document.getElementById(
-                "investBalance"
-            ).value
-        ) || 0;
+        window.cumulativePnL = (window.cumulativePnL || 0) + profitDeltaUSD;
 
-    if (tradingBalance <= 0) {
-        logToPanel(
-            "[WARN] No trading balance available."
-        );
-        return "CONTINUE"; // 🌟 RR REMOVED
-    }
+        // Sync visual live indicators instantly
+        const liveProfitText = document.getElementById("liveProfitValue");
+        if (liveProfitText) {
+            liveProfitText.innerText = window.cumulativePnL.toFixed(4) + " USDT";
+            liveProfitText.style.color = window.cumulativePnL >= 0 ? "#00FF00" : "#FF3B30";
+        }
 
-    // ==========================================
-    // PER-CYCLE ALLOCATION
-    // ==========================================
-
-    const totalBalance =
-        BigInt(
-            document
-                .getElementById(
-                    "startBalance"
-                )
-                .value
-                .toString()
-                .trim()
-        );
-
-    const remainingCycles =
-        Math.max(
-            1,
-            totalCycles - cycle + 1
-        );
-
-    const allocationUSD =
-        (
-            totalBalance /
-            BigInt(remainingCycles)
-        ).toString();
-
-    logToPanel(
-        `[ALLOCATION]
-TOTAL=${totalBalance}
-ALLOCATED=${allocationUSD}`
-    );
-
-    // ==========================================
-    // LOAD CURRENT TOKEN
-    // ==========================================
-
-    let currentToken =
-        "0x55d398326f99059fF775485246999027B3197955";
-
-    try {
-
-        const tokenResp =
-            await fetch(
-                "/prodbot/tokens/get",
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                },
-                    body: JSON.stringify({
-                        userid:
-                            window.USER_ID
-                    })
-                }
-            );
-
-        const tokenData =
-            await tokenResp.json();
-
-        if (
-            tokenData &&
-            tokenData.currenttoken
-        ) {
-            currentToken =
-                tokenData.currenttoken;
-
-            logToPanel(
-                `[TOKEN LOAD]
-${currentToken}`
-            );
+        if (typeof updateChart === "function") {
+            updateChart(afterBalanceUSD, window.cumulativePnL);
         }
 
     } catch (err) {
-        logToPanel(
-            `[TOKEN LOAD ERROR]
-${err.message}`
-        );
+        logToPanel(`[RUNTIME RUN EXCEPTION]\n${err.message}`);
+        return "CONTINUE"; 
     }
 
-    // ==========================================
-    // PICK COIN
-    // ==========================================
+    // 🌟 FIXED: Enforce percentage calculations entirely on USD values to prevent Wei overflows
+    const baseTradingVolumeUSD = window.initialSimulationUSD || parseFloat(document.getElementById("usd").value) || 1.0;
+    const totalChangePct = (window.cumulativePnL / Math.max(baseTradingVolumeUSD, 0.001)) * 100;
 
-    const selectedCoin =
-        await pickRandomCoin();
+    logToPanel(`📊 Loop Performance Evaluation: Net PnL = $${window.cumulativePnL.toFixed(4)} USD (${totalChangePct.toFixed(2)}%)`);
 
-    const coinInfo =
-        await window.evaluateCoin(
-            selectedCoin
-        );
-
-    if (
-        !coinInfo ||
-        !coinInfo.tokenAddress
-    ) {
-        logToPanel(
-            "[WARN] Invalid or unprofiled target token. Proceeding..."
-        );
-        return "CONTINUE"; // 🌟 RR REMOVED
-    }
-
-    // ==========================================
-    // COST-AWARE FILTER
-    // ==========================================
-
-    if (
-        Number(
-            coinInfo.change24h || 0
-        ) < -100
-    ) {
-        logToPanel(
-            `[SKIP]
-${coinInfo.symbol}
-MOVE=${coinInfo.change24h}%`
-        );
-        return "CONTINUE";
-    }
-
-    logToPanel(
-        `[TARGET]
-${coinInfo.symbol}
-MOVE=${coinInfo.change24h}%
-ADDRESS=${coinInfo.tokenAddress}`
-    );
-
-    const beforeBalance =
-        document.getElementById(
-            "investBalance"
-        ).value
-        .toString()
-        .trim();
-
-    try {
-
-        logToPanel(
-            `[SWAP REQUEST]
-FROM=${currentToken}
-TO=${coinInfo.tokenAddress}
-AMOUNT=${allocationUSD}`
-        );
-
-        const swapResp =
-            await window.runSwapUniswap(
-                window.USER_ADDR,
-                allocationUSD,
-                currentToken,
-                coinInfo.tokenAddress
-            );
-
-        if (
-            !swapResp ||
-            !swapResp.tx_hash
-        ) {
-            logToPanel(
-                "[SWAP PIPELINE SKIPPED OR REJECTED]"
-            );
-            return "CONTINUE"; // 🌟 RR REMOVED
-        }
-
-        logToPanel(
-            `[TX SENT]
-${swapResp.tx_hash}`
-        );
-
-        // ==========================================
-        // WAIT FOR ACTUAL BALANCE CHANGE
-        // ==========================================
-
-        let balanceChanged = false;
-
-        for (
-            let attempt = 1;
-            attempt <= 30;
-            attempt++
-        ) {
-
-            await blockDelay(
-                10000
-            );
-
-            await syncBalanceFromFund();
-
-            const currentBalance =
-                document
-                    .getElementById(
-                        "investBalance"
-                    )
-                    .value
-                    .toString()
-                    .trim();
-
-            logToPanel(
-                `[VERIFY ${attempt}/30]
-START=${beforeBalance}
-NOW=${currentBalance}`
-            );
-
-            if (
-                currentBalance !==
-                beforeBalance
-            ) {
-                balanceChanged =
-                    true;
-
-                logToPanel(
-                    `[BALANCE VERIFIED]
-${beforeBalance}
-➡
-${currentBalance}`
-                );
-                break;
-            }
-        }
-
-        // ==========================================
-        // NO MOVEMENT TRACKING
-        // ==========================================
-
-        if (!balanceChanged) {
-            logToPanel(
-                "[NO BALANCE MOVEMENT DETECTED — PASSING TO NEXT LOOP]"
-            );
-            return "CONTINUE"; // 🌟 RR REMOVED
-        }
-
-        // ==========================================
-        // UPDATE TOKENS TABLE
-        // ==========================================
-
-        await updateTokenRecord(
-            currentToken,
-            coinInfo.tokenAddress
-        );
-
-        logToPanel(
-            `[TOKEN UPDATED]
-LAST=${currentToken}
-CURRENT=${coinInfo.tokenAddress}`
-        );
-
-        await syncBalanceFromFund();
-
-        const afterBalance =
-            parseFloat(
-                document
-                    .getElementById(
-                        "investBalance"
-                    )
-                    .value
-            ) || 0;
-
-        const beforeFloat =
-            parseFloat(
-                beforeBalance
-            ) || 0;
-
-        const profitDelta =
-            afterBalance -
-            beforeFloat;
-
-        window.cumulativePnL =
-            (
-                window.cumulativePnL ||
-                0
-            ) +
-            profitDelta;
-
-        if (
-            typeof updateChart ===
-            "function"
-        ) {
-            updateChart(
-                afterBalance,
-                window.cumulativePnL
-            );
-        }
-
-    } catch (err) {
-        logToPanel(
-            `[RUNTIME RUN EXCEPTION]
-${err.message}`
-        );
-        return "CONTINUE"; // 🌟 RR REMOVED
-    }
-
-    const totalChangePct =
-        (
-            window.cumulativePnL /
-            Math.max(
-                tradingBalance,
-                1
-            )
-        ) * 100;
-
-    if (
-        totalChangePct >=
-        profitTargetPct
-    ) {
-        logToPanel(
-            "[TARGET REACHED]"
-        );
+    if (totalChangePct >= profitTargetPct) {
+        logToPanel("[TARGET REACHED] Exiting orchestration loop.");
         return "STOP_PROFIT";
     }
 
-    if (
-        totalChangePct <=
-        -stopLossPct
-    ) {
-        logToPanel(
-            "[STOP LOSS HIT]"
-        );
+    if (totalChangePct <= -stopLossPct) {
+        logToPanel("[STOP LOSS HIT] Risk threshold reached. Halting simulation loop.");
         return "STOP_LOSS";
     }
 
     return "CONTINUE";
-}
-
 
 
 
