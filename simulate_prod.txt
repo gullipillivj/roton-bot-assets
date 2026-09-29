@@ -13,6 +13,9 @@ window.logToPanel = logToPanel;
 
 const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+window.isBotRunning = false;
+window.stopRequested = false;
+
 async function updateTokenRecord(lastToken, currentToken) {
     try {
         const userid = window.USER_ID || localStorage.getItem("userid");
@@ -22,10 +25,12 @@ async function updateTokenRecord(lastToken, currentToken) {
         }
         const resp = await fetch("/prodbot/tokens/update", {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ userid: userid, lasttoken: lastToken, currenttoken: currentToken })
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                userid: userid, 
+                lasttoken: lastToken, 
+                currenttoken: currentToken 
+            })
         });
         const data = await resp.json();
         if (data && data.message) {
@@ -38,7 +43,6 @@ async function updateTokenRecord(lastToken, currentToken) {
         return false;
     }
 }
-
 async function pickRandomCoin() {
     try {
         if (typeof window.getBinancePairs === "function") {
@@ -48,7 +52,7 @@ async function pickRandomCoin() {
             }
         }
     } catch (err) {
-        console.log("pickRandomCoin standard query missed, using fallback:", err);
+        console.log("pickRandomCoin missed query, using fallback:", err);
     }
     return "CAKE";
 }
@@ -64,18 +68,15 @@ function setStatus(msg) {
 window.setStatus = setStatus;
 
 function stopBot() {
-    window.isBotRunning = false;
-    setStatus("STOPPED");
-    logToPanel("[BOT STOPPED] Trading halted by user.");
+    if (!window.isBotRunning) {
+        logToPanel("[INFO] Bot is already completely idle.");
+        return;
+    }
+    window.stopRequested = true;
+    setStatus("HALTING...");
+    logToPanel("⏹️ [STOP REQUESTED] Graceful exit active. Securing stablecoin positions before shutdown...");
 }
 window.stopBot = stopBot;
-
-// =====================================================================
-// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED FOR INTERACTION WORKFLOWS)
-// =====================================================================
-// =====================================================================
-// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED WITH AUTO-USDT SETTLE PIPELINE)
-// =====================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
@@ -92,7 +93,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "STOP_ERROR"; 
     }
 
-    // Capture baseline metrics before executing transaction routines
     window.beforeBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
     if (cycle === 1) {
         window.initialSimulationUSD = window.beforeBalanceUSD;
@@ -104,7 +104,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
 
-    let currentToken = "0x55d398326f99059fF775485246999027B3197955"; // Safe default (USDT)
+    let currentToken = "0x55d398326f99059fF775485246999027B3197955"; 
+    const usdtAddress = "0x55d398326f99059fF775485246999027B3197955";
+
     try {
         const tokenResp = await fetch("/prodbot/tokens/get", {
             method: "POST",
@@ -121,18 +123,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     let selectedCoin = "CAKE";
-    try {
-        selectedCoin = await pickRandomCoin();
-    } catch (pickErr) {
-        selectedCoin = "CAKE";
-    }
+    try { selectedCoin = await pickRandomCoin(); } catch (pickErr) { selectedCoin = "CAKE"; }
 
     let coinInfo = null;
-    try {
-        coinInfo = await window.evaluateCoin(selectedCoin);
-    } catch (evalErr) {
-        console.error(evalErr);
-    }
+    try { coinInfo = await window.evaluateCoin(selectedCoin); } catch (evalErr) { console.error(evalErr); }
 
     if (!coinInfo || !coinInfo.tokenAddress) {
         logToPanel("⚠️ Dynamic pricing lookup stalled. Injecting stable test asset mapping.");
@@ -162,8 +156,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
-
-        // STEP A: AWAIT LOGICAL BALANCE CHANGE CONFIRMATION
         let balanceChanged = false;
         for (let attempt = 1; attempt <= 45; attempt++) {
             await blockDelay(10000);
@@ -183,42 +175,57 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             return "STOP_ERROR"; 
         }
 
-        // STEP B: UPDATE THE RUNTIME LEDGER MAPPING FOR ACCOUNTING PURPOSES
         logToPanel("⏳ Synchronizing database token allocation tracking...");
         await updateTokenRecord(currentToken, coinInfo.tokenAddress);
+        currentToken = coinInfo.tokenAddress;
 
-        // =====================================================================
-        // 🌟 AUTOMATED POST-TRADE STABLE SETTLE PIPELINE (THE VOLATILITY SHIELD)
-        // =====================================================================
-        const usdtAddress = "0x55d398326f99059fF775485246999027B3197955";
-        
-        if (coinInfo.tokenAddress.toLowerCase() !== usdtAddress.toLowerCase()) {
-            logToPanel(`🛡️ [VOLATILITY SHIELD] Volatile asset parsed (${coinInfo.symbol}). Repatriating capital straight back to USDT...`);
+        // 🌟 AUTOMATED PROFIT-TARGETED POST-TRADE STABLE RECOVERY
+        if (currentToken.toLowerCase() !== usdtAddress.toLowerCase()) {
+            logToPanel(`🛡️ [VOLATILITY SHIELD] Holding ${coinInfo.symbol}. Polling prices for profit bounds...`);
             
-            // Read fresh balance configuration arrays from the canvas forms
+            let profitConfirmed = false;
+            const entryValueUSD = parseFloat(document.getElementById("usd").value) || 0;
+            
+            for (let targetCheck = 1; targetCheck <= 10; targetCheck++) {
+                await blockDelay(15000); 
+                await syncBalanceFromFund();
+                
+                const dynamicCurrentValueUSD = parseFloat(document.getElementById("usd").value) || 0;
+                logToPanel(`📈 [PROFIT CHECK ${targetCheck}/10] Entry: $${entryValueUSD.toFixed(4)} | Current: $${dynamicCurrentValueUSD.toFixed(4)}`);
+                
+                // Triggers recovery once position exceeds entry base value + fee friction buffers
+                if (dynamicCurrentValueUSD > (entryValueUSD * 1.005)) { 
+                    logToPanel("🎉 [PROFIT TARGET REACHED] Assets cleared fee margins. Triggering settlement...");
+                    profitConfirmed = true;
+                    break;
+                }
+            }
+
+            if (!profitConfirmed) {
+                logToPanel("⏳ [SETTLE TIMEOUT] Evaluation window expired. Executing recovery swap to safeguard balance...");
+            }
+
             const volatileWeiBalance = document.getElementById("investBalance").value.toString().trim();
-            
-            logToPanel(`[SHIELD SWAP REQUEST]\nFROM=${coinInfo.tokenAddress}\nTO=${usdtAddress}\nAMOUNT=${volatileWeiBalance}`);
+            logToPanel(`[SHIELD SWAP REQUEST]\nFROM=${currentToken}\nTO=${usdtAddress}\nAMOUNT=${volatileWeiBalance}`);
             
             const settleResp = await window.runSwapUniswap(
                 window.USER_ADDR,
                 volatileWeiBalance,
-                coinInfo.tokenAddress,
+                currentToken,
                 usdtAddress
             );
             
             if (settleResp && settleResp.tx_hash) {
-                logToPanel(`✅ [SHIELD SETTLED] Capital securely locked in USDT. Settle Hash: ${settleResp.tx_hash}`);
-                // Re-write mapping logs back to baseline track configuration parameters
-                await updateTokenRecord(coinInfo.tokenAddress, usdtAddress);
+                logToPanel(`✅ [SHIELD SETTLED] Capital secured in USDT. Hash: ${settleResp.tx_hash}`);
+                await updateTokenRecord(currentToken, usdtAddress);
+                currentToken = usdtAddress;
             } else {
-                logToPanel("⚠️ [SHIELD WARNING] Stable conversion skipped or rejected by extension layout provider. Holding raw assets.");
+                logToPanel("⚠️ [SHIELD FAILED] Settle rejected. Assets left stranded in alternative slots.");
+                return "STOP_ERROR";
             }
         }
 
-        // STEP C: RESYNC DATA AND CALCULATE ROLLING PERFORMANCE
         await syncBalanceFromFund();
-        
         const afterBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
         const profitDeltaUSD = afterBalanceUSD - window.beforeBalanceUSD;
         window.cumulativePnL = (window.cumulativePnL || 0) + profitDeltaUSD;
@@ -238,21 +245,17 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "STOP_ERROR"; 
     }
 
-    logToPanel("🟢 [CYCLE STABILIZED] Capital secured in stable reserves. Releasing next cycle thread gateway.");
     return "CONTINUE";
 }
-
-
-
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
+    window.stopRequested = false;
     window.cumulativePnL = 0;
 
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
-    // Reset chart array layout buffers to clean up the bar canvas elements
     if (window.balanceChart) {
         window.balanceChart.data.labels = [];
         window.balanceChart.data.datasets[0].data = [];
@@ -263,12 +266,21 @@ async function startSimulation(totalCycles) {
     logToPanel(`[BOT START] ${totalCycles} cycles`);
 
     for (let i = 1; i <= totalCycles; i++) {
-        if (!window.isBotRunning) break;
+        // 🌟 DEFERRED SHUTDOWN GATEWAY CHECK
+        if (window.stopRequested) {
+            logToPanel("🛑 [GRACEFUL EXIT CONFIRMED] Capital returned safely to USDT. Halting system.");
+            break;
+        }
         
         const signal = await simulateCycle(i, totalCycles, pTarget, sLoss);
         
         if (signal === "STOP_ERROR") {
-            logToPanel("🛑 State alignment check failed. Aborting full orchestration loop execution.");
+            logToPanel("🛑 State check failed or shield swap rejected. Stopping loop to protect records.");
+            break;
+        }
+
+        if (window.stopRequested) {
+            logToPanel("🛑 [GRACEFUL EXIT CONFIRMED] Capital returned safely to USDT. Halting system.");
             break;
         }
 
@@ -279,6 +291,7 @@ async function startSimulation(totalCycles) {
     }
     
     window.isBotRunning = false;
+    window.stopRequested = false;
     setStatus("STOPPED");
     logToPanel("[BOT FINISHED]");
 }
