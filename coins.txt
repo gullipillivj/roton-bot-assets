@@ -1,3 +1,4 @@
+logToPanel("coins.txt loaded (BEP20 Mode)");
 // ==================================================================
 // 🎛️ DIRECT WALLET-COMPATIBLE LIVE COIN ENGINE (DECENTRALIZED MODE)
 // ==================================================================
