@@ -145,7 +145,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     // =====================================================================
     // 📊 🌟 NEW ECONOMIC PROFIT THRESHOLD VERIFIER GATEWAY
     // =====================================================================
-    const maxGasOverheadUSD = 0.07; // \$0.01 Approve + \$0.06 Swap
+    const maxGasOverheadUSD = 0.02; // \$0.01 Approve + \$0.06 Swap
     const projectedProfitUSD = window.beforeBalanceUSD * (parseFloat(coinInfo.change24h) / 100);
 
     logToPanel(`[ECONOMICS EVALUATION]\nPORTFOLIO VALUE=$${window.beforeBalanceUSD.toFixed(4)}\nPROJECTED MOVE PROCEEDS=$${projectedProfitUSD.toFixed(4)}\nESTIMATED NETWORK FEES=$${maxGasOverheadUSD.toFixed(2)}`);
