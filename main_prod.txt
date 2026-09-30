@@ -458,34 +458,133 @@ function setupActionListeners() {
 
 
 // Extension provider initialization framework bindings
-window.activeProvider = window.ethereum;
-const connBtn = document.getElementById("connectwalletBtn");
-if (connBtn) {
-  connBtn.onclick = async function() {
-    if (typeof window.ethereum !== "undefined") {
-      try {
-        logToPanel("⏳ Querying accounts from browser extension...");
-        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-        window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
-        
-        const label = document.getElementById("currentWalletLabel");
-        if (label) label.innerText = window.USER_ADDR;
-        logToPanel("✅ Provider connected address confirmed: " + window.USER_ADDR);
-        
-        if (typeof window.syncBalanceFromFund === "function") {
-            await window.syncBalanceFromFund();
+// ========================================================
+// ⚡ REOWN / WALLETCONNECT DIRECT LIGHTWEIGHT RPC ENGINE
+// ========================================================
+
+// Configuration - Replace with your actual Project ID from cloud.reown.com
+const REOWN_PROJECT_ID = "db6af3372f722385b2e4c5df24341c63";
+const BSC_CHAIN_ID_CAIP = "eip155:56"; // Exact BSC Mainnet identifier map
+
+/**
+ * Robust JSON-RPC programmatic dispatcher targeting the raw WalletConnect API gateway
+ * @param {string} method - The standard Ethereum JSON-RPC method name (e.g., eth_blockNumber)
+ * @param {Array} params - Parameters array corresponding to the target execution call
+ */
+async function dispatchReownJsonRpcRequest(method, params = []) {
+    // Exact URL architecture matching your direct documentation reference parameter rules
+    const url = `https://walletconnect.org{BSC_CHAIN_ID_CAIP}&projectId=${REOWN_PROJECT_ID}`;
+    
+    const payload = {
+        id: Date.now() + Math.floor(Math.random() * 1000), // Unique connection sequence runtime id
+        jsonrpc: "2.0",
+        method: method,
+        params: params
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`Reown API HTTP Error Gateway Status: ${response.status}`);
         }
-        if (typeof window.initLiveBalanceClock === "function") {
-            window.initLiveBalanceClock();
+
+        const jsonResponse = await response.json();
+        
+        if (jsonResponse.error) {
+            throw new Error(`RPC Engine Exception [${jsonResponse.error.code}]: ${jsonResponse.error.message}`);
         }
-      } catch (err) {
-        logToPanel("❌ Wallet sync failed: " + err.message);
-      }
-    } else {
-      logToPanel("❌ Extension injector not discovered. Please access via a Web3 dashboard browser.");
+
+        return jsonResponse.result;
+    } catch (err) {
+        logToPanel(`❌ [REOWN RPC PIPELINE FAILURE] ${err.message}`);
+        throw err;
     }
-  };
 }
+
+// ========================================================
+// 📱 WALLET INTERFACE CONNECT ROUTER
+// ========================================================
+window.addEventListener("DOMContentLoaded", () => {
+    initializeLabels();
+    setupActionListeners();
+
+    const connBtn = document.getElementById("connectwalletBtn");
+    if (connBtn) {
+        connBtn.onclick = async function() {
+            // Track check prioritisation: Use built-in provider if user is inside a Web3 browser
+            if (typeof window.ethereum !== "undefined") {
+                try {
+                    logToPanel("⏳ Querying accounts from native browser wallet extension...");
+                    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+                    window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
+                    
+                    logToPanel("✅ Connected via Native Browser Wallet Provider.");
+                    await finalizeInterfaceSyncState();
+                    return;
+                } catch (nativeErr) {
+                    logToPanel(`⚠️ Built-in connection skipped: ${nativeErr.message}. Launching Reown fallback portal...`);
+                }
+            }
+
+            // Fallback: Programmatic raw data connection initialization via Reown AppKit Endpoint 
+            try {
+                logToPanel("📡 Dialing Reown Blockchain API Network Nodes...");
+                
+                // 1. Verify network chain availability straight from the endpoint
+                const onChainIdHex = await dispatchReownJsonRpcRequest("eth_chainId", []);
+                const chainIdDecimal = parseInt(onChainIdHex, 16);
+                logToPanel(`ℹ️ Reown RPC Connected. Network Target Chain ID: ${chainIdDecimal} (${onChainIdHex})`);
+
+                // 2. Fallback execution block parameters mapping window configurations
+                if (window.USER_ADDR && window.USER_ADDR !== "null") {
+                    logToPanel("🔄 Re-verifying active ledger parameters...");
+                } else {
+                    // Prompt instructions for external sessions
+                    logToPanel("💡 Outside built-in browser window: Enter your target Web3 public address inside logs to ground mapping states manually or inject via dApp links.");
+                    
+                    // Simple programmatic browser prompt for manual grounding input out-of-wallet
+                    const manualInputAddress = prompt("Enter your connected BSC Web3 Wallet Address to track:");
+                    if (manualInputAddress && manualInputAddress.startsWith("0x") && manualInputAddress.length === 42) {
+                        window.USER_ADDR = manualInputAddress.toLowerCase();
+                    } else {
+                        logToPanel("❌ Connection cancelled. Invalid address structure.");
+                        return;
+                    }
+                }
+
+                await finalizeInterfaceSyncState();
+
+            } catch (reownGatewayErr) {
+                logToPanel(`❌ Core Connection Pipeline Blocked: ${reownGatewayErr.message}`);
+            }
+        };
+    }
+});
+
+/**
+ * Updates UI labels and executes parallel on-chain balance synchronizations
+ */
+async function finalizeInterfaceSyncState() {
+    const label = document.getElementById("currentWalletLabel");
+    if (label) label.innerText = window.USER_ADDR;
+    
+    // Override the runtime reference so downstream modules (simulateCycle) read the endpoint data
+    window.ethereum_is_reown_rpc = true;
+
+    logToPanel(`🎉 Settle Success! Grounded State Address: ${window.USER_ADDR}`);
+
+    if (typeof window.syncBalanceFromFund === "function") {
+        await window.syncBalanceFromFund();
+    }
+}
+
 
 // ========================================================
 // 🚀 DEPOSIT & TRADING LIFE-RINGS
