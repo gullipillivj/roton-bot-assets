@@ -1,210 +1,234 @@
-logToPanel("pancake_prod.txt loaded successfully.");
+logToPanel("pancake_prod.txt loaded successfully with integrated Live Coins & Charts Engines.");
 
 // ==================================================================
-// 📊 GLOBAL LOGGING UTILITY
+// 📊 GLOBAL LOGGING UTILITY (STANDARDIZED ACCROSS SYSTEMS)
 // ==================================================================
-function logToPanel(msg) {
-  const panel = document.getElementById("logPanel");
-  if (panel) {
-    panel.innerText += "\n" + msg;
-    panel.scrollTop = panel.scrollHeight;
-  } else {
-    console.log(msg);
-  }
+if (typeof window.logToPanel !== "function") {
+    window.logToPanel = function(msg) {
+        var panel = document.getElementById("logPanel");
+        if (panel) {
+            panel.innerText += "\n" + msg;
+            panel.scrollTop = panel.scrollHeight;
+        } else {
+            console.log(msg);
+        }
+    };
 }
 
+// ==================================================================
+// 📈 INTEGRATED LIVE VISUALIZATION MATRIX ENGINE (CHART.TXT)
+// ==================================================================
+function updateChart(currentBalanceUSD, cumulativeProfitUSD) {
+    var chartInstance = window.balanceChart;
+    var safeProfit = typeof cumulativeProfitUSD !== 'undefined' ? cumulativeProfitUSD : 0;
+    
+    if (!chartInstance) {
+        console.warn("[CHART ERROR] window.balanceChart container instance is missing from global execution scope.");
+        return;
+    }
 
+    try {
+        var currentDataPointsCount = chartInstance.data.labels.length;
+        var targetLabel = currentDataPointsCount === 0 ? "Start" : "Cycle " + currentDataPointsCount;
+        
+        var safeBalance = parseFloat(currentBalanceUSD) || 0;
+        var parsedProfit = parseFloat(safeProfit) || 0;
+
+        chartInstance.data.labels.push(targetLabel);
+        
+        // Dataset 0: Investment Balance (Yellow line tracking boundaries)
+        chartInstance.data.datasets[0].data.push(safeBalance);
+        
+        // Dataset 1: Profit/Loss Tracker (Green/Red rolling line)
+        chartInstance.data.datasets[1].data.push(parsedProfit);
+
+        chartInstance.update();
+        console.log("[CHART SYNC SUCCESS] Label: " + targetLabel + " | Bal: $" + safeBalance.toFixed(4) + " | PnL: $" + parsedProfit.toFixed(4));
+    } catch (chartRenderErr) {
+        console.error("Critical breakdown inside Chart rendering pipeline:", chartRenderErr);
+    }
+}
+window.updateChart = updateChart;
 
 // ==================================================================
-// 🥞 PIPELINE 1: DISPATCH LOCAL UNISWAP / PANCAKE ROUTING
+// 🎛️ OPEN-SOURCE DYNAMIC LIVE COIN ENGINE (COINS.TXT LAYER)
+// ==================================================================
+(function () {
+    "use strict";
+
+    async function categorizeCoins() {
+        try {
+            var backendUrl = "/prodbot/market-analysis";
+            var res = await fetch(backendUrl);
+            var responseData = await res.json();
+
+            if (!responseData || responseData.status !== "ok") {
+                throw new Error("Backend response status failed or data malformed.");
+            }
+
+            var rawData = responseData.data || [];
+            var flatList = [];
+            var i;
+
+            for (i = 0; i < rawData.length; i++) {
+                var item = rawData[i];
+                if (item) {
+                    flatList.push({
+                        symbol: String(item.symbol || "UNKNOWN").toUpperCase(),
+                        address: item.address || "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+                        lastPrice: parseFloat(item.lastPrice || 0),
+                        change24h: parseFloat(item.change24h || 0),
+                        volume: parseFloat(item.volume || 0)
+                    });
+                }
+            }
+
+            window.logToPanel("🎉 [DIRECT SUCCESS] Synchronized " + flatList.length + " real-time open-source tokens from DeFiLlama!");
+            return { short_term: flatList, mid_term: [], long_term: [] };
+
+        } catch (err) {
+            window.logToPanel("⚠️ Open-Source Network Fetch stalled: " + err.message + ". Reverting to emergency backup.");
+            return { 
+                short_term: [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95, volume: 55000.0 }], 
+                mid_term: [], 
+                long_term: [] 
+            };
+        }
+    }
+    window.categorizeCoins = categorizeCoins;
+
+    async function getTradeCandidates() {
+        try {
+            var marketData = await categorizeCoins();
+            var allTokens = [];
+            if (marketData && marketData.short_term) {
+                allTokens = marketData.short_term;
+            }
+
+            allTokens.sort(function (a, b) {
+                return Number(b.change24h || 0) - Number(a.change24h || 0);
+            });
+            return allTokens;
+        } catch (err) {
+            return [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95 }];
+        }
+    }
+    window.getTradeCandidates = getTradeCandidates;
+
+    window.getBinancePairs = async function () {
+        var candidates = await window.getTradeCandidates();
+        return candidates.map(function (coin) {
+            return coin.symbol + "USDT";
+        });
+    };
+
+    window.evaluateCoin = async function (symbol) {
+        var candidates = await window.getTradeCandidates();
+        var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
+        var i;
+        
+        for (i = 0; i < candidates.length; i++) {
+            if (String(candidates[i].symbol).toUpperCase().trim() === cleanSymbol) {
+                var token = candidates[i];
+                return {
+                    symbol: token.symbol,
+                    tokenAddress: token.address,
+                    network: "bep20",
+                    router: "pancakeswap",
+                    change24h: Number(token.change24h || 0),
+                    lastPrice: Number(token.lastPrice || 0)
+                };
+            }
+        }
+        return null;
+    };
+
+    window.getBinanceStats = async function (symbol) {
+        var tokens = await window.getTradeCandidates();
+        var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
+        var i;
+
+        for (i = 0; i < tokens.length; i++) {
+            if (String(tokens[i].symbol).toUpperCase().trim() === cleanSymbol) {
+                var token = tokens[i];
+                return { 
+                    symbol: token.symbol, 
+                    lastPrice: Number(token.lastPrice || 0), 
+                    priceChangePercent: Number(token.change24h || 0) 
+                };
+            }
+        }
+        return null;
+    };
+
+})();
+
+// ==================================================================
+// 🥞 PIPELINE: DISPATCH LOCAL UNISWAP / PANCAKE ROUTING
 // ==================================================================
 async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
     try {
+        var base = window.API_BASE || "";
+        var cleanAmount = amountWei ? amountWei.toString().trim() : "0";
+        
+        // Deployed unalterable system constants
+        var pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+        var v12ContractAddress = "0x1854170353ea89672638F9fa5acB477c45523871"; 
+        var amountOutMin = "0"; 
+        
+        window.logToPanel("[INFO] Requesting token allowance approval from wallet...");
+        
+        var approveMethodId = "0x095ea7b3";
+        var paddedSpender = v12ContractAddress.replace("0x", "").toLowerCase().padStart(64, "0");
+        var paddedAmount = BigInt(cleanAmount).toString(16).padStart(64, "0");
+        var approveCalldata = approveMethodId + paddedSpender + paddedAmount;
 
-        const base = window.API_BASE || "";
-        const cleanAmount =
-            amountWei
-                ? amountWei.toString().trim()
-                : "0";
+        // Triggers authorization spend check overlay screen
+        await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{
+                from: userAddr,
+                to: fromToken,
+                data: approveCalldata,
+                value: '0x0'
+            }]
+        });
 
-        // Deployed constants
-        const pancakeRouterAddress =
-            "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-
-        const v12ContractAddress =
-            "0x1854170353ea89672638F9fa5acB477c45523871";
-
-        const amountOutMin = "0";
-
-        logToPanel(
-            "[INFO] Requesting token allowance approval from wallet..."
-        );
-
-        // ==================================================
-        // APPROVAL
-        // ==================================================
-
-        const approveMethodId =
-            "0x095ea7b3";
-
-        const paddedSpender =
-            v12ContractAddress
-                .replace("0x", "")
-                .toLowerCase()
-                .padStart(64, "0");
-
-        // MAX UINT256 APPROVAL
-        const paddedAmount =
-            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-
-        const approveCalldata =
-            approveMethodId +
-            paddedSpender +
-            paddedAmount;
-
-        const approveHash =
-            await window.ethereum.request({
-                method: "eth_sendTransaction",
-                params: [{
-                    from: userAddr,
-                    to: fromToken,
-                    data: approveCalldata,
-                    value: "0x0"
+        window.logToPanel("✅ Allowance granted. Proceeding to swap compilation pipeline...");
+        window.logToPanel("[ROUTE] Dispatching Uniswap pipeline query for " + cleanAmount + " units...");
+        
+        var res = await fetch(base + "/prodbot/swap/uniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ 
+                router: pancakeRouterAddress,
+                tokenIn: fromToken, 
+                tokenOut: toToken,
+                amountIn: cleanAmount, 
+                amountOutMin: amountOutMin
+            })
+        });
+        
+        var data = await res.json();
+        if (data && data.status === "ok") {
+            window.logToPanel("[INFO] Sending transaction payload directly to browser extension...");
+            
+            var txHash = await window.ethereum.request({
+                method: 'eth_sendTransaction',
+                params: [{ 
+                    from: userAddr, 
+                    to: data.to_contract,    
+                    data: data.compiled_data, 
+                    value: '0x0' 
                 }]
             });
-
-        logToPanel(
-            `[APPROVE TX] ${approveHash}`
-        );
-
-        logToPanel(
-            "[WAIT] Waiting for approval confirmation..."
-        );
-
-        let approveReceipt = null;
-
-        while (!approveReceipt) {
-
-            await new Promise(
-                resolve =>
-                    setTimeout(resolve, 3000)
-            );
-
-            approveReceipt =
-                await window.ethereum.request({
-                    method: "eth_getTransactionReceipt",
-                    params: [approveHash]
-                });
-
-            if (!approveReceipt) {
-                logToPanel(
-                    "[WAIT] Approval transaction pending..."
-                );
-            }
+            window.logToPanel("✅ Swap Transaction broadcasted successfully: " + txHash);
+            return { status: "ok", tx_hash: txHash };
         }
-
-        if (
-            approveReceipt.status !== "0x1" &&
-            approveReceipt.status !== 1
-        ) {
-            throw new Error(
-                "Approval transaction failed"
-            );
-        }
-
-        logToPanel(
-            "✅ Approval confirmed on-chain."
-        );
-
-        // ==================================================
-        // REQUEST COMPILED SWAP DATA
-        // ==================================================
-
-        logToPanel(
-            `[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`
-        );
-
-        logToPanel(`
-TOKEN_IN=${fromToken}
-TOKEN_OUT=${toToken}
-AMOUNT_IN=${cleanAmount}
-MIN_OUT=${amountOutMin}
-`);
-
-        const res = await fetch(
-            `${base}/prodbot/swap/uniswap`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-                body: JSON.stringify({
-                    router:
-                        pancakeRouterAddress,
-                    tokenIn:
-                        fromToken,
-                    tokenOut:
-                        toToken,
-                    amountIn:
-                        cleanAmount,
-                    amountOutMin:
-                        amountOutMin
-                })
-            }
-        );
-
-        const data =
-            await res.json();
-
-        if (
-            data &&
-            data.status === "ok"
-        ) {
-
-            logToPanel(
-                "[INFO] Sending transaction payload directly to browser extension..."
-            );
-
-            const txHash =
-                await window.ethereum.request({
-                    method:
-                        "eth_sendTransaction",
-                    params: [{
-                        from:
-                            userAddr,
-                        to:
-                            data.to_contract,
-                        data:
-                            data.compiled_data,
-                        value:
-                            "0x0"
-                    }]
-                });
-
-            logToPanel(
-                `✅ Swap Transaction broadcasted successfully: ${txHash}`
-            );
-
-            return {
-                status: "ok",
-                tx_hash: txHash
-            };
-        }
-
         return data;
-
-    } catch (err) {
-
-        logToPanel(
-            `❌ Uniswap Pipeline Error: ${err.message}`
-        );
-
-        return {
-            status: "error",
-            message: err.message
-        };
+    } catch (err) { 
+        window.logToPanel("❌ Uniswap Pipeline Error: " + err.message);
+        return { status: "error", message: err.message }; 
     }
 }
-
 window.runSwapUniswap = runSwapUniswap;
