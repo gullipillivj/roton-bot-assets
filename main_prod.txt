@@ -471,12 +471,15 @@ const BSC_CHAIN_ID_CAIP = "eip155:56"; // Exact BSC Mainnet identifier map
  * @param {string} method - The standard Ethereum JSON-RPC method name (e.g., eth_blockNumber)
  * @param {Array} params - Parameters array corresponding to the target execution call
  */
+// ========================================================
+// ⚡ SECURE PROXY-ROUTED PROGRAMMATIC RPC DISPATCHER
+// ========================================================
 async function dispatchReownJsonRpcRequest(method, params = []) {
-    // Exact URL architecture matching your direct documentation reference parameter rules
-    const url = `https://walletconnect.org{BSC_CHAIN_ID_CAIP}&projectId=${REOWN_PROJECT_ID}`;
+    // FIXED: Routing locally through your unblocked Flask server layer to break the CORS barrier
+    const url = "/prodbot/reown-rpc";
     
     const payload = {
-        id: Date.now() + Math.floor(Math.random() * 1000), // Unique connection sequence runtime id
+        id: Date.now() + Math.floor(Math.random() * 1000),
         jsonrpc: "2.0",
         method: method,
         params: params
@@ -492,7 +495,7 @@ async function dispatchReownJsonRpcRequest(method, params = []) {
         });
 
         if (!response.ok) {
-            throw new Error(`Reown API HTTP Error Gateway Status: ${response.status}`);
+            throw new Error(`Local Proxy Server Error Gateway Status: ${response.status}`);
         }
 
         const jsonResponse = await response.json();
@@ -503,7 +506,7 @@ async function dispatchReownJsonRpcRequest(method, params = []) {
 
         return jsonResponse.result;
     } catch (err) {
-        logToPanel(`❌ [REOWN RPC PIPELINE FAILURE] ${err.message}`);
+        logToPanel(`❌ [REOWN RPC PROXY FAILURE] ${err.message}`);
         throw err;
     }
 }
