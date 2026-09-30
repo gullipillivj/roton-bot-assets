@@ -1,10 +1,15 @@
 logToPanel("coins.txt loaded (BEP20 Mode)");
+
 // ==================================================================
 // 🎛️ DIRECT WALLET-COMPATIBLE LIVE COIN ENGINE (DECENTRALIZED MODE)
 // ==================================================================
 
 (function () {
     "use strict";
+
+    if (typeof window.logToPanel !== "function") {
+        window.logToPanel = function(msg) { console.log(msg); };
+    }
 
     window.logToPanel("coins.txt loaded safely via Open-Source DeFiLlama API Engine Layer.");
 
@@ -17,32 +22,85 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
             var res = await fetch(backendUrl);
             var responseData = await res.json();
 
-            if (!responseData || responseData.status !== "ok") {
-                throw new Error("Backend response status failed or data malformed.");
+            // Handle the backend envelope wrappers safely
+            var rawData = responseData;
+            if (responseData && responseData.data) {
+                rawData = responseData.data;
+            } else if (responseData && responseData.status === "ok" && responseData.data === undefined) {
+                rawData = [];
             }
 
-            var rawData = responseData.data || [];
+            if (!Array.isArray(rawData)) {
+                try { rawData = JSON.parse(rawData); } catch(e) { rawData = []; }
+            }
+
             var flatList = [];
             var i;
 
             for (i = 0; i < rawData.length; i++) {
                 var item = rawData[i];
+                if (!item) continue;
+
+                // 1. DYNAMIC TOKEN SYMBOL CLEANING
+                var rawSymbol = String(item.token_symbol || item.symbol || "").toUpperCase().trim();
+                var rawName = String(item.name || "UNKNOWN").toUpperCase().trim();
+                
+                if (!rawSymbol || rawSymbol === "N/A" || rawSymbol === "NULL") {
+                    rawSymbol = rawName.split(" ")[0]; // Fallback to first structural string word
+                }
+
+                // Drop heavy layer-1 benchmarks to preserve volatility limits
+                if (["WBNB", "BNB", "BUSD", "USDC", "BTC", "ETH"].indexOf(rawSymbol) !== -1) {
+                    continue;
+                }
+
+                // 2. DYNAMIC SMART CONTRACT ADDRESS SANITIZATION 
+                var rawAddress = String(item.address_or_geckoid || item.address || "").trim().toLowerCase();
+                
+                // Strip network identifier headers (like bsc:0x... or avax:0x...)
+                if (rawAddress.indexOf(":") !== -1) {
+                    rawAddress = rawAddress.split(":").pop();
+                }
+
+                // Validate structure: must be an active 42-character 0x hex string
+                if (!rawAddress.startsWith("0x") || rawAddress.length !== 42) {
+                    // Inject hardcoded safe fallbacks for verified historical tracking targets
+                    if (rawSymbol === "CAKE") {
+                        rawAddress = "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82";
+                    } else if (rawSymbol === "BABYDOGE") {
+                        rawAddress = "0xc748673057861a797275cd8a068abb95a902e8de";
+                    } else if (rawSymbol === "XVS") {
+                        rawAddress = "0xcf6bb5389c92bdda8a3747fbc4a028bc3116d9ad";
+                    } else {
+                        // Skip unidentifiable contract entries to maintain true BEP20 integrity
+                        continue;
+                    }
+                }
+
+                var priceUsd = parseFloat(item.live_price_usd || item.lastPrice || 1.0) || 1.0;
+                var change24h = parseFloat(item.change_24h_percent || item.change24h || 0.0) || 0.0;
+                var volume = parseFloat(item.volume || 0.0) || 0.0;
+
                 flatList.push({
-                    symbol: String(item.symbol || "UNKNOWN").toUpperCase(),
-                    address: item.address || "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
-                    lastPrice: parseFloat(item.lastPrice || 0),
-                    change24h: parseFloat(item.change24h || 0),
-                    volume: parseFloat(item.volume || 0)
+                    symbol: rawSymbol,
+                    address: rawAddress,
+                    lastPrice: priceUsd,
+                    change24h: change24h,
+                    volume: volume
                 });
             }
 
-            window.logToPanel("🎉 [DIRECT SUCCESS] Synchronized " + flatList.length + " real-time open-source tokens from DeFiLlama!");
+            window.logToPanel("🎉 [FRONTEND SUCCESS] Sanitized & Bound " + flatList.length + " valid BEP20 assets into tracking pools.");
             return { short_term: flatList, mid_term: [], long_term: [] };
 
         } catch (err) {
-            window.logToPanel("⚠️ Open-Source Network Fetch stalled: " + err.message + ". Reverting to emergency backup.");
+            window.logToPanel("⚠️ Frontend Parsing Error: " + err.message + ". Deploying backup reserves.");
             return { 
-                short_term: [{ symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95, volume: 55000.0 }], 
+                short_term: [
+                    { symbol: "CAKE", address: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", change24h: 1.8, lastPrice: 1.95, volume: 55000.0 },
+                    { symbol: "BABYDOGE", address: "0xc748673057861a797275cd8a068abb95a902e8de", change24h: 2.2, lastPrice: 0.000000002, volume: 62000.0 },
+                    { symbol: "XVS", address: "0xcf6bb5389c92bdda8a3747fbc4a028bc3116d9ad", change24h: 4.1, lastPrice: 10.45, volume: 98000.0 }
+                ], 
                 mid_term: [], 
                 long_term: [] 
             };
@@ -50,13 +108,13 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
     }
     window.categorizeCoins = categorizeCoins;
 
-    // ==============================================================
-    // BUILD PROFITABLE CANDIDATES POOL
-    // ==============================================================
     async function getTradeCandidates() {
         try {
             var marketData = await categorizeCoins();
-            var allTokens = marketData.short_term || [];
+            var allTokens = [];
+            if (marketData && marketData.short_term) {
+                allTokens = marketData.short_term;
+            }
 
             allTokens.sort(function (a, b) {
                 return Number(b.change24h || 0) - Number(a.change24h || 0);
@@ -75,7 +133,6 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
         });
     };
 
-    // FIXED: Removed .find() to bypass script injection engine constraints
     window.evaluateCoin = async function (symbol) {
         var candidates = await window.getTradeCandidates();
         var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
@@ -97,7 +154,6 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
         return null;
     };
 
-    // FIXED: Removed .find() to maximize execution security stability
     window.getBinanceStats = async function (symbol) {
         var tokens = await window.getTradeCandidates();
         var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
