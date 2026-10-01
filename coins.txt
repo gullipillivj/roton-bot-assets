@@ -140,7 +140,10 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
                 }
 
                 if (!targetAddress || targetAddress === "N/A") {
-                    targetAddress = generateMockAddress(rawSymbol);
+                    if (!targetAddress || targetAddress === "N/A") {
+                     continue;
+                }
+
                 }
             }
 
