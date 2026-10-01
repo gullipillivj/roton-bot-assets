@@ -15,7 +15,7 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
 
     // Expanded Mainnet/Testnet BEP20 Smart Contract Mappings for the current batch
     var FALLBACK_REGISTRY = {
-        "RR-BNB": "0xba67186fd454D0256a0D3744783538bE08C58feD"
+        "RR-BNB": "0xba67186fd454D0256a0D3744783538bE08C58feD",
         "CAKE": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
         "BABYDOGE": "0xc748673057861a797275cd8a068abb95a902e8de",
         "XVS": "0xcf6bb5389c92bdda8a3747fbc4a028bc3116d9ad",
