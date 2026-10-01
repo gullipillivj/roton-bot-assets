@@ -56,7 +56,11 @@ async function categorizeCoins() {
         }
 
         if (!Array.isArray(rawData)) {
-            rawData = [];
+            try {
+                rawData = JSON.parse(rawData);
+            } catch (e) {
+                rawData = [];
+            }
         }
 
         var flatList = [];
@@ -66,35 +70,25 @@ async function categorizeCoins() {
             var item = rawData[i];
             if (!item) continue;
 
-            var rawSymbol = String(
-                item.token_symbol ||
-                item.symbol ||
-                item.name ||
-                ""
-            ).toUpperCase().trim();
-
             var rawName = String(
                 item.name || ""
-            ).toUpperCase().trim();
+            ).trim();
+
+            var rawSymbol =
+                item.token_symbol &&
+                String(item.token_symbol).trim().toUpperCase() !== "N/A"
+                    ? item.token_symbol
+                    : rawName;
+
+            rawSymbol = String(rawSymbol || "")
+                .toUpperCase()
+                .trim();
 
             var rawAddress = String(
                 item.address_or_geckoid || ""
             ).trim();
 
-            // ---------------------------------
-            // DROP EMPTY / N/A SYMBOLS
-            // ---------------------------------
-            if (
-                !rawSymbol ||
-                rawSymbol === "N/A" ||
-                rawSymbol === "NA"
-            ) {
-                continue;
-            }
-
-            // ---------------------------------
-            // DROP EMPTY ADDRESSES
-            // ---------------------------------
+            // Must have address
             if (
                 !rawAddress ||
                 rawAddress === "N/A"
@@ -102,9 +96,7 @@ async function categorizeCoins() {
                 continue;
             }
 
-            // ---------------------------------
-            // BLOCK CROSS CHAIN
-            // ---------------------------------
+            // Block cross-chain
             if (
                 rawAddress.startsWith("solana:") ||
                 rawAddress.startsWith("arbitrum:") ||
@@ -115,18 +107,14 @@ async function categorizeCoins() {
                 continue;
             }
 
-            // ---------------------------------
-            // NORMALIZE BSC
-            // ---------------------------------
+            // Normalize bsc:
             if (rawAddress.startsWith("bsc:")) {
                 rawAddress = rawAddress.substring(4);
             }
 
-            // ---------------------------------
-            // BLOCK THENA
-            // ---------------------------------
+            // Block THENA
             if (
-                rawName.indexOf("THENA") !== -1 ||
+                rawName.toUpperCase().indexOf("THENA") !== -1 ||
                 rawSymbol === "THE" ||
                 rawAddress.toLowerCase() ===
                 "0xf4c8e32eadec4bfe97e0f595add0f4450a863a11"
@@ -134,16 +122,14 @@ async function categorizeCoins() {
                 continue;
             }
 
-            // ---------------------------------
-            // SKIP BASE TOKENS
-            // ---------------------------------
+            // Skip major base assets
             if (
                 [
-                    "WBNB",
                     "BNB",
+                    "WBNB",
                     "USDT",
-                    "BUSD",
                     "USDC",
+                    "BUSD",
                     "BTC",
                     "ETH"
                 ].indexOf(rawSymbol) !== -1
@@ -151,9 +137,7 @@ async function categorizeCoins() {
                 continue;
             }
 
-            // ---------------------------------
-            // VALID ADDRESS ONLY
-            // ---------------------------------
+            // Must be valid address
             if (
                 !/^0x[a-fA-F0-9]{40}$/.test(rawAddress)
             ) {
@@ -176,7 +160,8 @@ async function categorizeCoins() {
 
             var volume =
                 parseFloat(
-                    item.volume || 0
+                    item.volume ||
+                    0
                 ) || 0;
 
             flatList.push({
@@ -193,7 +178,7 @@ async function categorizeCoins() {
                    Number(a.change24h || 0);
         });
 
-        // Limit pool to strongest candidates
+        // Keep strongest candidates only
         flatList = flatList.slice(0, 5);
 
         window.logToPanel(
