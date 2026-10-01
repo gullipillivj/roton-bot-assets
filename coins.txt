@@ -48,76 +48,170 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
     // ==============================================================
     // DIRECT WALLET FETCH PIPELINE (POLLS CLEAN BINANCE PAYLOAD)
     // ==============================================================
-    async function categorizeCoins() {
-        try {
-            var backendUrl = "/prodbot/market-analysis";
-            var res = await fetch(backendUrl);
-            var responseData = await res.json();
+  async function categorizeCoins() {
+    try {
 
-            var rawData = responseData;
-            if (responseData && responseData.data) {
-                rawData = responseData.data;
-            } else if (responseData && responseData.status === "ok" && responseData.data === undefined) {
+        var backendUrl = "/prodbot/market-analysis";
+        var res = await fetch(backendUrl);
+        var responseData = await res.json();
+
+        var rawData = responseData;
+
+        if (responseData && responseData.data) {
+            rawData = responseData.data;
+        } else if (
+            responseData &&
+            responseData.status === "ok" &&
+            responseData.data === undefined
+        ) {
+            rawData = [];
+        }
+
+        if (!Array.isArray(rawData)) {
+            try {
+                rawData = JSON.parse(rawData);
+            } catch (e) {
                 rawData = [];
             }
+        }
 
-            if (!Array.isArray(rawData)) {
-                try { rawData = JSON.parse(rawData); } catch(e) { rawData = []; }
+        var flatList = [];
+
+        for (var i = 0; i < rawData.length; i++) {
+
+            var item = rawData[i];
+            if (!item) continue;
+
+            var rawSymbol = String(
+                item.token_symbol ||
+                item.symbol ||
+                item.name ||
+                ""
+            ).toUpperCase().trim();
+
+            var rawName = String(
+                item.name || ""
+            ).toUpperCase().trim();
+
+            var rawAddress = String(
+                item.address_or_geckoid || ""
+            ).trim();
+
+            // Skip base assets
+            if (
+                ["WBNB","BNB","BUSD","USDC","BTC","ETH","USDT"]
+                .indexOf(rawSymbol) !== -1
+            ) {
+                continue;
             }
 
-            var flatList = [];
+            // Block cross-chain assets
+            if (
+                rawAddress.startsWith("solana:") ||
+                rawAddress.startsWith("arbitrum:") ||
+                rawAddress.startsWith("avax:") ||
+                rawAddress.startsWith("thorchain:") ||
+                rawAddress.startsWith("sonic:")
+            ) {
+                continue;
+            }
 
-            for (var i = 0; i < rawData.length; i++) {
-                var item = rawData[i];
-                if (!item) continue;
+            // Remove bsc: prefix
+            if (rawAddress.startsWith("bsc:")) {
+                rawAddress = rawAddress.substring(4);
+            }
 
-                var rawSymbol = String(item.token_symbol || item.symbol || "").toUpperCase().trim();
+            // Block THENA
+            if (
+                rawName.indexOf("THENA") !== -1 ||
+                rawSymbol === "THE" ||
+                rawAddress.toLowerCase() ===
+                "0xf4c8e32eadec4bfe97e0f595add0f4450a863a11"
+            ) {
+                continue;
+            }
 
-                // Instantly skip major base infrastructure pairs to preserve volatility indexing
-                if (["WBNB", "BNB", "BUSD", "USDC", "BTC", "ETH", "USDT"].indexOf(rawSymbol) !== -1) {
+            var targetAddress = rawAddress;
+
+            if (!targetAddress || targetAddress === "N/A") {
+
+                targetAddress = FALLBACK_REGISTRY[rawSymbol];
+
+                if (
+                    targetAddress &&
+                    targetAddress.toLowerCase() ===
+                    "0xf4c8e32eadec4bfe97e0f595add0f4450a863a11"
+                ) {
                     continue;
                 }
 
-                // Check standard registry; if N/A or empty, generate a valid format mock token address
-                var targetAddress = FALLBACK_REGISTRY[rawSymbol];
                 if (!targetAddress || targetAddress === "N/A") {
-                    if (item.address_or_geckoid && item.address_or_geckoid !== "N/A") {
-                        targetAddress = item.address_or_geckoid;
-                    } else {
-                        targetAddress = generateMockAddress(rawSymbol);
-                    }
+                    targetAddress = generateMockAddress(rawSymbol);
                 }
-
-                var priceUsd = parseFloat(item.live_price_usd || item.lastPrice || 1.0) || 1.0;
-                var change24h = parseFloat(item.change_24h_percent || item.change24h || 0.0) || 0.0;
-                var volume = parseFloat(item.volume || 0.0) || 0.0;
-
-                flatList.push({
-                    symbol: rawSymbol,
-                    address: targetAddress,
-                    lastPrice: priceUsd,
-                    change24h: change24h,
-                    volume: volume
-                });
             }
 
-            window.logToPanel("🎉 [FRONTEND SUCCESS] Bound " + flatList.length + " clean Binance assets into tracking pools.");
-            return { short_term: flatList, mid_term: [], long_term: [] };
+            var priceUsd =
+                parseFloat(
+                    item.live_price_usd ||
+                    item.lastPrice ||
+                    1.0
+                ) || 1.0;
 
-        } catch (err) {
-            window.logToPanel("⚠️ Frontend Parsing Error: " + err.message + ". Deploying backup reserves.");
-            return { 
-                short_term: [
-                    { symbol: "MOVR", address: "0x0f93f40d6fa22e2b0de75b11eb55df1d47864cb5", change24h: 87.57, lastPrice: 2.671, volume: 55000.0 },
-                    { symbol: "CREAM", address: "0xd3cf7c06eb6964a75a7c5c04cde6c579c3ba486b", change24h: 65.35, lastPrice: 2.1, volume: 62000.0 },
-                    { symbol: "GLMR", address: "0xe7337373fcfcb5f3b7ba153b6fa72d61d564fa72", change24h: 38.53, lastPrice: 0.010912, volume: 98000.0 }
-                ], 
-                mid_term: [], 
-                long_term: [] 
-            };
+            var change24h =
+                parseFloat(
+                    item.change_24h_percent ||
+                    item.change24h ||
+                    0
+                ) || 0;
+
+            var volume =
+                parseFloat(
+                    item.volume || 0
+                ) || 0;
+
+            flatList.push({
+                symbol: rawSymbol,
+                address: targetAddress,
+                lastPrice: priceUsd,
+                change24h: change24h,
+                volume: volume
+            });
         }
+
+        window.logToPanel(
+            "🎉 [FRONTEND SUCCESS] Bound " +
+            flatList.length +
+            " BEP20 assets into trading pool."
+        );
+
+        return {
+            short_term: flatList,
+            mid_term: [],
+            long_term: []
+        };
+
+    } catch (err) {
+
+        window.logToPanel(
+            "⚠️ Frontend Parsing Error: " +
+            err.message
+        );
+
+        return {
+            short_term: [
+                {
+                    symbol: "MOVR",
+                    address: "0x0f93f40d6fa22e2b0de75b11eb55df1d47864cb5",
+                    change24h: 87.57,
+                    lastPrice: 2.671,
+                    volume: 55000
+                }
+            ],
+            mid_term: [],
+            long_term: []
+        };
     }
-    window.categorizeCoins = categorizeCoins;
+}
 
     async function getTradeCandidates() {
         try {
