@@ -133,7 +133,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
 
-    const maxGasOverheadUSD = 0.00032; 
+    const maxGasOverheadUSD = 0.0001; 
     const projectedProfitUSD = window.beforeBalanceUSD * (parseFloat(coinInfo.change24h) / 100);
 
     logToPanel(`[ECONOMICS EVALUATION]\nPORTFOLIO VALUE=$${window.beforeBalanceUSD.toFixed(4)}\nPROJECTED MOVE PROCEEDS=$${projectedProfitUSD.toFixed(4)}\nESTIMATED NETWORK FEES=$${maxGasOverheadUSD.toFixed(2)}`);
