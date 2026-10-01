@@ -97,15 +97,29 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
 
-    let coinInfo = null;
+        let coinInfo = null;
     try {
-        if (typeof window.getTargetCandidateForCycle === "function") {
-            // Evaluates index matching the cycle round to progress sequentially
-            coinInfo = await window.getTargetCandidateForCycle(cycle);
+        if (typeof window.getTradeCandidates === "function") {
+            const candidates = await window.getTradeCandidates();
+            if (candidates && candidates.length > 0) {
+                var safeIndex = (parseInt(cycle) - 1) % candidates.length;
+                if (safeIndex < 0) safeIndex = 0;
+                
+                var targetToken = candidates[safeIndex];
+                coinInfo = {
+                    symbol: targetToken.symbol || "UNKNOWN",
+                    tokenAddress: targetToken.address || "0x0000000000000000000000000000000000000000",
+                    network: "bep20",
+                    router: "pancakeswap",
+                    change24h: Number(targetToken.change24h || 0),
+                    lastPrice: Number(targetToken.lastPrice || 0)
+                };
+            }
         }
     } catch (evalErr) {
-        console.error("Target cycle retrieval failed, applying structural fallback:", evalErr);
+        console.error("Sequence index lookup failed, running structural fallback:", evalErr);
     }
+
 
     if (!coinInfo || !coinInfo.tokenAddress) {
         logToPanel("⚠️ Dynamic pricing lookup stalled. Injecting stable test asset mapping.");
