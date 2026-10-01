@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (BEP20 Mode)");
+logToPanel("simulate_prod.txt loaded (BEP20 Mode - Sequential Engine)");
 
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
@@ -37,20 +37,6 @@ async function updateTokenRecord(lastToken, currentToken) {
     }
 }
 
-async function pickRandomCoin() {
-    try {
-        if (typeof window.getBinancePairs === "function") {
-            const pairs = await window.getBinancePairs();
-            if (pairs && pairs.length > 0) {
-                return pairs[Math.floor(Math.random() * pairs.length)].replace("USDT", "");
-            }
-        }
-    } catch (err) {
-        console.log("pickRandomCoin standard query missed, using fallback:", err);
-    }
-    return "CAKE";
-}
-
 function setStatus(msg) {
     const statusLabel = document.querySelector(".status-label");
     if (statusLabel) {
@@ -68,10 +54,6 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
-
-// =====================================================================
-// SINGLE TRADING CYCLE (STRICTLY SYNCHRONIZED WITH FULL-AMOUNT MATH & ECONOMIC GAS GATES)
-// =====================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
@@ -88,19 +70,17 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "STOP_ERROR"; 
     }
 
-    // Capture baseline metrics before executing transaction routines
     window.beforeBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
     if (cycle === 1) {
         window.initialSimulationUSD = window.beforeBalanceUSD;
     }
 
-    // 🌟 FULL POSITION COMMITTED (REMOVED 10% FRACTIONAL SIMULATION SLICES)
     const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
     const allocationUSD = totalBalance.toString();
 
     logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
 
-    let currentToken = "0x55d398326f99059fF775485246999027B3197955"; // Safe default (USDT)
+    let currentToken = "0x55d398326f99059fF775485246999027B3197955"; 
     try {
         const tokenResp = await fetch("/prodbot/tokens/get", {
             method: "POST",
@@ -116,18 +96,15 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`[TOKEN LOAD ERROR]\n${err.message}`);
     }
 
-    let selectedCoin = "CAKE";
-    try {
-        selectedCoin = await pickRandomCoin();
-    } catch (pickErr) {
-        selectedCoin = "CAKE";
-    }
 
     let coinInfo = null;
     try {
-        coinInfo = await window.evaluateCoin(selectedCoin);
+        if (typeof window.getTargetCandidateForCycle === "function") {
+            // Evaluates index matching the cycle round to progress sequentially
+            coinInfo = await window.getTargetCandidateForCycle(cycle);
+        }
     } catch (evalErr) {
-        console.error(evalErr);
+        console.error("Target cycle retrieval failed, applying structural fallback:", evalErr);
     }
 
     if (!coinInfo || !coinInfo.tokenAddress) {
@@ -142,10 +119,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
 
-    // =====================================================================
-    // 📊 🌟 NEW ECONOMIC PROFIT THRESHOLD VERIFIER GATEWAY
-    // =====================================================================
-    const maxGasOverheadUSD = 0.1; // \$0.01 Approve + \$0.06 Swap
+    const maxGasOverheadUSD = 0.11; 
     const projectedProfitUSD = window.beforeBalanceUSD * (parseFloat(coinInfo.change24h) / 100);
 
     logToPanel(`[ECONOMICS EVALUATION]\nPORTFOLIO VALUE=$${window.beforeBalanceUSD.toFixed(4)}\nPROJECTED MOVE PROCEEDS=$${projectedProfitUSD.toFixed(4)}\nESTIMATED NETWORK FEES=$${maxGasOverheadUSD.toFixed(2)}`);
@@ -156,7 +130,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     const beforeBalance = document.getElementById("investBalance").value.toString().trim();
-
 
     try {
         logToPanel(`[SWAP REQUEST]\nFROM=${currentToken}\nTO=${coinInfo.tokenAddress}\nAMOUNT=${allocationUSD}`);
@@ -175,7 +148,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
 
         let balanceChanged = false;
-        for (let attempt = 1; attempt <= 10; attempt++) {
+        for (let attempt = 1; attempt <= 45; attempt++) {
             await blockDelay(10000);
             await syncBalanceFromFund();
             const currentBalance = document.getElementById("investBalance").value.toString().trim();
@@ -196,9 +169,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel("⏳ Synchronizing database token allocation tracking...");
         await updateTokenRecord(currentToken, coinInfo.tokenAddress);
 
-        // =====================================================================
-        // 🛡️ AUTOMATED POST-TRADE STABLE SETTLE PIPELINE (THE VOLATILITY SHIELD)
-        // =====================================================================
         const usdtAddress = "0x55d398326f99059fF775485246999027B3197955";
         
         if (coinInfo.tokenAddress.toLowerCase() !== usdtAddress.toLowerCase()) {
@@ -255,13 +225,6 @@ async function startSimulation(totalCycles) {
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
-    if (window.balanceChart) {
-        window.balanceChart.data.labels = [];
-        window.balanceChart.data.datasets[0].data = [];
-        window.balanceChart.data.datasets[1].data = [];
-        window.balanceChart.update();
-    }
-
     logToPanel(`[BOT START] ${totalCycles} cycles`);
 
     for (let i = 1; i <= totalCycles; i++) {
@@ -274,9 +237,8 @@ async function startSimulation(totalCycles) {
             break;
         }
 
-        // 🌟 If cycle is skipped, it outputs the skip message, increments loop index i, and proceeds
         if (signal === "SKIP") {
-            await blockDelay(1000); // Small brief yield to allow layout screen painting
+            await blockDelay(1000); 
             continue;
         }
 
@@ -293,4 +255,3 @@ async function startSimulation(totalCycles) {
 
 window.startSimulation = startSimulation;
 window.simulateCycle = simulateCycle;
-
