@@ -80,7 +80,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
 
-    let currentToken = "0x55d398326f99059fF775485246999027B3197955"; 
+    let currentToken = "0x0000000000000000000000000000000000000000"; 
     try {
         const tokenResp = await fetch("/prodbot/tokens/get", {
             method: "POST",
