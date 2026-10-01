@@ -15,15 +15,10 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
 
     // Expanded Mainnet/Testnet BEP20 Smart Contract Mappings for the current batch
     var FALLBACK_REGISTRY = {
+        "RR-BNB": "0xba67186fd454D0256a0D3744783538bE08C58feD"
         "CAKE": "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
         "BABYDOGE": "0xc748673057861a797275cd8a068abb95a902e8de",
         "XVS": "0xcf6bb5389c92bdda8a3747fbc4a028bc3116d9ad",
-        "CREAM": "0xd3cf7c06eb6964a75a7c5c04cde6c579c3ba486b", // Map item from batch
-        "MOVR": "0x0f93f40d6fa22e2b0de75b11eb55df1d47864cb5",   // Map item from batch
-        "GLMR": "0xe7337373fcfcb5f3b7ba153b6fa72d61d564fa72",   // Map item from batch
-        "STX": "0xbbb32f99e6f2cb29337eebaa43c5069386de6e6c",
-        "WAVES": "0x1cf2b1d7bb3cf6c85e68b371cf7c06e579c3ba48",
-        "ENA": "0x2e8ade73bd3ade0a17ecc321fd13a19e81ce82bc"
     };
 
     // Helper to generate a stable, valid mock BEP20 contract address if missing from data
