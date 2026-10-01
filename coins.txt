@@ -42,7 +42,7 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
     // ==============================================================
     // DIRECT WALLET FETCH PIPELINE (POLLS CLEAN BINANCE PAYLOAD)
     // ==============================================================
-  async function categorizeCoins() {
+async function categorizeCoins() {
     try {
 
         var backendUrl = "/prodbot/market-analysis";
@@ -53,20 +53,10 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
 
         if (responseData && responseData.data) {
             rawData = responseData.data;
-        } else if (
-            responseData &&
-            responseData.status === "ok" &&
-            responseData.data === undefined
-        ) {
-            rawData = [];
         }
 
         if (!Array.isArray(rawData)) {
-            try {
-                rawData = JSON.parse(rawData);
-            } catch (e) {
-                rawData = [];
-            }
+            rawData = [];
         }
 
         var flatList = [];
@@ -91,15 +81,30 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
                 item.address_or_geckoid || ""
             ).trim();
 
-            // Skip base assets
+            // ---------------------------------
+            // DROP EMPTY / N/A SYMBOLS
+            // ---------------------------------
             if (
-                ["WBNB","BNB","BUSD","USDC","BTC","ETH","USDT"]
-                .indexOf(rawSymbol) !== -1
+                !rawSymbol ||
+                rawSymbol === "N/A" ||
+                rawSymbol === "NA"
             ) {
                 continue;
             }
 
-            // Block cross-chain assets
+            // ---------------------------------
+            // DROP EMPTY ADDRESSES
+            // ---------------------------------
+            if (
+                !rawAddress ||
+                rawAddress === "N/A"
+            ) {
+                continue;
+            }
+
+            // ---------------------------------
+            // BLOCK CROSS CHAIN
+            // ---------------------------------
             if (
                 rawAddress.startsWith("solana:") ||
                 rawAddress.startsWith("arbitrum:") ||
@@ -110,12 +115,16 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
                 continue;
             }
 
-            // Remove bsc: prefix
+            // ---------------------------------
+            // NORMALIZE BSC
+            // ---------------------------------
             if (rawAddress.startsWith("bsc:")) {
                 rawAddress = rawAddress.substring(4);
             }
 
-            // Block THENA
+            // ---------------------------------
+            // BLOCK THENA
+            // ---------------------------------
             if (
                 rawName.indexOf("THENA") !== -1 ||
                 rawSymbol === "THE" ||
@@ -125,34 +134,38 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
                 continue;
             }
 
-            var targetAddress = rawAddress;
+            // ---------------------------------
+            // SKIP BASE TOKENS
+            // ---------------------------------
+            if (
+                [
+                    "WBNB",
+                    "BNB",
+                    "USDT",
+                    "BUSD",
+                    "USDC",
+                    "BTC",
+                    "ETH"
+                ].indexOf(rawSymbol) !== -1
+            ) {
+                continue;
+            }
 
-            if (!targetAddress || targetAddress === "N/A") {
-
-                targetAddress = FALLBACK_REGISTRY[rawSymbol];
-
-                if (
-                    targetAddress &&
-                    targetAddress.toLowerCase() ===
-                    "0xf4c8e32eadec4bfe97e0f595add0f4450a863a11"
-                ) {
-                    continue;
-                }
-
-                if (!targetAddress || targetAddress === "N/A") {
-                    if (!targetAddress || targetAddress === "N/A") {
-                     continue;
-                }
-
-                }
+            // ---------------------------------
+            // VALID ADDRESS ONLY
+            // ---------------------------------
+            if (
+                !/^0x[a-fA-F0-9]{40}$/.test(rawAddress)
+            ) {
+                continue;
             }
 
             var priceUsd =
                 parseFloat(
                     item.live_price_usd ||
                     item.lastPrice ||
-                    1.0
-                ) || 1.0;
+                    0
+                ) || 0;
 
             var change24h =
                 parseFloat(
@@ -168,17 +181,25 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
 
             flatList.push({
                 symbol: rawSymbol,
-                address: targetAddress,
+                address: rawAddress,
                 lastPrice: priceUsd,
                 change24h: change24h,
                 volume: volume
             });
         }
 
+        flatList.sort(function(a, b) {
+            return Number(b.change24h || 0) -
+                   Number(a.change24h || 0);
+        });
+
+        // Limit pool to strongest candidates
+        flatList = flatList.slice(0, 5);
+
         window.logToPanel(
-            "🎉 [FRONTEND SUCCESS] Bound " +
+            "✅ Production Filter Accepted " +
             flatList.length +
-            " BEP20 assets into trading pool."
+            " verified BSC assets."
         );
 
         return {
@@ -190,25 +211,20 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
     } catch (err) {
 
         window.logToPanel(
-            "⚠️ Frontend Parsing Error: " +
+            "⚠️ Coin Filter Error: " +
             err.message
         );
 
         return {
-            short_term: [
-                {
-                    symbol: "MOVR",
-                    address: "0x0f93f40d6fa22e2b0de75b11eb55df1d47864cb5",
-                    change24h: 87.57,
-                    lastPrice: 2.671,
-                    volume: 55000
-                }
-            ],
+            short_term: [],
             mid_term: [],
             long_term: []
         };
     }
 }
+
+
+
 
     async function getTradeCandidates() {
         try {
