@@ -474,9 +474,13 @@ const BSC_CHAIN_ID_CAIP = "eip155:56"; // Exact BSC Mainnet identifier map
 // ========================================================
 // ⚡ SECURE PROXY-ROUTED PROGRAMMATIC RPC DISPATCHER
 // ========================================================
+// ========================================================
+// ⚡ SECURE PUBLIC-ROUTED NATIVE PROGRAMMATIC RPC DISPATCHER
+// ========================================================
 async function dispatchReownJsonRpcRequest(method, params = []) {
-    // FIXED: Routing locally through your unblocked Flask server layer to break the CORS barrier
-    const url = "/prodbot/reown-rpc";
+    // 🌟 FIXED: Shifted endpoint away from the blocked backend server proxy
+    // Targets the public high-availability nodes directly using the user's local network connection
+    const targetPublicRpc = "https://binance.org";
     
     const payload = {
         id: Date.now() + Math.floor(Math.random() * 1000),
@@ -486,7 +490,10 @@ async function dispatchReownJsonRpcRequest(method, params = []) {
     };
 
     try {
-        const response = await fetch(url, {
+        window.logToPanel(`📡 Forwarding client-side Web3 connection method: ${method}...`);
+
+        // Fire a direct un-proxied post request straight from the browser frame
+        const response = await fetch(targetPublicRpc, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -495,7 +502,7 @@ async function dispatchReownJsonRpcRequest(method, params = []) {
         });
 
         if (!response.ok) {
-            throw new Error(`Local Proxy Server Error Gateway Status: ${response.status}`);
+            throw new Error(`Public Node Communication Barrier Gateway Status: ${response.status}`);
         }
 
         const jsonResponse = await response.json();
@@ -504,12 +511,14 @@ async function dispatchReownJsonRpcRequest(method, params = []) {
             throw new Error(`RPC Engine Exception [${jsonResponse.error.code}]: ${jsonResponse.error.message}`);
         }
 
+        window.logToPanel(`✅ Direct Node Response Verified for method: ${method}`);
         return jsonResponse.result;
     } catch (err) {
-        logToPanel(`❌ [REOWN RPC PROXY FAILURE] ${err.message}`);
+        logToPanel(`❌ [DIRECT RPC DISPATCH FAILURE] ${err.message}`);
         throw err;
     }
 }
+
 
 // ========================================================
 // 📱 WALLET INTERFACE CONNECT ROUTER
