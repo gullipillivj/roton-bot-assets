@@ -162,7 +162,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
 
         let balanceChanged = false;
-        for (let attempt = 1; attempt <= 45; attempt++) {
+        for (let attempt = 1; attempt <= 15; attempt++) {
             await blockDelay(10000);
             await syncBalanceFromFund();
             const currentBalance = document.getElementById("investBalance").value.toString().trim();
