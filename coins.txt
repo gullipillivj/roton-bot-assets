@@ -12,7 +12,7 @@ window.BSCSCAN_API_KEY = "T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4";
         window.logToPanel = function(msg) { console.log(msg); };
     }
 
-    window.logToPanel("coins.txt loaded safely via Clean Binance REST Mirror Feed.");
+    window.logToPanel("coins.txt loaded safely via Server-Side Filter Mirror Pipeline.");
 
     // Expanded Mainnet/Testnet BEP20 Smart Contract Mappings for the current batch
     var FALLBACK_REGISTRY = {
@@ -33,417 +33,114 @@ window.BSCSCAN_API_KEY = "T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4";
             var value = (hash >> (j * 2)) & 0xFF;
             hex += ("00" + value.toString(16)).slice(-2);
         }
-        // Fill up remaining characters to match standard 40-character hex string length
         while (hex.length < 42) {
             hex += "f";
         }
         return hex.substring(0, 42);
     }
 
-
-
-
-
-
 // =============================================================
-// PRODUCTION COIN FILTER
+// PRODUCTION COIN FILTER (ADAPTED FOR DIRECT BACKEND PIPELINE)
 // =============================================================
 async function categorizeCoins() {
-
     try {
+        // Fetch pre-processed tokens directly from your new Python filter pipeline
+        const backendUrl = "/prodbot/filtertokens";
+        const res = await fetch(backendUrl);
+        let responseData = await res.json();
 
-        const backendUrl =
-            "/prodbot/market-analysis";
-
-        const res =
-            await fetch(backendUrl);
-
-        let responseData =
-            await res.json();
-
-        let rawData =
-            responseData;
-
-        if (
-            responseData &&
-            responseData.data
-        ) {
-            rawData =
-                responseData.data;
+        // Standardize output payload extraction mapping
+        let shortTermList = [];
+        if (responseData && responseData.short_term) {
+            shortTermList = responseData.short_term;
+        } else if (Array.isArray(responseData)) {
+            shortTermList = responseData;
         }
 
-        if (
-            !Array.isArray(rawData)
-        ) {
-
-            try {
-
-                rawData =
-                    JSON.parse(rawData);
-
-            } catch (e) {
-
-                rawData = [];
-
-            }
-        }
-
-        const flatList = [];
-
-        for (
-            let i = 0;
-            i < rawData.length;
-            i++
-        ) {
-
-            const item =
-                rawData[i];
-
-            if (!item) {
-                continue;
-            }
-
-            let rawName =
-                String(
-                    item.name || ""
-                ).trim();
-
-            let rawSymbol =
-                item.token_symbol &&
-                String(
-                    item.token_symbol
-                )
-                    .trim()
-                    .toUpperCase() !== "N/A"
-                    ? item.token_symbol
-                    : rawName;
-
-            rawSymbol =
-                String(
-                    rawSymbol || ""
-                )
-                    .toUpperCase()
-                    .trim();
-
-            let rawAddress =
-                String(
-                    item.address_or_geckoid ||
-                    ""
-                ).trim();
-
-            // -------------------------------------------------
-            // ADDRESS REQUIRED
-            // -------------------------------------------------
-
-            if (
-                !rawAddress ||
-                rawAddress === "N/A"
-            ) {
-                continue;
-            }
-
-            // -------------------------------------------------
-            // REJECT NON-BSC CHAINS
-            // -------------------------------------------------
-
-            if (
-                rawAddress.startsWith(
-                    "solana:"
-                ) ||
-                rawAddress.startsWith(
-                    "arbitrum:"
-                ) ||
-                rawAddress.startsWith(
-                    "base:"
-                ) ||
-                rawAddress.startsWith(
-                    "avax:"
-                ) ||
-                rawAddress.startsWith(
-                    "polygon:"
-                ) ||
-                rawAddress.startsWith(
-                    "optimism:"
-                ) ||
-                rawAddress.startsWith(
-                    "ethereum:"
-                ) ||
-                rawAddress.startsWith(
-                    "thorchain:"
-                ) ||
-                rawAddress.startsWith(
-                    "sonic:"
-                )
-            ) {
-                continue;
-            }
-
-            // -------------------------------------------------
-            // NORMALIZE bsc:
-            // -------------------------------------------------
-
-            if (
-                rawAddress.startsWith(
-                    "bsc:"
-                )
-            ) {
-
-                rawAddress =
-                    rawAddress.substring(4);
-
-            }
-
-            // -------------------------------------------------
-            // BLOCK THENA
-            // -------------------------------------------------
-
-            if (
-                rawName
-                    .toUpperCase()
-                    .includes("THENA") ||
-
-                rawSymbol === "THE" ||
-
-                rawAddress.toLowerCase() ===
-                "0xf4c8e32eadec4bfe97e0f595add0f4450a863a11"
-            ) {
-                continue;
-            }
-
-            // -------------------------------------------------
-            // BLOCK BASE ASSETS
-            // -------------------------------------------------
-
-            if (
-                [
-                    "BNB",
-                    "WBNB",
-                    "BTC",
-                    "WBTC",
-                    "ETH",
-                    "USDT",
-                    "USDC",
-                    "BUSD",
-                    "DAI"
-                ].includes(
-                    rawSymbol
-                )
-            ) {
-                continue;
-            }
-
-            // -------------------------------------------------
-            // VALID CONTRACT FORMAT
-            // -------------------------------------------------
-
-            if (
-                !/^0x[a-fA-F0-9]{40}$/.test(
-                    rawAddress
-                )
-            ) {
-                continue;
-            }
-
-            // -------------------------------------------------
-            // BNB MAINNET VERIFICATION
-            // -------------------------------------------------
-
-            const verified =
-                await verifyBnbMainnetToken(
-                    rawAddress
-                );
-
-            if (!verified) {
-
-                window.logToPanel(
-                    "⛔ REJECTED NON-BSC TOKEN: " +
-                    rawSymbol +
-                    " | " +
-                    rawAddress
-                );
-
-                continue;
-            }
-
-            // -------------------------------------------------
-            // MARKET DATA
-            // -------------------------------------------------
-
-            const priceUsd =
-                parseFloat(
-                    item.live_price_usd ||
-                    item.lastPrice ||
-                    0
-                ) || 0;
-
-            const change24h =
-                parseFloat(
-                    item.change_24h_percent ||
-                    item.change24h ||
-                    0
-                ) || 0;
-
-            const volume =
-                parseFloat(
-                    item.volume || 0
-                ) || 0;
-
-            flatList.push({
-
-                symbol:
-                    rawSymbol,
-
-                address:
-                    rawAddress,
-
-                lastPrice:
-                    priceUsd,
-
-                change24h:
-                    change24h,
-
-                volume:
-                    volume
-
-            });
-
-            window.logToPanel(
-                "✅ VERIFIED BSC TOKEN: " +
-                rawSymbol
-            );
-        }
-
-        // -------------------------------------------------
-        // RANK BY PERFORMANCE
-        // -------------------------------------------------
-
-        flatList.sort(
-            function (a, b) {
-
-                return (
-                    Number(
-                        b.change24h || 0
-                    ) -
-                    Number(
-                        a.change24h || 0
-                    )
-                );
-
-            }
-        );
-
-        // -------------------------------------------------
-        // TOP FIVE ONLY
-        // -------------------------------------------------
-
-        const finalList =
-            flatList.slice(0, 5);
-
-        window.logToPanel(
-            "✅ Production Filter Accepted " +
-            finalList.length +
-            " verified BNB Mainnet assets."
-        );
+        window.logToPanel("✅ Production Filter Accepted " + shortTermList.length + " verified BNB Mainnet assets directly from backend.");
 
         return {
-
-            short_term:
-                finalList,
-
-            mid_term:
-                [],
-
-            long_term:
-                []
-
+            short_term: shortTermList,
+            mid_term: [],
+            long_term: []
         };
 
     } catch (err) {
-
-        window.logToPanel(
-            "⚠️ Coin Filter Error: " +
-            err.message
-        );
-
+        window.logToPanel("⚠️ Coin Filter Error: " + err.message);
         return {
-
             short_term: [],
             mid_term: [],
             long_term: []
-
         };
     }
 }
 
+// =============================================================
+// TRADE CANDIDATE SELECTOR Engine
+// =============================================================
+async function getTradeCandidates() {
+    try {
+        var marketData = await categorizeCoins();
+        var allTokens = [];
+        if (marketData && marketData.short_term) {
+            allTokens = marketData.short_term;
+        }
 
+        // Sort based on the updated profit key schema '%profit'
+        allTokens.sort(function (a, b) {
+            return Number(b["%profit"] || 0) - Number(a["%profit"] || 0);
+        });
+        return allTokens;
+    } catch (err) {
+        return [{ symbol: "MOVR", address: "0x0f93f40d6fa22e2b0de75b11eb55df1d47864cb5", "%profit": 87.57, price: 2.671, rank: 1, "usd value": 50000 }];
+    }
+}
+window.getTradeCandidates = getTradeCandidates;
 
+window.getBinancePairs = async function () {
+    var candidates = await window.getTradeCandidates();
+    return candidates.map(function (coin) {
+        return coin.symbol + "USDT";
+    });
+};
 
-
-
-
-
-    async function getTradeCandidates() {
-        try {
-            var marketData = await categorizeCoins();
-            var allTokens = [];
-            if (marketData && marketData.short_term) {
-                allTokens = marketData.short_term;
-            }
-
-            allTokens.sort(function (a, b) {
-                return Number(b.change24h || 0) - Number(a.change24h || 0);
-            });
-            return allTokens;
-        } catch (err) {
-            return [{ symbol: "MOVR", address: "0x0f93f40d6fa22e2b0de75b11eb55df1d47864cb5", change24h: 87.57, lastPrice: 2.671 }];
+window.evaluateCoin = async function (symbol) {
+    var candidates = await window.getTradeCandidates();
+    var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
+    var i;
+    
+    for (i = 0; i < candidates.length; i++) {
+        if (String(candidates[i].symbol).toUpperCase().trim() === cleanSymbol) {
+            var token = candidates[i];
+            return {
+                symbol: token.symbol,
+                tokenAddress: token.address,
+                network: "bep20",
+                router: "pancakeswap",
+                change24h: Number(token["%profit"] || 0), // Bridges old property variable names
+                lastPrice: Number(token.price || 0)
+            };
         }
     }
-    window.getTradeCandidates = getTradeCandidates;
+    return null;
+};
 
-    window.getBinancePairs = async function () {
-        var candidates = await window.getTradeCandidates();
-        return candidates.map(function (coin) {
-            return coin.symbol + "USDT";
-        });
-    };
+window.getBinanceStats = async function (symbol) {
+    var tokens = await window.getTradeCandidates();
+    var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
+    var i;
 
-    window.evaluateCoin = async function (symbol) {
-        var candidates = await window.getTradeCandidates();
-        var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
-        var i;
-        
-        for (i = 0; i < candidates.length; i++) {
-            if (String(candidates[i].symbol).toUpperCase().trim() === cleanSymbol) {
-                var token = candidates[i];
-                return {
-                    symbol: token.symbol,
-                    tokenAddress: token.address,
-                    network: "bep20",
-                    router: "pancakeswap",
-                    change24h: Number(token.change24h || 0),
-                    lastPrice: Number(token.lastPrice || 0)
-                };
-            }
+    for (i = 0; i < tokens.length; i++) {
+        if (String(tokens[i].symbol).toUpperCase().trim() === cleanSymbol) {
+            var token = tokens[i];
+            return { 
+                symbol: token.symbol, 
+                lastPrice: Number(token.price || 0), 
+                priceChangePercent: Number(token["%profit"] || 0) 
+            };
         }
-        return null;
-    };
-
-    window.getBinanceStats = async function (symbol) {
-        var tokens = await window.getTradeCandidates();
-        var cleanSymbol = String(symbol).replace("USDT", "").toUpperCase().trim();
-        var i;
-
-        for (i = 0; i < tokens.length; i++) {
-            if (String(tokens[i].symbol).toUpperCase().trim() === cleanSymbol) {
-                var token = tokens[i];
-                return { 
-                    symbol: token.symbol, 
-                    lastPrice: Number(token.lastPrice || 0), 
-                    priceChangePercent: Number(token.change24h || 0) 
-                };
-            }
-        }
-        return null;
-    };
+    }
+    return null;
+};
 
 })();
