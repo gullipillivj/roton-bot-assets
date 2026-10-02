@@ -508,48 +508,58 @@ window.addEventListener("DOMContentLoaded", () => {
     
     if (connBtn) {
         connBtn.onclick = async function() {
-            // Track 1: User is inside a mobile wallet's built-in browser (window.ethereum exists natively)
+            
+            // 🌟 STEP 1: CHECK IF WINDOW.ETHEREUM EXISTS DIRECTLY IN THE CLICK EVENT
             if (typeof window.ethereum !== "undefined" && !window.ethereum_is_reown_rpc) {
                 try {
-                    window.logToPanel("⏳ Querying accounts from native built-in mobile browser...");
+                    window.logToPanel("⏳ Querying accounts from native built-in mobile wallet browser...");
+                    
+                    // Fire native wallet permission selector popup
                     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
                     
-                    // Accept address parameter outputs safely 
                     window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
-                    window.logToPanel("✅ Natively Connected via Mobile App Browser Environment.");
+                    window.logToPanel(`✅ Natively Connected via Mobile Wallet App Browser. Address: ${window.USER_ADDR}`);
                     
+                    // Hide the form just in case it was toggled by mistake earlier
+                    const pipelineForm = document.getElementById("reownPipelineForm");
+                    if (pipelineForm) pipelineForm.style.display = "none";
+
                     await window.finalizeInterfaceSyncState();
-                    return;
+                    return; // 🌟 PRIORITY MATCHED. Bypasses AppKit completely and exits.
+                    
                 } catch (nativeErr) {
-                    window.logToPanel(`⚠️ Built-in track declined: ${nativeErr.message}. Launching modern browser fallback...`);
+                    window.logToPanel(`❌ Native connection failed or rejected: ${nativeErr.message}`);
+                    return;
                 }
             }
 
-            // Track 2: User is in standard browsers (Chrome, Firefox, Opera, Safari)
-            // Displays your inline HTML appkit-button hidden form element and fires the QR code overlay modal
-            window.logToPanel("📡 Initializing client-side connection bridge...");
+            // 🌟 STEP 2: FALLBACK RUNS ONLY IF WINDOW.ETHEREUM IS MISSING (CHROME, FIREFOX, OPERA)
+            window.logToPanel("📡 Standalone web browser found. Activating Reown selection layout form...");
+            
+            // Unveil the form container grid right inside the dashboard view page
             const pipelineForm = document.getElementById("reownPipelineForm");
             if (pipelineForm) {
-                pipelineForm.style.display = "block"; // Open input display visibility box
+                pipelineForm.style.display = "block";
             }
             
-            // Check if module loader has initialized the global trigger mapping
+            // Trigger the AppKit overlay modal window grid automatically
             if (window.reownAppKitInstance) {
                 window.reownAppKitInstance.open();
                 window.ethereum_is_reown_rpc = true;
             } else {
-                // If clicked before ESM scripts finish downloading from CDN network nodes
-                window.logToPanel("⏳ Syncing bridge nodes in the background. Please tap connect once more.");
-                
-                // Fallback attempt to open custom tag element modal engine directly
+                // Emulate direct shadow DOM button click fallback to reveal choices
                 const appKitButton = document.querySelector('appkit-button');
                 if (appKitButton) {
                     appKitButton.click();
+                    window.ethereum_is_reown_rpc = true;
+                } else {
+                    window.logToPanel("❌ Error: Connection engine custom layout tags missing.");
                 }
             }
         };
     }
 });
+
 
 
 // ========================================================
