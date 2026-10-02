@@ -39,56 +39,6 @@ logToPanel("coins.txt loaded (BEP20 Mode)");
         return hex.substring(0, 42);
     }
 
-    // ==========================================================
-// PRODUCTION BNB MAINNET VALIDATOR
-// Requires: window.BSCSCAN_API_KEY
-// ==========================================================
-async function verifyBnbMainnetToken(address) {
-    try {
-
-        if (
-            !address ||
-            !/^0x[a-fA-F0-9]{40}$/.test(address)
-        ) {
-            return false;
-        }
-
-        const apiKey = window.BSCSCAN_API_KEY;
-
-        if (!apiKey) {
-            console.warn("Missing BSCSCAN API KEY");
-            return false;
-        }
-
-        const url =
-            "https://api.bscscan.com/api" +
-            "?module=token" +
-            "&action=tokeninfo" +
-            "&contractaddress=" + address +
-            "&apikey=" + apiKey;
-
-        const res = await fetch(url);
-        const data = await res.json();
-
-        if (
-            !data ||
-            data.status !== "1" ||
-            !data.result
-        ) {
-            return false;
-        }
-
-        return true;
-
-    } catch (err) {
-        console.error(
-            "BSC verification failed:",
-            err.message
-        );
-        return false;
-
-    }
-}
 
 
 // =============================================================
