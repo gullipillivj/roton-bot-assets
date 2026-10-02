@@ -63,10 +63,77 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel("[WARN] Balance sync failed. Stopping orchestration loop.");
         return "STOP_ERROR"; 
     }
-0x0000000000000000000000000000000000000000
+
+    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    if (tradingBalance <= 0) {
+        logToPanel("[WARN] No trading balance available. Stopping loop.");
+        return "STOP_ERROR"; 
+    }
+
+    window.beforeBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
+    if (cycle === 1) {
+        window.initialSimulationUSD = window.beforeBalanceUSD;
+    }
+
+    const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
+    const allocationUSD = totalBalance.toString();
+
+    logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
+
+    let currentToken = "0x55d398326f99059fF775485246999027B3197955"; 
+    try {
+        const tokenResp = await fetch("/prodbot/tokens/get", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userid: window.USER_ID })
+        });
+        const tokenData = await tokenResp.json();
+        if (tokenData && tokenData.currenttoken) {
+            currentToken = tokenData.currenttoken;
+            logToPanel(`[TOKEN LOAD]\n${currentToken}`);
+        }
+    } catch (err) {
+        logToPanel(`[TOKEN LOAD ERROR]\n${err.message}`);
+    }
+
+
+        let coinInfo = null;
+    try {
+        if (typeof window.getTradeCandidates === "function") {
+            const candidates = await window.getTradeCandidates();
+            if (candidates && candidates.length > 0) {
+                var safeIndex = (parseInt(cycle) - 1) % candidates.length;
+                if (safeIndex < 0) safeIndex = 0;
+                
+                var targetToken = candidates[safeIndex];
+                coinInfo = {
+                    symbol: targetToken.symbol || "UNKNOWN",
+                    tokenAddress: targetToken.address || "0x0000000000000000000000000000000000000000",
+                    network: "bep20",
+                    router: "pancakeswap",
+                    change24h: Number(targetToken.change24h || 0),
+                    lastPrice: Number(targetToken.lastPrice || 0)
+                };
+            }
+        }
+    } catch (evalErr) {
+        console.error("Sequence index lookup failed, running structural fallback:", evalErr);
+    }
+
+
+    if (!coinInfo || !coinInfo.tokenAddress) {
+        logToPanel("⚠️ Dynamic pricing lookup stalled. Injecting stable test asset mapping.");
+        coinInfo = {
+            symbol: "CAKE",
+            tokenAddress: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
+            change24h: 1.8,
+            lastPrice: 1.95
+        };
+    }
+
     logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
 
-    const maxGasOverheadUSD = 0.1; 
+    const maxGasOverheadUSD = 0.11; 
     const projectedProfitUSD = window.beforeBalanceUSD * (parseFloat(coinInfo.change24h) / 100);
 
     logToPanel(`[ECONOMICS EVALUATION]\nPORTFOLIO VALUE=$${window.beforeBalanceUSD.toFixed(4)}\nPROJECTED MOVE PROCEEDS=$${projectedProfitUSD.toFixed(4)}\nESTIMATED NETWORK FEES=$${maxGasOverheadUSD.toFixed(2)}`);
@@ -95,11 +162,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
 
         let balanceChanged = false;
-        for (let attempt = 1; attempt <= 15; attempt++) {
+        for (let attempt = 1; attempt <= 45; attempt++) {
             await blockDelay(10000);
             await syncBalanceFromFund();
             const currentBalance = document.getElementById("investBalance").value.toString().trim();
-            logToPanel(`[VERIFY ${attempt}/15]\nSTART=${beforeBalance}\nNOW=${currentBalance}`);
+            logToPanel(`[VERIFY ${attempt}/45]\nSTART=${beforeBalance}\nNOW=${currentBalance}`);
 
             if (currentBalance !== beforeBalance) {
                 balanceChanged = true;
