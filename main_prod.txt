@@ -498,7 +498,6 @@ async function finalizeInterfaceSyncState() {
     }
 }
 window.finalizeInterfaceSyncState = finalizeInterfaceSyncState;
-
 // Execute UI setup bindings instantly on browser ready cycles
 window.addEventListener("DOMContentLoaded", () => {
     initializeLabels();
@@ -509,20 +508,22 @@ window.addEventListener("DOMContentLoaded", () => {
     if (connBtn) {
         connBtn.onclick = async function() {
             
-            // 🌟 STEP 1: CHECK IF WINDOW.ETHEREUM EXISTS DIRECTLY IN THE CLICK EVENT
+            // 🥇 STEP 1: PRIORITIZE BUILT-IN WALLET BROWSERS (Trust Wallet / MetaMask Mobile App)
             if (typeof window.ethereum !== "undefined" && !window.ethereum_is_reown_rpc) {
                 try {
                     window.logToPanel("⏳ Querying accounts from native built-in mobile wallet browser...");
                     
-                    // Fire native wallet permission selector popup
+                    // Trigger the native mobile app's internal wallet connection request popup
                     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
                     
                     window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
                     window.logToPanel(`✅ Natively Connected via Mobile Wallet App Browser. Address: ${window.USER_ADDR}`);
                     
-                    // Hide the form just in case it was toggled by mistake earlier
+                    // Ensure the background floating popup layers are hidden
                     const pipelineForm = document.getElementById("reownPipelineForm");
+                    const pipelineBackdrop = document.getElementById("pipelineBackdrop");
                     if (pipelineForm) pipelineForm.style.display = "none";
+                    if (pipelineBackdrop) pipelineBackdrop.style.display = "none";
 
                     await window.finalizeInterfaceSyncState();
                     return; // 🌟 PRIORITY MATCHED. Bypasses AppKit completely and exits.
@@ -533,27 +534,29 @@ window.addEventListener("DOMContentLoaded", () => {
                 }
             }
 
-            // 🌟 STEP 2: FALLBACK RUNS ONLY IF WINDOW.ETHEREUM IS MISSING (CHROME, FIREFOX, OPERA)
+            // 🥈 STEP 2: FALLBACK FOR STANDALONE BROWSERS (CHROME, FIREFOX, OPERA, SAFARI)
             window.logToPanel("📡 Standalone web browser found. Activating Reown selection layout form...");
             
-            // Unveil the form container grid right inside the dashboard view page
+            // Bring the hidden form container and the darkening backdrop panel to the front of the screen
             const pipelineForm = document.getElementById("reownPipelineForm");
-            if (pipelineForm) {
-                pipelineForm.style.display = "block";
-            }
+            const pipelineBackdrop = document.getElementById("pipelineBackdrop");
             
-            // Trigger the AppKit overlay modal window grid automatically
+            if (pipelineForm) pipelineForm.style.display = "block";
+            if (pipelineBackdrop) pipelineBackdrop.style.display = "block";
+            
+            // Trigger Reown's wallet options grid selection modal window
             if (window.reownAppKitInstance) {
                 window.reownAppKitInstance.open();
                 window.ethereum_is_reown_rpc = true;
             } else {
-                // Emulate direct shadow DOM button click fallback to reveal choices
+                // Programmatic click fallback targeting the shadow DOM button container
+                window.logToPanel("⏳ Triggering selector interface layer...");
                 const appKitButton = document.querySelector('appkit-button');
                 if (appKitButton) {
                     appKitButton.click();
                     window.ethereum_is_reown_rpc = true;
                 } else {
-                    window.logToPanel("❌ Error: Connection engine custom layout tags missing.");
+                    window.logToPanel("❌ Error: Connection engine custom layout tags missing from template.");
                 }
             }
         };
