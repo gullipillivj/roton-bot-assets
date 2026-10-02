@@ -91,57 +91,154 @@ async function verifyBnbMainnetToken(address) {
 }
 
 
+// =============================================================
+// BNB MAINNET CONTRACT VERIFIER
+// Requires:
+// window.BSCSCAN_API_KEY = "T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4";
+// =============================================================
+async function verifyBnbMainnetToken(address) {
 
-    // ==============================================================
-    // DIRECT WALLET FETCH PIPELINE (POLLS CLEAN BINANCE PAYLOAD)
-    // ==============================================================
-async function categorizeCoins() {
     try {
 
-        var backendUrl = "/prodbot/market-analysis";
-        var res = await fetch(backendUrl);
-        var responseData = await res.json();
-
-        var rawData = responseData;
-
-        if (responseData && responseData.data) {
-            rawData = responseData.data;
+        if (
+            !address ||
+            !/^0x[a-fA-F0-9]{40}$/.test(address)
+        ) {
+            return false;
         }
 
-        if (!Array.isArray(rawData)) {
+        const apiKey = window.BSCSCAN_API_KEY;
+
+        if (!apiKey) {
+            window.logToPanel(
+                "❌ BSCSCAN API KEY missing"
+            );
+            return false;
+        }
+
+        const url =
+            "https://api.bscscan.com/api" +
+            "?module=token" +
+            "&action=tokeninfo" +
+            "&contractaddress=" +
+            address +
+            "&apikey=" +
+            apiKey;
+
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (
+            data &&
+            data.status === "1" &&
+            data.result
+        ) {
+            return true;
+        }
+
+        return false;
+
+    } catch (err) {
+
+        window.logToPanel(
+            "BSC VERIFY ERROR: " +
+            err.message
+        );
+
+        return false;
+    }
+}
+
+// =============================================================
+// PRODUCTION COIN FILTER
+// =============================================================
+async function categorizeCoins() {
+
+    try {
+
+        const backendUrl =
+            "/prodbot/market-analysis";
+
+        const res =
+            await fetch(backendUrl);
+
+        let responseData =
+            await res.json();
+
+        let rawData =
+            responseData;
+
+        if (
+            responseData &&
+            responseData.data
+        ) {
+            rawData =
+                responseData.data;
+        }
+
+        if (
+            !Array.isArray(rawData)
+        ) {
+
             try {
-                rawData = JSON.parse(rawData);
+
+                rawData =
+                    JSON.parse(rawData);
+
             } catch (e) {
+
                 rawData = [];
+
             }
         }
 
-        var flatList = [];
+        const flatList = [];
 
-        for (var i = 0; i < rawData.length; i++) {
+        for (
+            let i = 0;
+            i < rawData.length;
+            i++
+        ) {
 
-            var item = rawData[i];
-            if (!item) continue;
+            const item =
+                rawData[i];
 
-            var rawName = String(
-                item.name || ""
-            ).trim();
+            if (!item) {
+                continue;
+            }
 
-            var rawSymbol =
+            let rawName =
+                String(
+                    item.name || ""
+                ).trim();
+
+            let rawSymbol =
                 item.token_symbol &&
-                String(item.token_symbol).trim().toUpperCase() !== "N/A"
+                String(
+                    item.token_symbol
+                )
+                    .trim()
+                    .toUpperCase() !== "N/A"
                     ? item.token_symbol
                     : rawName;
 
-            rawSymbol = String(rawSymbol || "")
-                .toUpperCase()
-                .trim();
+            rawSymbol =
+                String(
+                    rawSymbol || ""
+                )
+                    .toUpperCase()
+                    .trim();
 
-            var rawAddress = String(
-                item.address_or_geckoid || ""
-            ).trim();
+            let rawAddress =
+                String(
+                    item.address_or_geckoid ||
+                    ""
+                ).trim();
 
-            // Must have address
+            // -------------------------------------------------
+            // ADDRESS REQUIRED
+            // -------------------------------------------------
+
             if (
                 !rawAddress ||
                 rawAddress === "N/A"
@@ -149,101 +246,220 @@ async function categorizeCoins() {
                 continue;
             }
 
-            // Block cross-chain
+            // -------------------------------------------------
+            // REJECT NON-BSC CHAINS
+            // -------------------------------------------------
+
             if (
-                rawAddress.startsWith("solana:") ||
-                rawAddress.startsWith("arbitrum:") ||
-                rawAddress.startsWith("avax:") ||
-                rawAddress.startsWith("thorchain:") ||
-                rawAddress.startsWith("sonic:")
+                rawAddress.startsWith(
+                    "solana:"
+                ) ||
+                rawAddress.startsWith(
+                    "arbitrum:"
+                ) ||
+                rawAddress.startsWith(
+                    "base:"
+                ) ||
+                rawAddress.startsWith(
+                    "avax:"
+                ) ||
+                rawAddress.startsWith(
+                    "polygon:"
+                ) ||
+                rawAddress.startsWith(
+                    "optimism:"
+                ) ||
+                rawAddress.startsWith(
+                    "ethereum:"
+                ) ||
+                rawAddress.startsWith(
+                    "thorchain:"
+                ) ||
+                rawAddress.startsWith(
+                    "sonic:"
+                )
             ) {
                 continue;
             }
 
-            // Normalize bsc:
-            if (rawAddress.startsWith("bsc:")) {
-                rawAddress = rawAddress.substring(4);
+            // -------------------------------------------------
+            // NORMALIZE bsc:
+            // -------------------------------------------------
+
+            if (
+                rawAddress.startsWith(
+                    "bsc:"
+                )
+            ) {
+
+                rawAddress =
+                    rawAddress.substring(4);
+
             }
 
-            // Block THENA
+            // -------------------------------------------------
+            // BLOCK THENA
+            // -------------------------------------------------
+
             if (
-                rawName.toUpperCase().indexOf("THENA") !== -1 ||
+                rawName
+                    .toUpperCase()
+                    .includes("THENA") ||
+
                 rawSymbol === "THE" ||
+
                 rawAddress.toLowerCase() ===
                 "0xf4c8e32eadec4bfe97e0f595add0f4450a863a11"
             ) {
                 continue;
             }
 
-            // Skip major base assets
+            // -------------------------------------------------
+            // BLOCK BASE ASSETS
+            // -------------------------------------------------
+
             if (
                 [
                     "BNB",
                     "WBNB",
+                    "BTC",
+                    "WBTC",
+                    "ETH",
                     "USDT",
                     "USDC",
                     "BUSD",
-                    "BTC",
-                    "ETH"
-                ].indexOf(rawSymbol) !== -1
+                    "DAI"
+                ].includes(
+                    rawSymbol
+                )
             ) {
                 continue;
             }
 
-            // Must be valid address
+            // -------------------------------------------------
+            // VALID CONTRACT FORMAT
+            // -------------------------------------------------
+
             if (
-                !/^0x[a-fA-F0-9]{40}$/.test(rawAddress)
+                !/^0x[a-fA-F0-9]{40}$/.test(
+                    rawAddress
+                )
             ) {
                 continue;
             }
 
-            var priceUsd =
+            // -------------------------------------------------
+            // BNB MAINNET VERIFICATION
+            // -------------------------------------------------
+
+            const verified =
+                await verifyBnbMainnetToken(
+                    rawAddress
+                );
+
+            if (!verified) {
+
+                window.logToPanel(
+                    "⛔ REJECTED NON-BSC TOKEN: " +
+                    rawSymbol +
+                    " | " +
+                    rawAddress
+                );
+
+                continue;
+            }
+
+            // -------------------------------------------------
+            // MARKET DATA
+            // -------------------------------------------------
+
+            const priceUsd =
                 parseFloat(
                     item.live_price_usd ||
                     item.lastPrice ||
                     0
                 ) || 0;
 
-            var change24h =
+            const change24h =
                 parseFloat(
                     item.change_24h_percent ||
                     item.change24h ||
                     0
                 ) || 0;
 
-            var volume =
+            const volume =
                 parseFloat(
-                    item.volume ||
-                    0
+                    item.volume || 0
                 ) || 0;
 
             flatList.push({
-                symbol: rawSymbol,
-                address: rawAddress,
-                lastPrice: priceUsd,
-                change24h: change24h,
-                volume: volume
+
+                symbol:
+                    rawSymbol,
+
+                address:
+                    rawAddress,
+
+                lastPrice:
+                    priceUsd,
+
+                change24h:
+                    change24h,
+
+                volume:
+                    volume
+
             });
+
+            window.logToPanel(
+                "✅ VERIFIED BSC TOKEN: " +
+                rawSymbol
+            );
         }
 
-        flatList.sort(function(a, b) {
-            return Number(b.change24h || 0) -
-                   Number(a.change24h || 0);
-        });
+        // -------------------------------------------------
+        // RANK BY PERFORMANCE
+        // -------------------------------------------------
 
-        // Keep strongest candidates only
-        flatList = flatList.slice(0, 5);
+        flatList.sort(
+            function (a, b) {
+
+                return (
+                    Number(
+                        b.change24h || 0
+                    ) -
+                    Number(
+                        a.change24h || 0
+                    )
+                );
+
+            }
+        );
+
+        // -------------------------------------------------
+        // TOP FIVE ONLY
+        // -------------------------------------------------
+
+        const finalList =
+            flatList.slice(0, 5);
 
         window.logToPanel(
             "✅ Production Filter Accepted " +
-            flatList.length +
-            " verified BSC assets."
+            finalList.length +
+            " verified BNB Mainnet assets."
         );
 
         return {
-            short_term: flatList,
-            mid_term: [],
-            long_term: []
+
+            short_term:
+                finalList,
+
+            mid_term:
+                [],
+
+            long_term:
+                []
+
         };
 
     } catch (err) {
@@ -254,12 +470,18 @@ async function categorizeCoins() {
         );
 
         return {
+
             short_term: [],
             mid_term: [],
             long_term: []
+
         };
     }
 }
+
+
+
+
 
 
 
