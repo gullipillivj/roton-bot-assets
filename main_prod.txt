@@ -477,125 +477,79 @@ const BSC_CHAIN_ID_CAIP = "eip155:56"; // Exact BSC Mainnet identifier map
 // ========================================================
 // ⚡ SECURE PUBLIC-ROUTED NATIVE PROGRAMMATIC RPC DISPATCHER
 // ========================================================
-async function dispatchReownJsonRpcRequest(method, params = []) {
-    // 🌟 FIXED: Shifted endpoint away from the blocked backend server proxy
-    // Targets the public high-availability nodes directly using the user's local network connection
-    const targetPublicRpc = "https://binance.org";
-    
-    const payload = {
-        id: Date.now() + Math.floor(Math.random() * 1000),
-        jsonrpc: "2.0",
-        method: method,
-        params: params
-    };
-
-    try {
-        window.logToPanel(`📡 Forwarding client-side Web3 connection method: ${method}...`);
-
-        // Fire a direct un-proxied post request straight from the browser frame
-        const response = await fetch(targetPublicRpc, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-            throw new Error(`Public Node Communication Barrier Gateway Status: ${response.status}`);
-        }
-
-        const jsonResponse = await response.json();
-        
-        if (jsonResponse.error) {
-            throw new Error(`RPC Engine Exception [${jsonResponse.error.code}]: ${jsonResponse.error.message}`);
-        }
-
-        window.logToPanel(`✅ Direct Node Response Verified for method: ${method}`);
-        return jsonResponse.result;
-    } catch (err) {
-        logToPanel(`❌ [DIRECT RPC DISPATCH FAILURE] ${err.message}`);
-        throw err;
-    }
-}
-
 
 // ========================================================
-// 📱 WALLET INTERFACE CONNECT ROUTER
+// 📱 PART B: DYNAMIC WALLET ROUTER & INTERFACE SYNCHRONIZER
 // ========================================================
-window.addEventListener("DOMContentLoaded", () => {
-    initializeLabels();
-    setupActionListeners();
-
-    const connBtn = document.getElementById("connectwalletBtn");
-    if (connBtn) {
-        connBtn.onclick = async function() {
-            // Track check prioritisation: Use built-in provider if user is inside a Web3 browser
-            if (typeof window.ethereum !== "undefined") {
-                try {
-                    logToPanel("⏳ Querying accounts from native browser wallet extension...");
-                    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-                    window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
-                    
-                    logToPanel("✅ Connected via Native Browser Wallet Provider.");
-                    await finalizeInterfaceSyncState();
-                    return;
-                } catch (nativeErr) {
-                    logToPanel(`⚠️ Built-in connection skipped: ${nativeErr.message}. Launching Reown fallback portal...`);
-                }
-            }
-
-            // Fallback: Programmatic raw data connection initialization via Reown AppKit Endpoint 
-            try {
-                logToPanel("📡 Dialing Reown Blockchain API Network Nodes...");
-                
-                // 1. Verify network chain availability straight from the endpoint
-                const onChainIdHex = await dispatchReownJsonRpcRequest("eth_chainId", []);
-                const chainIdDecimal = parseInt(onChainIdHex, 16);
-                logToPanel(`ℹ️ Reown RPC Connected. Network Target Chain ID: ${chainIdDecimal} (${onChainIdHex})`);
-
-                // 2. Fallback execution block parameters mapping window configurations
-                if (window.USER_ADDR && window.USER_ADDR !== "null") {
-                    logToPanel("🔄 Re-verifying active ledger parameters...");
-                } else {
-                    // Prompt instructions for external sessions
-                    logToPanel("💡 Outside built-in browser window: Enter your target Web3 public address inside logs to ground mapping states manually or inject via dApp links.");
-                    
-                    // Simple programmatic browser prompt for manual grounding input out-of-wallet
-                    const manualInputAddress = prompt("Enter your connected BSC Web3 Wallet Address to track:");
-                    if (manualInputAddress && manualInputAddress.startsWith("0x") && manualInputAddress.length === 42) {
-                        window.USER_ADDR = manualInputAddress.toLowerCase();
-                    } else {
-                        logToPanel("❌ Connection cancelled. Invalid address structure.");
-                        return;
-                    }
-                }
-
-                await finalizeInterfaceSyncState();
-
-            } catch (reownGatewayErr) {
-                logToPanel(`❌ Core Connection Pipeline Blocked: ${reownGatewayErr.message}`);
-            }
-        };
-    }
-});
 
 /**
- * Updates UI labels and executes parallel on-chain balance synchronizations
+ * Updates UI layout parameters and fires parallel on-chain sync checks
  */
 async function finalizeInterfaceSyncState() {
     const label = document.getElementById("currentWalletLabel");
-    if (label) label.innerText = window.USER_ADDR;
+    if (label) {
+        label.innerText = "Wallet Address: " + window.USER_ADDR;
+    }
     
-    // Override the runtime reference so downstream modules (simulateCycle) read the endpoint data
-    window.ethereum_is_reown_rpc = true;
-
-    logToPanel(`🎉 Settle Success! Grounded State Address: ${window.USER_ADDR}`);
+    window.logToPanel(`🎉 Interface Sync Success! Active Wallet Session: ${window.USER_ADDR}`);
 
     if (typeof window.syncBalanceFromFund === "function") {
         await window.syncBalanceFromFund();
     }
 }
+window.finalizeInterfaceSyncState = finalizeInterfaceSyncState;
+
+// Execute UI setup bindings instantly on browser ready cycles
+window.addEventListener("DOMContentLoaded", () => {
+    initializeLabels();
+    setupActionListeners();
+
+    const connBtn = document.getElementById("connectwalletBtn");
+    
+    if (connBtn) {
+        connBtn.onclick = async function() {
+            // Track 1: User is inside a mobile wallet's built-in browser (window.ethereum exists natively)
+            if (typeof window.ethereum !== "undefined" && !window.ethereum_is_reown_rpc) {
+                try {
+                    window.logToPanel("⏳ Querying accounts from native built-in mobile browser...");
+                    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+                    
+                    // Accept address parameter outputs safely 
+                    window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
+                    window.logToPanel("✅ Natively Connected via Mobile App Browser Environment.");
+                    
+                    await window.finalizeInterfaceSyncState();
+                    return;
+                } catch (nativeErr) {
+                    window.logToPanel(`⚠️ Built-in track declined: ${nativeErr.message}. Launching modern browser fallback...`);
+                }
+            }
+
+            // Track 2: User is in standard browsers (Chrome, Firefox, Opera, Safari)
+            // Displays your inline HTML appkit-button hidden form element and fires the QR code overlay modal
+            window.logToPanel("📡 Initializing client-side connection bridge...");
+            const pipelineForm = document.getElementById("reownPipelineForm");
+            if (pipelineForm) {
+                pipelineForm.style.display = "block"; // Open input display visibility box
+            }
+            
+            // Check if module loader has initialized the global trigger mapping
+            if (window.reownAppKitInstance) {
+                window.reownAppKitInstance.open();
+                window.ethereum_is_reown_rpc = true;
+            } else {
+                // If clicked before ESM scripts finish downloading from CDN network nodes
+                window.logToPanel("⏳ Syncing bridge nodes in the background. Please tap connect once more.");
+                
+                // Fallback attempt to open custom tag element modal engine directly
+                const appKitButton = document.querySelector('appkit-button');
+                if (appKitButton) {
+                    appKitButton.click();
+                }
+            }
+        };
+    }
+});
 
 
 // ========================================================
