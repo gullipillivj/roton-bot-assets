@@ -1,4 +1,5 @@
 logToPanel("coins.txt loaded (BEP20 Mode)");
+window.BSCSCAN_API_KEY = "T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4";
 
 // ==================================================================
 // 🎛️ DIRECT WALLET-COMPATIBLE LIVE COIN ENGINE (STREAMLINED BINANCE MODE)
