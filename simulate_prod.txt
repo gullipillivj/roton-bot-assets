@@ -149,7 +149,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     try {
         logToPanel(`[SWAP REQUEST]\nFROM=${currentToken}\nTO=${coinInfo.tokenAddress}\nAMOUNT=${allocationUSD}`);
-        const swapResp = await window.runSwapUniswap(
+        const swapResp = await window.runbscSwapUniswap(
             window.USER_ADDR,
             allocationUSD,
             currentToken,
