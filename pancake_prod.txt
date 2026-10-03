@@ -13,134 +13,53 @@ function logToPanel(msg) {
   }
 }
 
-// ==================================================================
-// 🥞 PIPELINE 1: DISPATCH LOCAL BSC UNISWAP / PANCAKE ROUTING
-// ==================================================================
-async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken) {
-    try {
-        const base = window.API_BASE || "";
-        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
-        const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-        const amountOutMin = "0";
+// 🌟 STAGE 3: LINEAR SIMULATION PASS-THROUGH PIPELINE
+async function runsimulateSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+    const res = await fetch("/prodbot/swap/simulateuniswap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            router: targetRouter,
+            tokenIn: fromToken,
+            tokenOut: toToken,
+            amountIn: amountWei,
+            amountOutMin: "0"
+        })
+    });
+    return await res.json();
+}
+window.runsimulateSwapUniswap = runsimulateSwapUniswap;
 
-        logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
-        logToPanel(`TOKEN_IN=${fromToken}\nTOKEN_OUT=${toToken}\nAMOUNT_IN=${cleanAmount}\nMIN_OUT=${amountOutMin}`);
-
-        const res = await fetch(`${base}/prodbot/swap/bscuniswap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: pancakeRouterAddress,
-                tokenIn: fromToken,
-                tokenOut: toToken,
-                amountIn: cleanAmount,
-                amountOutMin: amountOutMin
-            })
-        });
-
-        const data = await res.json();
-
-        if (data && data.status === "ok") {
-            logToPanel("[INFO] Sending transaction payload directly to browser extension...");
-            const txHash = await window.ethereum.request({
-                method: "eth_sendTransaction",
-                params: [{
-                    from: userAddr,
-                    to: data.to_contract,
-                    data: data.compiled_data,
-                    value: "0x0"
-                }]
-            });
-            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
-            return { status: "ok", tx_hash: txHash };
-        }
-        return data;
-    } catch (err) {
-        logToPanel(`❌ Uniswap Pipeline Error: ${err.message}`);
-        return { status: "error", message: err.message };
-    }
+// 🌟 STAGE 4: LINEAR LIVE BSC SWAP PASS-THROUGH PIPELINE
+async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+    const res = await fetch("/prodbot/swap/bscuniswap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            router: targetRouter,
+            tokenIn: fromToken,
+            tokenOut: toToken,
+            amountIn: amountWei,
+            amountOutMin: "0"
+        })
+    });
+    return await res.json();
 }
 window.runbscSwapUniswap = runbscSwapUniswap;
 
-// ==================================================================
-// 🥞 PIPELINE 2: DISPATCH LOCAL ETHEREUM UNISWAP ROUTING
-// ==================================================================
-async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken) {
-    try {
-        const base = window.API_BASE || "";
-        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
-        const ethereumRouterAddress = "0xE592427A0AEce92De3Edee1F18E0157C05861564";
-        const amountOutMin = "0";
-
-        logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
-        logToPanel(`TOKEN_IN=${fromToken}\nTOKEN_OUT=${toToken}\nAMOUNT_IN=${cleanAmount}\nMIN_OUT=${amountOutMin}`);
-
-        const res = await fetch(`${base}/prodbot/swap/ethuniswap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: ethereumRouterAddress,
-                tokenIn: fromToken,
-                tokenOut: toToken,
-                amountIn: cleanAmount,
-                amountOutMin: amountOutMin
-            })
-        });
-
-        const data = await res.json();
-
-        if (data && data.status === "ok") {
-            logToPanel("[INFO] Sending transaction payload directly to browser extension...");
-            const txHash = await window.ethereum.request({
-                method: "eth_sendTransaction",
-                params: [{
-                    from: userAddr,
-                    to: data.to_contract,
-                    data: data.compiled_data,
-                    value: "0x0"
-                }]
-            });
-            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
-            return { status: "ok", tx_hash: txHash };
-        }
-        return data;
-    } catch (err) {
-        logToPanel(`❌ Uniswap Pipeline Error: ${err.message}`);
-        return { status: "error", message: err.message };
-    }
+// 🌟 STAGE 4: LINEAR LIVE ETH SWAP PASS-THROUGH PIPELINE
+async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+    const res = await fetch("/prodbot/swap/ethuniswap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            router: targetRouter,
+            tokenIn: fromToken,
+            tokenOut: toToken,
+            amountIn: amountWei,
+            amountOutMin: "0"
+        })
+    });
+    return await res.json();
 }
 window.runethSwapUniswap = runethSwapUniswap;
-
-// ==================================================================
-// 🥞 PIPELINE 3: DYNAMIC SIMULATE SWAP ROUTING 
-// ==================================================================
-async function runsimulateSwapUniswap(userAddr, amountWei, fromToken, toToken, dynamicRouter) {
-    try {
-        const base = window.API_BASE || "";
-        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
-        const targetRouter = dynamicRouter || "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-        const amountOutMin = "0";
-
-        logToPanel(`[ROUTE] Dispatching Uniswap simulation query via target router: ${targetRouter}`);
-        logToPanel(`TOKEN_IN=${fromToken}\nTOKEN_OUT=${toToken}\nAMOUNT_IN=${cleanAmount}\nMIN_OUT=${amountOutMin}`);
-
-        const res = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: targetRouter,
-                tokenIn: fromToken,
-                tokenOut: toToken,
-                amountIn: cleanAmount,
-                amountOutMin: amountOutMin
-            })
-        });
-
-        const data = await res.json();
-        return data;
-    } catch (err) {
-        logToPanel(`❌ Uniswap Simulation Pipeline Error: ${err.message}`);
-        return { status: "error", message: err.message };
-    }
-}
-window.runsimulateSwapUniswap = runsimulateSwapUniswap;
