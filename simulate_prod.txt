@@ -1,5 +1,6 @@
-logToPanel("simulate_prod.txt loaded (BEP20 Mode - Sequential Engine)");
+logToPanel("simulate_prod.txt loaded (Multi-Network Orchestration Engine)");
 
+// Global log dashboard adapter
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) {
@@ -11,8 +12,29 @@ function logToPanel(msg) {
 }
 window.logToPanel = logToPanel;
 
+// Thread state delays
 const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// UI Status label updater
+function setStatus(msg) {
+    const statusLabel = document.querySelector(".status-label");
+    if (statusLabel) {
+        statusLabel.textContent = msg;
+    } else {
+        logToPanel(`[STATUS] ${msg}`);
+    }
+}
+window.setStatus = setStatus;
+
+// Emergency Halt
+function stopBot() {
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT STOPPED] Trading halted by user.");
+}
+window.stopBot = stopBot;
+
+// Database tracker token synchronization
 async function updateTokenRecord(lastToken, currentToken) {
     try {
         const userid = window.USER_ID || localStorage.getItem("userid");
@@ -37,230 +59,162 @@ async function updateTokenRecord(lastToken, currentToken) {
     }
 }
 
-function setStatus(msg) {
-    const statusLabel = document.querySelector(".status-label");
-    if (statusLabel) {
-        statusLabel.textContent = msg;
-    } else {
-        logToPanel(`[STATUS] ${msg}`);
-    }
-}
-window.setStatus = setStatus;
-
-function stopBot() {
-    window.isBotRunning = false;
-    setStatus("STOPPED");
-    logToPanel("[BOT STOPPED] Trading halted by user.");
-}
-window.stopBot = stopBot;
-
-// Inside your simulateCycle function when it requests compiled simulation data:
-const res = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-        router: pancakeRouterAddress,
-        tokenIn: currentToken,
-        tokenOut: coinInfo.tokenAddress,
-        amountIn: cleanAmount,
-        amountOutMin: amountOutMin
-    })
-});
-
-const data = await res.json();
-
-if (data && data.status === "ok") {
-    // Read the newly added parameters directly out of the existing route payload
-    logToPanel(`[PRE-SWAP SIMULATION METRICS]\nSLIPPAGE COST=${data.slippage_cost_pct}%\nEXPECTED OUTPUT=${data.expected_output_wei} WEI`);
-    
-    if (parseFloat(data.slippage_cost_pct) >= 1.0) {
-        logToPanel("⚠️ [LOOP LOCKDOWN] Slippage too high! Skipping cycle to safeguard assets.");
-        return "SKIP"; 
-    }
-    
-    logToPanel("✅ [SIMULATION CONFIRMED] Execution conditions safe. Proceeding to wallet pipeline...");
-
-}
-
-
-async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
-    setStatus(`RUNNING ${cycle}/${totalCycles}`);
-
-    const syncedBalance = await syncBalanceFromFund();
-    if (syncedBalance === null) {
-        logToPanel("[WARN] Balance sync failed. Stopping orchestration loop.");
-        return "STOP_ERROR"; 
-    }
-
-    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    if (tradingBalance <= 0) {
-        logToPanel("[WARN] No trading balance available. Stopping loop.");
-        return "STOP_ERROR"; 
-    }
-
-    window.beforeBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
-    if (cycle === 1) {
-        window.initialSimulationUSD = window.beforeBalanceUSD;
-    }
-
-    const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
-    const allocationUSD = totalBalance.toString();
-
-    logToPanel(`[ALLOCATION]\nTOTAL=${totalBalance}\nALLOCATED=${allocationUSD}`);
-
-    let currentToken = "0x55d398326f99059fF775485246999027B3197955"; 
+// Pipeline asset fetcher helper
+async function getCurrentTokenState() {
+    let state = { token: "0x55d398326f99059fF775485246999027B3197955", network: "bep20" };
     try {
-        const tokenResp = await fetch("/prodbot/tokens/get", {
+        const resp = await fetch("/prodbot/tokens/get", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userid: window.USER_ID })
         });
-        const tokenData = await tokenResp.json();
-        if (tokenData && tokenData.currenttoken) {
-            currentToken = tokenData.currenttoken;
-            logToPanel(`[TOKEN LOAD]\n${currentToken}`);
+        const data = await resp.json();
+        if (data && data.currenttoken) {
+            state.token = data.currenttoken;
+            state.network = data.network || "bep20";
         }
     } catch (err) {
-        logToPanel(`[TOKEN LOAD ERROR]\n${err.message}`);
+        logToPanel(`[TOKEN LOAD ERROR] Using USDT fallback: ${err.message}`);
     }
+    return state;
+}
 
 
-        let coinInfo = null;
+function evaluateRoutingMatrix(srcNet, dstNet, base) {
+    let config = { endpoint: "", minOut: "0", router: "0x10ED43C718714eb63d5aA57B78B54704E256024E" };
+    
+    const isSrcBSC = ["bep20", "bsc"].includes(srcNet.toLowerCase());
+    const isDstBSC = ["bep20", "bsc"].includes(dstNet.toLowerCase());
+    const isSrcETH = ["erc20", "eth"].includes(srcNet.toLowerCase());
+    const isDstETH = ["erc20", "eth"].includes(dstNet.toLowerCase());
+
+    // RULE 1: BSC -> BSC
+    if (isSrcBSC && isDstBSC) {
+        config.endpoint = `${base}/prodbot/swap/bscuniswap`;
+        config.minOut = "0"; 
+        logToPanel("[ROUTE] Rule 1: BSC->BSC Routing applied (MinOut = 0).");
+    } 
+    // RULE 2: ETH -> ETH
+    else if (isSrcETH && isDstETH) {
+        config.endpoint = `${base}/prodbot/swap/ethuniswap`;
+        config.router = "0xE592427A0AEce92De3Edee1F18E0157C05861564"; // Uniswap V3
+        config.minOut = "1"; 
+        logToPanel("[ROUTE] Rule 2: ETH->ETH Routing applied (MinOut non-zero).");
+    } 
+    // RULE 3: Cross-Chain Bridge
+    else {
+        config.endpoint = `${base}/prodbot/swap/crossswap`;
+        config.minOut = "1";
+        logToPanel("[ROUTE] Rule 3: Cross-Chain Routing via WBNB/WETH assets.");
+    }
+    return config;
+}
+
+async function executePreFlightCheck(base, router, tokenIn, tokenOut, amountIn, minOut, currentBal, gainPct) {
+    try {
+        logToPanel("⚡ [PRE-FLIGHT] Verifying router viability via Brownie simulation variables...");
+        const res = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ router, tokenIn, tokenOut, amountIn, amountOutMin: minOut })
+        });
+        const sim = await res.json();
+
+        if (sim && sim.status === "ok") {
+            const slipCost = parseFloat(sim.slippage_cost_pct || 0);
+            const gasUSD = parseFloat(sim.gas_overhead_usd || 0.11);
+            
+            const grossProfitUSD = currentBal * (gainPct / 100);
+            const slipImpactUSD = currentBal * (slipCost / 100);
+            const netProfitUSD = grossProfitUSD - (gasUSD + slipImpactUSD);
+
+            logToPanel(`[METRICS] Slip: ${slipCost}% | Gas: $${gasUSD} | Net: $${netProfitUSD.toFixed(4)}`);
+
+            if (sim.possible === false || netProfitUSD <= 0) {
+                logToPanel("⚠️ [SKIP] Unprofitable or routing paths stalled. Safeguarding capital assets.");
+                return false;
+            }
+            return true;
+        }
+    } catch (err) {
+        logToPanel(`❌ Pre-swap validation crashed: ${err.message}`);
+    }
+    return false; // Safely skip cycle if simulation throws exceptions
+}
+
+async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
+    logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
+    setStatus(`RUNNING ${cycle}/${totalCycles}`);
+    const base = window.API_BASE || "";
+
+    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    if (tradingBalance <= 0) return "STOP_ERROR"; 
+
+    const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
+    const allocationWei = totalBalance.toString();
+
+    // Load active tokens and sequence target candidates
+    const srcAsset = await getCurrentTokenState();
+    let coinInfo = null;
+
     try {
         if (typeof window.getTradeCandidates === "function") {
             const candidates = await window.getTradeCandidates();
             if (candidates && candidates.length > 0) {
-                var safeIndex = (parseInt(cycle) - 1) % candidates.length;
-                if (safeIndex < 0) safeIndex = 0;
-                
-                var targetToken = candidates[safeIndex];
-                
-                // Matches your coins.txt translation layers perfectly
+                let targetToken = candidates[(parseInt(cycle) - 1) % candidates.length];
                 coinInfo = {
                     symbol: targetToken.symbol || "UNKNOWN",
-                    tokenAddress: targetToken.address || "0x0000000000000000000000000000000000000000",
-                    network: "bep20",
-                    router: "pancakeswap",
-                    change24h: Number(targetToken.change24h || 0), 
-                    lastPrice: Number(targetToken.lastPrice || 0)   
+                    tokenAddress: targetToken.address,
+                    network: targetToken.network || "bep20",
+                    change24h: Number(targetToken["%profit"] || 0)
                 };
             }
         }
-    } catch (evalErr) {
-        console.error("Sequence index lookup failed, running structural fallback:", evalErr);
-    }
+    } catch (e) { console.error(e); }
 
+    if (!coinInfo) return "SKIP";
 
-    if (!coinInfo || !coinInfo.tokenAddress) {
-        logToPanel("⚠️ Dynamic pricing lookup stalled. Injecting stable test asset mapping.");
-        coinInfo = {
-            symbol: "CAKE",
-            tokenAddress: "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82",
-            change24h: 1.8,
-            lastPrice: 1.95
-        };
-    }
+    // Matrix Evaluation and Simulation Checks
+    const route = evaluateRoutingMatrix(srcAsset.network, coinInfo.network, base);
+    const pass = await executePreFlightCheck(base, route.router, srcAsset.token, coinInfo.tokenAddress, allocationWei, route.minOut, tradingBalance, coinInfo.change24h);
+    if (!pass) return "SKIP";
 
-    logToPanel(`[TARGET]\n${coinInfo.symbol}\nMOVE=${coinInfo.change24h}%\nADDRESS=${coinInfo.tokenAddress}`);
-
-    const maxGasOverheadUSD = 0.11; 
-    const projectedProfitUSD = window.beforeBalanceUSD * (parseFloat(coinInfo.change24h) / 100);
-
-    logToPanel(`[ECONOMICS EVALUATION]\nPORTFOLIO VALUE=$${window.beforeBalanceUSD.toFixed(4)}\nPROJECTED MOVE PROCEEDS=$${projectedProfitUSD.toFixed(4)}\nESTIMATED NETWORK FEES=$${maxGasOverheadUSD.toFixed(2)}`);
-
-    if (projectedProfitUSD <= maxGasOverheadUSD) {
-        logToPanel(`[CYCLE SKIPPED] Expected profit ($${projectedProfitUSD.toFixed(4)}) is below gas/approval overhead thresholds ($${maxGasOverheadUSD}). Advancing engine loop...`);
-        return "SKIP"; 
-    }
-
-    const beforeBalance = document.getElementById("investBalance").value.toString().trim();
-
+    // Core execution dispatch block
     try {
-        logToPanel(`[SWAP REQUEST]\nFROM=${currentToken}\nTO=${coinInfo.tokenAddress}\nAMOUNT=${allocationUSD}`);
-        const swapResp = await window.runbscSwapUniswap(
-            window.USER_ADDR,
-            allocationUSD,
-            currentToken,
-            coinInfo.tokenAddress
-        );
+        const swapResp = await fetch(route.endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ router: route.router, tokenIn: srcAsset.token, tokenOut: coinInfo.tokenAddress, amountIn: allocationWei, amountOutMin: route.minOut })
+        });
+        const data = await swapResp.json();
+        if (!data || data.status !== "ok") return "CONTINUE";
 
-        if (!swapResp || !swapResp.tx_hash) {
-            logToPanel("[SWAP PIPELINE SKIPPED OR REJECTED]");
-            return "CONTINUE"; 
-        }
+        const txHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{ from: window.USER_ADDR, to: data.to_contract, data: data.compiled_data, value: "0x0" }]
+        });
+        logToPanel(`✅ Broadcast Success: ${txHash}`);
 
-        logToPanel(`[TX SENT]\n${swapResp.tx_hash}`);
-
-        let balanceChanged = false;
-        for (let attempt = 1; attempt <= 45; attempt++) {
+        // Track lifecycle delta movements
+        const beforeWei = document.getElementById("investBalance").value.toString().trim();
+        let confirmed = false;
+        for (let i = 1; i <= 45; i++) {
             await blockDelay(10000);
-            await syncBalanceFromFund();
-            const currentBalance = document.getElementById("investBalance").value.toString().trim();
-            logToPanel(`[VERIFY ${attempt}/45]\nSTART=${beforeBalance}\nNOW=${currentBalance}`);
-
-            if (currentBalance !== beforeBalance) {
-                balanceChanged = true;
-                logToPanel(`[BALANCE VERIFIED]\n${beforeBalance}\n➡\n${currentBalance}`);
-                break;
+            if (typeof syncBalanceFromFund === "function") await syncBalanceFromFund();
+            if (document.getElementById("investBalance").value.toString().trim() !== beforeWei) {
+                confirmed = true; break;
             }
         }
-
-        if (!balanceChanged) {
-            logToPanel("❌ [NO BALANCE MOVEMENT DETECTED] Enforcing safe lockdown. Halting loop.");
-            return "STOP_ERROR"; 
-        }
-
-        logToPanel("⏳ Synchronizing database token allocation tracking...");
-        await updateTokenRecord(currentToken, coinInfo.tokenAddress);
-
-        const usdtAddress = "0x55d398326f99059fF775485246999027B3197955";
-        
-        if (coinInfo.tokenAddress.toLowerCase() !== usdtAddress.toLowerCase()) {
-            logToPanel(`🛡️ [VOLATILITY SHIELD] Volatile asset parsed (${coinInfo.symbol}). Repatriating capital straight back to USDT...`);
-            
-            const volatileWeiBalance = document.getElementById("investBalance").value.toString().trim();
-            logToPanel(`[SHIELD SWAP REQUEST]\nFROM=${coinInfo.tokenAddress}\nTO=${usdtAddress}\nAMOUNT=${volatileWeiBalance}`);
-            
-            const settleResp = await window.runSwapUniswap(
-                window.USER_ADDR,
-                volatileWeiBalance,
-                coinInfo.tokenAddress,
-                usdtAddress
-            );
-            
-            if (settleResp && settleResp.tx_hash) {
-                logToPanel(`✅ [SHIELD SETTLED] Capital securely locked in USDT. Settle Hash: ${settleResp.tx_hash}`);
-                await updateTokenRecord(coinInfo.tokenAddress, usdtAddress);
-            } else {
-                logToPanel("⚠️ [SHIELD WARNING] Stable conversion skipped or rejected by extension layout provider. Holding raw assets.");
-            }
-        }
-
-        await syncBalanceFromFund();
-        
-        const afterBalanceUSD = parseFloat(document.getElementById("usd").value) || 0;
-        const profitDeltaUSD = afterBalanceUSD - window.beforeBalanceUSD;
-        window.cumulativePnL = (window.cumulativePnL || 0) + profitDeltaUSD;
-
-        const liveProfitText = document.getElementById("liveProfitValue");
-        if (liveProfitText) {
-            liveProfitText.innerText = window.cumulativePnL.toFixed(4) + " USDT";
-            liveProfitText.style.color = window.cumulativePnL >= 0 ? "#00FF00" : "#FF3B30";
-        }
-
-        if (typeof updateChart === "function") {
-            updateChart(afterBalanceUSD, window.cumulativePnL);
-        }
+        if (!confirmed) return "STOP_ERROR";
+        await updateTokenRecord(srcAsset.token, coinInfo.tokenAddress);
 
     } catch (err) {
-        logToPanel(`[RUNTIME RUN EXCEPTION]\n${err.message}`);
-        return "STOP_ERROR"; 
+        logToPanel(`❌ Runtime loop error: ${err.message}`);
+        return "STOP_ERROR";
     }
-
-    logToPanel("🟢 [CYCLE STABILIZED] Capital secured in stable reserves. Releasing next cycle thread gateway.");
     return "CONTINUE";
 }
+
 
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
@@ -270,7 +224,7 @@ async function startSimulation(totalCycles) {
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
 
-    logToPanel(`[BOT START] ${totalCycles} cycles`);
+    logToPanel(`🚀 [BOT INITIATED] Processing up to ${totalCycles} execution cycles.`);
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
@@ -278,15 +232,13 @@ async function startSimulation(totalCycles) {
         const signal = await simulateCycle(i, totalCycles, pTarget, sLoss);
         
         if (signal === "STOP_ERROR") {
-            logToPanel("🛑 State alignment check failed. Aborting full orchestration loop execution.");
+            logToPanel("🛑 State mismatch runtime alert. Aborting framework loops.");
             break;
         }
-
         if (signal === "SKIP") {
             await blockDelay(1000); 
             continue;
         }
-
         if (i < totalCycles) {
             setStatus("WAITING");
             await blockDelay(10000);
@@ -295,7 +247,7 @@ async function startSimulation(totalCycles) {
     
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[BOT FINISHED]");
+    logToPanel("[BOT FINISHED] Processing complete.");
 }
 
 window.startSimulation = startSimulation;
