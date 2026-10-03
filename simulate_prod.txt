@@ -54,6 +54,35 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
+// Inside your simulateCycle function when it requests compiled simulation data:
+const res = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        router: pancakeRouterAddress,
+        tokenIn: currentToken,
+        tokenOut: coinInfo.tokenAddress,
+        amountIn: cleanAmount,
+        amountOutMin: amountOutMin
+    })
+});
+
+const data = await res.json();
+
+if (data && data.status === "ok") {
+    // Read the newly added parameters directly out of the existing route payload
+    logToPanel(`[PRE-SWAP SIMULATION METRICS]\nSLIPPAGE COST=${data.slippage_cost_pct}%\nEXPECTED OUTPUT=${data.expected_output_wei} WEI`);
+    
+    if (parseFloat(data.slippage_cost_pct) >= 1.0) {
+        logToPanel("⚠️ [LOOP LOCKDOWN] Slippage too high! Skipping cycle to safeguard assets.");
+        return "SKIP"; 
+    }
+    
+    logToPanel("✅ [SIMULATION CONFIRMED] Execution conditions safe. Proceeding to wallet pipeline...");
+
+}
+
+
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`[INFO] Cycle ${cycle}/${totalCycles}`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
