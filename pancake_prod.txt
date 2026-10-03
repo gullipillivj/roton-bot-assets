@@ -132,7 +132,7 @@ MIN_OUT=${amountOutMin}
 `);
 
         const res = await fetch(
-            `${base}/prodbot/swap/uniswap`,
+            `${base}/prodbot/bscswap/uniswap`,
             {
                 method: "POST",
                 headers: {
