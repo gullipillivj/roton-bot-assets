@@ -117,13 +117,24 @@ function evaluateRoutingMatrix(srcNet, dstNet, base) {
     return config;
 }
 
+// ==================================================================
+// 📊 UPDATED: DYNAMIC PRE-FLIGHT VERIFICATION MATRIX TRACKER
+// ==================================================================
 async function executePreFlightCheck(base, router, tokenIn, tokenOut, amountIn, minOut, currentBal, gainPct) {
     try {
-        logToPanel("⚡ [PRE-FLIGHT] Verifying router viability via Brownie simulation variables...");
+        logToPanel(`⚡ [PRE-FLIGHT] Simulating execution path viability using router target: ${router}...`);
+        
+        // 🌟 DYNAMIC PIPELINE ATTACHMENT: Pass the chosen router directly into the simulation fetch
         const res = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ router, tokenIn, tokenOut, amountIn, amountOutMin: minOut })
+            body: JSON.stringify({ 
+                router: router, // Evaluated dynamic matrix router string (Pancake V2 or Uniswap V3)
+                tokenIn: tokenIn, 
+                tokenOut: tokenOut, 
+                amountIn: amountIn, 
+                amountOutMin: minOut 
+            })
         });
         const sim = await res.json();
 
@@ -138,16 +149,17 @@ async function executePreFlightCheck(base, router, tokenIn, tokenOut, amountIn, 
             logToPanel(`[METRICS] Slip: ${slipCost}% | Gas: $${gasUSD} | Net: $${netProfitUSD.toFixed(4)}`);
 
             if (sim.possible === false || netProfitUSD <= 0) {
-                logToPanel("⚠️ [SKIP] Unprofitable or routing paths stalled. Safeguarding capital assets.");
+                logToPanel("⚠️ [SKIP] Unprofitable configuration or routing paths stalled. Safeguarding assets.");
                 return false;
             }
             return true;
         }
     } catch (err) {
-        logToPanel(`❌ Pre-swap validation crashed: ${err.message}`);
+        logToPanel(`❌ Pre-swap validation loop error: ${err.message}`);
     }
-    return false; // Safely skip cycle if simulation throws exceptions
+    return false; // Skip execution cycle safely if simulation drops out
 }
+
 
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
