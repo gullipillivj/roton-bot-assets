@@ -18,68 +18,151 @@ function logToPanel(msg) {
 // ==================================================================
 // 🥞 PIPELINE 1: DISPATCH LOCAL BSC UNISWAP / PANCAKE ROUTING
 // ==================================================================
-async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken) {
-    try {
-        const base = window.API_BASE || "";
-        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
+# ==================================================================
+# 🥞 UNIVERSAL SWEEP & SIMULATE INTERCEPTOR (5-PARAMETER EXACT MATCH)
+# ==================================================================
+@app.route("/prodbot/swap/bscuniswap", methods=["POST"])
+def swap_bscuniswap_interceptor():
+    try:
+        global v12_contract_instance
+        if not network.is_connected():
+            network.connect('bsc-main')
 
-        // Deployed constants
-        const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-        const amountOutMin = "0";
+        d = request.get_json(force=True, silent=True) or {}
+        
+        # 1. Read foundational parameters from execution context
+        router_addr = d.get("router", PANCAKE_ROUTER)
+        token_in = d.get("tokenIn")
+        amount_in = d.get("amountIn")
+        amount_out_min = d.get("amountOutMin", 0)  # Rigidly preserved as 0
 
-        // ==================================================
-        // REQUEST COMPILED SWAP DATA DIRECTLY (APPROVAL BYPASSED)
-        // ==================================================
-        logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
-        logToPanel(`TOKEN_IN=${fromToken}\nTOKEN_OUT=${toToken}\nAMOUNT_IN=${cleanAmount}\nMIN_OUT=${amountOutMin}`);
+        if not token_in or not amount_in:
+            return jsonify({"status": "error", "message": "Missing required core parameters (tokenIn/amountIn)"}), 400
 
-        const res = await fetch(`${base}/prodbot/swap/bscuniswap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: pancakeRouterAddress,
-                tokenIn: fromToken,
-                tokenOut: toToken,
-                amountIn: cleanAmount,
-                amountOutMin: amountOutMin
-            })
-        });
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        json_file_path = os.path.join(base_dir, "coins.json")
 
-        const data = await res.json();
+        if not os.path.exists(json_file_path):
+            return jsonify({"status": "error", "message": "coins.json data layer feed missing"}), 400
 
-        if (data && data.status === "ok") {
-            logToPanel("[INFO] Sending transaction payload directly to browser extension...");
+        with open(json_file_path, "r", encoding="utf-8") as f:
+            raw_data = json.load(f)
 
-            const txHash = await window.ethereum.request({
-                method: "eth_sendTransaction",
-                params: [{
-                    from: userAddr,
-                    to: data.to_contract,
-                    data: data.compiled_data,
-                    value: "0x0"
-                }]
-            });
+        if isinstance(raw_data, dict) and "data" in raw_data:
+            raw_data = raw_data["data"]
 
-            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
+        if not isinstance(raw_data, list):
+            return jsonify({"status": "error", "message": "Malformed token dataset format"}), 400
 
-            return {
-                status: "ok",
-                tx_hash: txHash
-            };
-        }
+        # Router lookahead setup for verifying asset liquidity depth
+        router_view_abi = [{
+            "inputs": [
+                {"internalType": "uint256", "name": "amountIn", "type": "uint256"},
+                {"internalType": "address[]", "name": "path", "type": "address[]"}
+            ],
+            "name": "getAmountsOut",
+            "outputs": [{"internalType": "uint256[]", "name": "amounts", "type": "uint256[]"}],
+            "stateMutability": "view",
+            "type": "function"
+        }]
+        router_checksum = network.web3.to_checksum_address(router_addr)
+        router_contract = Contract.from_abi("RouterView", router_checksum, router_view_abi)
 
-        return data;
+        viable_candidates = []
 
-    } catch (err) {
-        logToPanel(`❌ Uniswap Pipeline Error: ${err.message}`);
-        return {
-            status: "error",
-            message: err.message
-        };
-    }
-}
+        # -------------------------------------------------------------
+        # STAGE 1: LOOP THROUGH AND SIMULATE CANDIDATE TOKENS
+        # -------------------------------------------------------------
+        for item in raw_data:
+            address_field = str(item.get("address_or_geckoid") or "").strip()
+            if not address_field or address_field == "N/A":
+                continue
+            
+            if address_field.lower().startswith("bsc:"):
+                address_field = address_field[4:]
 
-window.runbscSwapUniswap = runbscSwapUniswap;
+            if not re.match(r"^0x[a-fA-F0-9]{40}$", address_field):
+                continue
+
+            target_token_address = network.web3.to_checksum_address(address_field)
+            
+            # Prevent token self-swaps
+            if target_token_address.lower() == network.web3.to_checksum_address(token_in).lower():
+                continue
+
+            try:
+                # 🔬 EXACT 5-PARAMETER SMART CONTRACT SIMULATION CALL
+                v12_contract_instance.executeERC20SwapUniswap.call(
+                    router_checksum,
+                    network.web3.to_checksum_address(token_in),
+                    target_token_address,
+                    int(str(amount_in).strip()),
+                    int(str(amount_out_min).strip()),
+                    {"from": accounts}
+                )
+
+                # Query pool returns to calculate absolute transaction viability
+                path = [network.web3.to_checksum_address(token_in), target_token_address]
+                amounts_out = router_contract.getAmountsOut(int(str(amount_in).strip()), path)
+                expected_output_wei = amounts_out[-1]
+
+                momentum_pct = float(item.get("change_24h_percent") or item.get("change24h") or 0.0)
+
+                # Store successful simulation profiles in local memory variables
+                viable_candidates.append({
+                    "symbol": str(item.get("name") or "UNKNOWN").upper().replace(" ", ""),
+                    "address": target_token_address,
+                    "expected_output_wei": str(expected_output_wei),
+                    "momentum_yield_pct": momentum_pct
+                })
+
+            except Exception:
+                # Silently skip pool reverts, missing liquidity, or routing faults
+                continue
+
+        # -------------------------------------------------------------
+        # STAGE 2: ISOLATE MAXIMUM PROFIT OPTION OR SKIP TOTAL CYCLE
+        # -------------------------------------------------------------
+        if not viable_candidates:
+            return jsonify({
+                "status": "skip_cycle",
+                "message": "All available token iterations failed simulation. Execution cycle skipped to save gas."
+            }), 200
+
+        # Sort array instantly by maximum momentum metrics to isolate the winner
+        viable_candidates.sort(key=lambda x: x["momentum_yield_pct"], reverse=True)
+        winning_token = viable_candidates
+
+        print(f"🏆 [SWEEP SUCCESS] Best Simulated Token Selected: {winning_token['symbol']} ({winning_token['momentum_yield_pct']}%)")
+
+        # -------------------------------------------------------------
+        # STAGE 3: PACK BITCODE USING WORKING RIGID ENCODER
+        # -------------------------------------------------------------
+        arguments = [
+            router_addr, 
+            token_in, 
+            winning_token["address"], 
+            amount_in, 
+            str(amount_out_min)
+        ]
+        
+        # Compiles bytecode using the exact rules you confirmed are working
+        txdata = encode_function_call(v12_abi, "executeERC20SwapUniswap", arguments)
+
+        return jsonify({
+            "status": "ok",
+            "to_contract": V12_ADDR,
+            "compiled_data": txdata,
+            "target_token_address": winning_token["address"],
+            "target_token_symbol": winning_token["symbol"],
+            "projected_output_units": winning_token["expected_output_wei"],
+            "momentum_checked": winning_token["momentum_yield_pct"]
+        })
+
+    except Exception as e:
+        print(f"❌ [PIPELINE CRITICAL EXCEPTION] Error: {str(e)}")
+        return jsonify({"status": "error", "message": f"Pipeline failure: {str(e)}"}), 500
+
 
 
 // ==================================================================
