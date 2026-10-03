@@ -96,7 +96,7 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken) {
 
         // Deployed constants
         const pancakeRouterAddress =
-            "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+            "0xE592427A0AEce92De3Edee1F18E0157C05861564";
 
         const v12ContractAddress =
             "0x1854170353ea89672638F9fa5acB477c45523871";
