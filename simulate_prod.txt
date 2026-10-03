@@ -35,7 +35,8 @@ function stopBot() {
 window.stopBot = stopBot;
 
 // Database tracker token synchronization
-async function updateTokenRecord(lastToken, currentToken) {
+// Database tracker token and network synchronization mapping
+async function updateTokenRecord(lastToken, currentToken, networkType = "bep20") {
     try {
         const userid = window.USER_ID || localStorage.getItem("userid");
         if (!userid) {
@@ -45,11 +46,16 @@ async function updateTokenRecord(lastToken, currentToken) {
         const resp = await fetch("/prodbot/tokens/update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userid: userid, lasttoken: lastToken, currenttoken: currentToken })
+            body: JSON.stringify({ 
+                userid: userid, 
+                lasttoken: lastToken, 
+                currenttoken: currentToken,
+                network: networkType // Injects network key to the server pipeline payload
+            })
         });
         const data = await resp.json();
         if (data && data.message) {
-            logToPanel(`[DATABASE COMMIT VERIFIED]\nLAST=${lastToken}\nCURRENT=${currentToken}`);
+            logToPanel(`[DATABASE COMMIT VERIFIED]\nLAST=${lastToken}\nCURRENT=${currentToken}\nNETWORK=${networkType}`);
             return true;
         }
         return false;
@@ -58,6 +64,7 @@ async function updateTokenRecord(lastToken, currentToken) {
         return false;
     }
 }
+
 
 // Pipeline asset fetcher helper
 async function getCurrentTokenState() {
