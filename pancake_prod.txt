@@ -132,7 +132,7 @@ MIN_OUT=${amountOutMin}
 `);
 
         const res = await fetch(
-            `${base}/prodbot/bscswap/uniswap`,
+            `${base}/prodbot/swap/bscuniswap`,
             {
                 method: "POST",
                 headers: {
@@ -327,7 +327,7 @@ MIN_OUT=${amountOutMin}
 `);
 
         const res = await fetch(
-            `${base}/prodbot/ethswap/uniswap`,
+            `${base}/prodbot/swap/ethuniswap`,
             {
                 method: "POST",
                 headers: {
@@ -522,7 +522,7 @@ MIN_OUT=${amountOutMin}
 `);
 
         const res = await fetch(
-            `${base}/prodbot/simulateswap/uniswap`,
+            `${base}/prodbot/swap/simulateuniswap`,
             {
                 method: "POST",
                 headers: {
