@@ -18,7 +18,7 @@ function logToPanel(msg) {
 // ==================================================================
 // 🥞 PIPELINE 1: DISPATCH LOCAL UNISWAP / PANCAKE ROUTING
 // ==================================================================
-async function runSwapUniswap(userAddr, amountWei, fromToken, toToken) {
+async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken) {
     try {
 
         const base = window.API_BASE || "";
