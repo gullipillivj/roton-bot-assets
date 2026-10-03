@@ -20,171 +20,47 @@ function logToPanel(msg) {
 // ==================================================================
 async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken) {
     try {
-
         const base = window.API_BASE || "";
-        const cleanAmount =
-            amountWei
-                ? amountWei.toString().trim()
-                : "0";
+        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
 
         // Deployed constants
-        const pancakeRouterAddress =
-            "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-
-        const v12ContractAddress =
-            "0x1854170353ea89672638F9fa5acB477c45523871";
-
+        const pancakeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
         const amountOutMin = "0";
 
-        logToPanel(
-            "[INFO] Requesting token allowance approval from wallet..."
-        );
-
         // ==================================================
-        // APPROVAL
+        // REQUEST COMPILED SWAP DATA DIRECTLY (APPROVAL BYPASSED)
         // ==================================================
+        logToPanel(`[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`);
+        logToPanel(`TOKEN_IN=${fromToken}\nTOKEN_OUT=${toToken}\nAMOUNT_IN=${cleanAmount}\nMIN_OUT=${amountOutMin}`);
 
-        const approveMethodId =
-            "0x095ea7b3";
+        const res = await fetch(`${base}/prodbot/swap/bscuniswap`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: pancakeRouterAddress,
+                tokenIn: fromToken,
+                tokenOut: toToken,
+                amountIn: cleanAmount,
+                amountOutMin: amountOutMin
+            })
+        });
 
-        const paddedSpender =
-            v12ContractAddress
-                .replace("0x", "")
-                .toLowerCase()
-                .padStart(64, "0");
+        const data = await res.json();
 
-        // MAX UINT256 APPROVAL
-        const paddedAmount =
-            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        if (data && data.status === "ok") {
+            logToPanel("[INFO] Sending transaction payload directly to browser extension...");
 
-        const approveCalldata =
-            approveMethodId +
-            paddedSpender +
-            paddedAmount;
-
-        const approveHash =
-            await window.ethereum.request({
+            const txHash = await window.ethereum.request({
                 method: "eth_sendTransaction",
                 params: [{
                     from: userAddr,
-                    to: fromToken,
-                    data: approveCalldata,
+                    to: data.to_contract,
+                    data: data.compiled_data,
                     value: "0x0"
                 }]
             });
 
-        logToPanel(
-            `[APPROVE TX] ${approveHash}`
-        );
-
-        logToPanel(
-            "[WAIT] Waiting for approval confirmation..."
-        );
-
-        let approveReceipt = null;
-
-        while (!approveReceipt) {
-
-            await new Promise(
-                resolve =>
-                    setTimeout(resolve, 3000)
-            );
-
-            approveReceipt =
-                await window.ethereum.request({
-                    method: "eth_getTransactionReceipt",
-                    params: [approveHash]
-                });
-
-            if (!approveReceipt) {
-                logToPanel(
-                    "[WAIT] Approval transaction pending..."
-                );
-            }
-        }
-
-        if (
-            approveReceipt.status !== "0x1" &&
-            approveReceipt.status !== 1
-        ) {
-            throw new Error(
-                "Approval transaction failed"
-            );
-        }
-
-        logToPanel(
-            "✅ Approval confirmed on-chain."
-        );
-
-        // ==================================================
-        // REQUEST COMPILED SWAP DATA
-        // ==================================================
-
-        logToPanel(
-            `[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`
-        );
-
-        logToPanel(`
-TOKEN_IN=${fromToken}
-TOKEN_OUT=${toToken}
-AMOUNT_IN=${cleanAmount}
-MIN_OUT=${amountOutMin}
-`);
-
-        const res = await fetch(
-            `${base}/prodbot/swap/bscuniswap`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-                body: JSON.stringify({
-                    router:
-                        pancakeRouterAddress,
-                    tokenIn:
-                        fromToken,
-                    tokenOut:
-                        toToken,
-                    amountIn:
-                        cleanAmount,
-                    amountOutMin:
-                        amountOutMin
-                })
-            }
-        );
-
-        const data =
-            await res.json();
-
-        if (
-            data &&
-            data.status === "ok"
-        ) {
-
-            logToPanel(
-                "[INFO] Sending transaction payload directly to browser extension..."
-            );
-
-            const txHash =
-                await window.ethereum.request({
-                    method:
-                        "eth_sendTransaction",
-                    params: [{
-                        from:
-                            userAddr,
-                        to:
-                            data.to_contract,
-                        data:
-                            data.compiled_data,
-                        value:
-                            "0x0"
-                    }]
-                });
-
-            logToPanel(
-                `✅ Swap Transaction broadcasted successfully: ${txHash}`
-            );
+            logToPanel(`✅ Swap Transaction broadcasted successfully: ${txHash}`);
 
             return {
                 status: "ok",
@@ -195,11 +71,7 @@ MIN_OUT=${amountOutMin}
         return data;
 
     } catch (err) {
-
-        logToPanel(
-            `❌ Uniswap Pipeline Error: ${err.message}`
-        );
-
+        logToPanel(`❌ Uniswap Pipeline Error: ${err.message}`);
         return {
             status: "error",
             message: err.message
