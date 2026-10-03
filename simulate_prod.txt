@@ -212,8 +212,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 confirmed = true; break;
             }
         }
-        if (!confirmed) return "STOP_ERROR";
-        await updateTokenRecord(srcAsset.token, coinInfo.tokenAddress);
+               if (!confirmed) return "STOP_ERROR";
+        
+        // Pass coinInfo.network to save state dynamically to the database on successful block confirmation
+        await updateTokenRecord(srcAsset.token, coinInfo.tokenAddress, coinInfo.network);
 
     } catch (err) {
         logToPanel(`❌ Runtime loop error: ${err.message}`);
