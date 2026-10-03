@@ -120,23 +120,15 @@ function evaluateRoutingMatrix(srcNet, dstNet, base) {
 // ==================================================================
 // 📊 UPDATED: DYNAMIC PRE-FLIGHT VERIFICATION MATRIX TRACKER
 // ==================================================================
+// ==================================================================
+// 📊 UPDATED: DYNAMIC PRE-FLIGHT VERIFICATION MATRIX TRACKER
+// ==================================================================
 async function executePreFlightCheck(base, router, tokenIn, tokenOut, amountIn, minOut, currentBal, gainPct) {
     try {
-        logToPanel(`⚡ [PRE-FLIGHT] Simulating execution path viability using router target: ${router}...`);
+        logToPanel(`⚡ [PRE-FLIGHT] Verifying router viability via dynamic contract routing matrix...`);
         
-        // 🌟 DYNAMIC PIPELINE ATTACHMENT: Pass the chosen router directly into the simulation fetch
-        const res = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                router: router, // Evaluated dynamic matrix router string (Pancake V2 or Uniswap V3)
-                tokenIn: tokenIn, 
-                tokenOut: tokenOut, 
-                amountIn: amountIn, 
-                amountOutMin: minOut 
-            })
-        });
-        const sim = await res.json();
+        // 🌟 DYNAMIC CONNECT PIPELINE: Pass the matrix router variable straight into the wrapper method
+        const sim = await window.runsimulateSwapUniswap(window.USER_ADDR, amountIn, tokenIn, tokenOut, router);
 
         if (sim && sim.status === "ok") {
             const slipCost = parseFloat(sim.slippage_cost_pct || 0);
@@ -149,16 +141,17 @@ async function executePreFlightCheck(base, router, tokenIn, tokenOut, amountIn, 
             logToPanel(`[METRICS] Slip: ${slipCost}% | Gas: $${gasUSD} | Net: $${netProfitUSD.toFixed(4)}`);
 
             if (sim.possible === false || netProfitUSD <= 0) {
-                logToPanel("⚠️ [SKIP] Unprofitable configuration or routing paths stalled. Safeguarding assets.");
+                logToPanel("⚠️ [SKIP] Unprofitable or routing paths stalled. Safeguarding capital assets.");
                 return false;
             }
             return true;
         }
     } catch (err) {
-        logToPanel(`❌ Pre-swap validation loop error: ${err.message}`);
+        logToPanel(`❌ Pre-swap validation crashed: ${err.message}`);
     }
-    return false; // Skip execution cycle safely if simulation drops out
+    return false; // Safely skip cycle if simulation throws exceptions
 }
+
 
 
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
