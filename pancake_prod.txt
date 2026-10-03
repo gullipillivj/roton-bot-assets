@@ -205,120 +205,45 @@ window.runethSwapUniswap = runethSwapUniswap;
 // ==================================================================
 // 🥞 PIPELINE 1: DISPATCH LOCAL SIMULATE UNISWAP / PANCAKE ROUTING
 // ==================================================================
-async function runsimulateSwapUniswap(userAddr, amountWei, fromToken, toToken) {
+// ==================================================================
+// 🥞 PIPELINE 3: DYNAMIC SIMULATE SWAP ROUTING (FIXED FROM HARDCODED)
+// ==================================================================
+async function runsimulateSwapUniswap(userAddr, amountWei, fromToken, toToken, dynamicRouter) {
     try {
-
         const base = window.API_BASE || "";
-        const cleanAmount =
-            amountWei
-                ? amountWei.toString().trim()
-                : "0";
+        const cleanAmount = amountWei ? amountWei.toString().trim() : "0";
 
-        // Deployed constants
-        const pancakeRouterAddress =
-            "0xE592427A0AEce92De3Edee1F18E0157C05861564";
-
-        const v12ContractAddress =
-            "0x1854170353ea89672638F9fa5acB477c45523871";
-
+        // Dynamic routing protection: Fallback safely to Pancake V2 if parameter is omitted
+        const targetRouter = dynamicRouter || "0x10ED43C718714eb63d5aA57B78B54704E256024E";
         const amountOutMin = "0";
 
-        logToPanel(
-            "[INFO] Requesting token allowance approval from wallet..."
-        );
+        logToPanel(`[ROUTE] Dispatching Uniswap simulation query via target router: ${targetRouter}`);
+        logToPanel(`TOKEN_IN=${fromToken}\nTOKEN_OUT=${toToken}\nAMOUNT_IN=${cleanAmount}\nMIN_OUT=${amountOutMin}`);
 
- 
-        // ==================================================
-        // REQUEST COMPILED SWAP DATA
-        // ==================================================
+        const res = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                router: targetRouter, // Dynamic parameter injection mapping
+                tokenIn: fromToken,
+                tokenOut: toToken,
+                amountIn: cleanAmount,
+                amountOutMin: amountOutMin
+            })
+        });
 
-        logToPanel(
-            `[ROUTE] Dispatching Uniswap pipeline query for ${cleanAmount} units...`
-        );
-
-        logToPanel(`
-TOKEN_IN=${fromToken}
-TOKEN_OUT=${toToken}
-AMOUNT_IN=${cleanAmount}
-MIN_OUT=${amountOutMin}
-`);
-
-        const res = await fetch(
-            `${base}/prodbot/swap/simulateuniswap`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-                body: JSON.stringify({
-                    router:
-                        pancakeRouterAddress,
-                    tokenIn:
-                        fromToken,
-                    tokenOut:
-                        toToken,
-                    amountIn:
-                        cleanAmount,
-                    amountOutMin:
-                        amountOutMin
-                })
-            }
-        );
-
-        const data =
-            await res.json();
-
-        if (
-            data &&
-            data.status === "ok"
-        ) {
-
-            logToPanel(
-                "[INFO] Sending transaction payload directly to browser extension..."
-            );
-
-            const txHash =
-                await window.ethereum.request({
-                    method:
-                        "eth_sendTransaction",
-                    params: [{
-                        from:
-                            userAddr,
-                        to:
-                            data.to_contract,
-                        data:
-                            data.compiled_data,
-                        value:
-                            "0x0"
-                    }]
-                });
-
-            logToPanel(
-                `✅ Swap Transaction broadcasted successfully: ${txHash}`
-            );
-
-            return {
-                status: "ok",
-                tx_hash: txHash
-            };
-        }
-
+        const data = await res.json();
         return data;
 
     } catch (err) {
-
-        logToPanel(
-            `❌ Uniswap Pipeline Error: ${err.message}`
-        );
-
+        logToPanel(`❌ Uniswap Simulation Pipeline Error: ${err.message}`);
         return {
             status: "error",
             message: err.message
         };
     }
 }
-
 window.runsimulateSwapUniswap = runsimulateSwapUniswap;
-
 
