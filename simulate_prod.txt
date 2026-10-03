@@ -153,7 +153,6 @@ async function executePreFlightCheck(base, router, tokenIn, tokenOut, amountIn, 
 }
 
 
-
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
@@ -186,8 +185,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     if (!coinInfo) return "SKIP";
 
-    // Matrix Evaluation and Simulation Checks
-        // Matrix Evaluation and Simulation Checks (Matrix handles token network parameters natively)
+    // Matrix Evaluation and Simulation Checks (Matrix handles token network parameters natively)
     const route = evaluateRoutingMatrix(srcAsset.network, coinInfo.network, base);
     
     // 1. Fire dynamic simulation check using the dynamic router parameter verified above
@@ -231,16 +229,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
     } catch (err) {
         logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
-        return "STOP_ERROR";
-    }
-    return "CONTINUE";
-
-        
-        // Pass coinInfo.network to save state dynamically to the database on successful block confirmation
-        await updateTokenRecord(srcAsset.token, coinInfo.tokenAddress, coinInfo.network);
-
-    } catch (err) {
-        logToPanel(`❌ Runtime loop error: ${err.message}`);
         return "STOP_ERROR";
     }
     return "CONTINUE";
