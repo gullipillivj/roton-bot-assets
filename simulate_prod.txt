@@ -34,6 +34,7 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
+
 // Database tracker token and network synchronization mapping
 async function updateTokenRecord(lastToken, currentToken, networkType) {
     try {
@@ -86,6 +87,7 @@ async function getCurrentTokenState() {
 }
 window.getCurrentTokenState = getCurrentTokenState;
 
+
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - INIT & SCANNING
 // ==================================================================
@@ -94,20 +96,18 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
     const base = window.API_BASE || "";
 
-    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    if (tradingBalance <= 0) {
-        logToPanel("⚠️ [CYCLE ABORTED] Balance is zero or negative.");
+    // 🌟 FIXED: Take value completely raw to eliminate 18-zero multipliers
+    let balanceInput = document.getElementById("investBalance").value.toString().trim();
+    if (!balanceInput || balanceInput === "0") {
+        logToPanel("⚠️ [CYCLE ABORTED] Balance field is empty or zero.");
         return "STOP_ERROR";
     }
 
-    // 1. Core structural tracking framework assignments
     const srcAsset = await getCurrentTokenState();
     const sourceTokenAddress = String(srcAsset.token).toLowerCase().trim();
     const sourceNetwork = String(srcAsset.network).toLowerCase().trim();
-
     logToPanel(`[PORTFOLIO ROOT IDENTIFIED] Active address coordinate: ${srcAsset.token} (${sourceNetwork.toUpperCase()})`);
 
-    // 2. Poll the dynamic sequential multi-stage validation filtering engine route
     let marketData = [];
     try {
         const filterResp = await fetch("/prodbot/filtertokens");
@@ -125,24 +125,18 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "SKIP";
     }
 
-    // Isolate highest-ranking opportunity element inside the verified array matrix
     const isolatedTarget = marketData[0];
     const targetTokenAddress = String(isolatedTarget.address).toLowerCase().trim();
     const targetedWinnerSymbol = String(isolatedTarget.symbol).toUpperCase().trim();
     const winnerNetworkType = String(isolatedTarget.tokentype || "bep20").toLowerCase().trim();
 
-    // Verify self-trading execution loops are safely gate-checked
     if (targetTokenAddress === sourceTokenAddress) {
         logToPanel("🔄 [CYCLE BOUNDARY] Highest momentum asset matches current asset position. Cycle skipped.");
         return "SKIP";
     }
 
-    // Calculate precision allocation configurations matching exact 18-decimal configurations
-// 🌟 FIXED: Read the 18-digit token value directly as a raw string asset
-// Bypasses secondary Math.floor and BigInt decimal padding operations
-const allocationWei = document.getElementById("investBalance").value.toString().trim();
-    
-    // Explicit Endpoint Selector Logic Map
+    // Pass the raw string variable seamlessly into the payload parameters
+    const allocationWei = balanceInput;
     let targetEndpoint = `${base}/prodbot/swap/bscuniswap`;
     let activeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; 
 
@@ -152,12 +146,10 @@ const allocationWei = document.getElementById("investBalance").value.toString().
         if (matchedSource) sourceSymbolFallback = matchedSource.symbol;
     }
 
-    // 📊 HIGH-VISIBILITY LOGVIEW HANDSHAKE OUTPUTS
     logToPanel(`🔀 [SWAP LIFECYCLE INITIATED]`);
     logToPanel(`   ➡️ FROM: ${sourceSymbolFallback} [${sourceTokenAddress}] (${sourceNetwork.toUpperCase()})`);
     logToPanel(`   ➡️ TO:   ${targetedWinnerSymbol} [${targetTokenAddress}] (${winnerNetworkType.toUpperCase()})`);
 
-    // DYNAMIC MATRIX SWITCHING (ZERO CONFLICT FROM FIXED SIGNATURES)
     if (winnerNetworkType === "erc20" || sourceNetwork === "erc20") {
         logToPanel(`🦄 [ROUTE] Ethereum network layer invoked for Winner: ${targetedWinnerSymbol}`);
         targetEndpoint = `${base}/prodbot/swap/ethuniswap`;
@@ -166,10 +158,8 @@ const allocationWei = document.getElementById("investBalance").value.toString().
         logToPanel(`🥞 [ROUTE] BSC network layer invoked for Winner: ${targetedWinnerSymbol}`);
     }
 
-    // 3. Dispatch the payload parameters directly to the targeted endpoint route
     try {
         logToPanel(`⏳ Cycle ${cycle}: Fetching dynamic maximum-profit simulation sweep from server...`);
-        
         const res = await fetch(targetEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -183,24 +173,19 @@ const allocationWei = document.getElementById("investBalance").value.toString().
         });
 
         const data = await res.json();
-
         if (data && data.status === "skip_cycle") {
             logToPanel(`⚠️ [CYCLE ALERT] ${data.message || 'All targets failed simulation or printed losses.'}`);
-            logToPanel(`❌ Skipped Swap: ${sourceSymbolFallback} ➡️ ${targetedWinnerSymbol} aborted.`);
             return "SKIP";
         }
-
         if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Pipeline dropped or compiled invalid payload data: ${data ? data.message : 'Unknown'}`);
+            logToPanel(`⚠️ Pipeline dropped or compiled invalid payload data.`);
             return "CONTINUE";
         }
 
-        logToPanel(`🏆 Simulation Winner Isolated: ${data.target_token_symbol || targetedWinnerSymbol}`);
-        logToPanel(`🎯 Address: ${data.target_token_address || targetTokenAddress} | Momentum: ${data.momentum_checked || isolatedTarget["%profit"]}%`);
-        logToPanel(`📈 Projected Output: ${data.projected_output_units || data.expected_output_wei || '0'} Wei units.`);
+        logToPanel(`🏆 Winner Isolated: ${data.target_token_symbol || targetedWinnerSymbol}`);
+        logToPanel(`📈 Rigid Parameter Passed Intact: ${allocationWei} Units`);
 
-        // 4. Broadcast the transaction payload directly via browser extension provider context
-        logToPanel(`📢 [WALLET PROMPT] Authorizing Swap: ${sourceSymbolFallback} ➡️ ${data.target_token_symbol || targetedWinnerSymbol}...`);
+        logToPanel(`📢 [WALLET PROMPT] Authorizing Swap...`);
         const txHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{
@@ -213,7 +198,6 @@ const allocationWei = document.getElementById("investBalance").value.toString().
 
         logToPanel(`✅ On-Chain Transaction Dispatched! Hash: ${txHash}`);
 
-        // 5. Track block confirmation monitoring window intervals
         const beforeWei = document.getElementById("investBalance").value.toString().trim();
         let confirmed = false;
         for (let i = 1; i <= 45; i++) {
@@ -226,21 +210,17 @@ const allocationWei = document.getElementById("investBalance").value.toString().
         }
         
         if (!confirmed) {
-            logToPanel(`🛑 Timeout: Swap execution profile ${sourceSymbolFallback} ➡️ ${targetedWinnerSymbol} remains pending.`);
+            logToPanel(`🛑 Timeout: Swap execution remains pending.`);
             return "STOP_ERROR";
         }
         
-        logToPanel(`🎉 Swap Successfully Settled on Ledger! ${sourceSymbolFallback} ➡️ ${targetedWinnerSymbol}`);
-
-        // 6. Commit the updated token coordinates directly to the tokens table row
-        const nextAddressToCommit = data.target_token_address || targetTokenAddress;
-        await updateTokenRecord(srcAsset.token, nextAddressToCommit, winnerNetworkType);
+        logToPanel(`🎉 Swap Successfully Settled!`);
+        await updateTokenRecord(srcAsset.token, data.target_token_address || targetTokenAddress, winnerNetworkType);
 
     } catch (err) {
         logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
         return "STOP_ERROR";
     }
-    
     return "CONTINUE";
 }
 window.simulateCycle = simulateCycle;
@@ -255,14 +235,11 @@ async function startSimulation(totalCycles) {
 
     const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
     const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
-
     logToPanel(`🚀 [BOT INITIATED] Processing up to ${totalCycles} execution cycles.`);
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
-        
         const signal = await simulateCycle(i, totalCycles, pTarget, sLoss);
-        
         if (signal === "STOP_ERROR") {
             logToPanel("🛑 State mismatch runtime alert. Aborting framework loops.");
             break;
@@ -276,10 +253,8 @@ async function startSimulation(totalCycles) {
             await blockDelay(10000);
         }
     }
-    
     window.isBotRunning = false;
     setStatus("STOPPED");
     logToPanel("[BOT FINISHED] Processing complete.");
 }
 window.startSimulation = startSimulation;
-
