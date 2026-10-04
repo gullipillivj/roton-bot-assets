@@ -96,7 +96,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
     const base = window.API_BASE || "";
 
-    // 🌟 FIXED: Take value completely raw to eliminate 18-zero multipliers
     let balanceInput = document.getElementById("investBalance").value.toString().trim();
     if (!balanceInput || balanceInput === "0") {
         logToPanel("⚠️ [CYCLE ABORTED] Balance field is empty or zero.");
@@ -135,7 +134,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "SKIP";
     }
 
-    // Pass the raw string variable seamlessly into the payload parameters
     const allocationWei = balanceInput;
     let targetEndpoint = `${base}/prodbot/swap/bscuniswap`;
     let activeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; 
@@ -159,7 +157,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     try {
-        logToPanel(`⏳ Cycle ${cycle}: Fetching dynamic maximum-profit simulation sweep from server...`);
+        logToPanel(`⏳ Cycle ${cycle}: Fetching dynamic maximum-profit simulation sweep...`);
         const res = await fetch(targetEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -167,44 +165,41 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 router: activeRouterAddress,
                 tokenIn: srcAsset.token,
                 tokenOut: targetTokenAddress, 
-                amountIn: allocationWei,
-                amountOutMin: "0"
+                amountIn: allocationWei
             })
         });
 
         const data = await res.json();
-        if (data && data.status === "skip_cycle") {
-            logToPanel(`⚠️ [CYCLE ALERT] ${data.message || 'All targets failed simulation or printed losses.'}`);
-            return "SKIP";
-        }
         if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Pipeline dropped or compiled invalid payload data.`);
+            logToPanel(`⚠️ Pipeline dropped or compiled invalid payload data: ${data.message || 'unknown error'}`);
             return "CONTINUE";
         }
 
-                logToPanel(`🏆 Winner Isolated: ${data.target_token_symbol || targetedWinnerSymbol}`);
-        logToPanel(`📈 Rigid Parameter Passed Intact: ${allocationWei} Units`);
+        // 🌟 STEP 1: EXECUTE TOKEN ALLOWANCE APPROVAL PACKET NATIVELY
+        logToPanel(`📢 [WALLET PROMPT 1/2] Authorizing Token Spending Allowance...`);
+        const approveHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: window.USER_ADDR,
+                to: data.approval_packet.to_contract,
+                data: data.approval_packet.compiled_data,
+                value: "0x0"
+            }]
+        });
+        logToPanel(`⏳ Allowance Tx Dispatched: ${approveHash}. Waiting 12s for block inclusion...`);
+        await blockDelay(12000); // Prevents execution race conditions
 
-        // Execute unified web3 pipeline logic directly via pancake_prod routines
-        let txHash;
-        if (winnerNetworkType === "erc20" || sourceNetwork === "erc20") {
-            const ethResult = await window.runethSwapUniswap(window.USER_ADDR, allocationWei, srcAsset.token, targetTokenAddress, activeRouterAddress);
-            if (ethResult.status !== "ok") throw new Error(ethResult.message || "ETH Interceptor failed");
-            
-            txHash = await window.ethereum.request({
-                method: "eth_sendTransaction",
-                params: [{ from: window.USER_ADDR, to: ethResult.to_contract, data: ethResult.compiled_data, value: "0x0" }]
-            });
-        } else {
-            const bscResult = await window.runbscSwapUniswap(window.USER_ADDR, allocationWei, srcAsset.token, targetTokenAddress, activeRouterAddress);
-            if (bscResult.status !== "ok") throw new Error(bscResult.message || "BSC Interceptor failed");
-            
-            txHash = await window.ethereum.request({
-                method: "eth_sendTransaction",
-                params: [{ from: window.USER_ADDR, to: bscResult.to_contract, data: bscResult.compiled_data, value: "0x0" }]
-            });
-        }
-
+        // 🌟 STEP 2: EXECUTE NATIVE CONTRACT SWAP ACTION PACKET NATIVELY
+        logToPanel(`📢 [WALLET PROMPT 2/2] Confirming Exchange Execution...`);
+        const txHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: window.USER_ADDR,
+                to: data.swap_packet.to_contract,
+                data: data.swap_packet.compiled_data,
+                value: "0x0"
+            }]
+        });
 
         logToPanel(`✅ On-Chain Transaction Dispatched! Hash: ${txHash}`);
 
@@ -225,7 +220,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
         
         logToPanel(`🎉 Swap Successfully Settled!`);
-        await updateTokenRecord(srcAsset.token, data.target_token_address || targetTokenAddress, winnerNetworkType);
+        await updateTokenRecord(srcAsset.token, targetTokenAddress, winnerNetworkType);
 
     } catch (err) {
         logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
@@ -233,7 +228,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
     return "CONTINUE";
 }
-window.simulateCycle = simulateCycle;
+
+
 
 // ==================================================================
 // 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY
