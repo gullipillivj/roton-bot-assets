@@ -86,9 +86,8 @@ async function getCurrentTokenState() {
 }
 window.getCurrentTokenState = getCurrentTokenState;
 
-
 // ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP (DETAILED LOGGING MODE)
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - INIT & SCANNING
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
@@ -96,7 +95,58 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const base = window.API_BASE || "";
 
     let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    if (tradingBalance  String(c.address).toLowerCase().trim() === sourceTokenAddress);
+    if (tradingBalance <= 0) {
+        logToPanel("⚠️ [CYCLE ABORTED] Balance is zero or negative.");
+        return "STOP_ERROR";
+    }
+
+    // 1. Core structural tracking framework assignments
+    const srcAsset = await getCurrentTokenState();
+    const sourceTokenAddress = String(srcAsset.token).toLowerCase().trim();
+    const sourceNetwork = String(srcAsset.network).toLowerCase().trim();
+
+    logToPanel(`[PORTFOLIO ROOT IDENTIFIED] Active address coordinate: ${srcAsset.token} (${sourceNetwork.toUpperCase()})`);
+
+    // 2. Poll the dynamic sequential multi-stage validation filtering engine route
+    let marketData = [];
+    try {
+        const filterResp = await fetch("/prodbot/filtertokens");
+        const filterJson = await filterResp.json();
+        if (filterJson && filterJson.status === "ok" && Array.isArray(filterJson.short_term)) {
+            marketData = filterJson.short_term;
+        }
+    } catch (fErr) {
+        logToPanel(`⚠️ [SCANNER DELAY] Master filter table route dropped: ${fErr.message}`);
+        return "CONTINUE";
+    }
+
+    if (marketData.length === 0) {
+        logToPanel("⚠️ [SCANNER COLD] Zero token profiles verified by validation checks. Skipping cycle...");
+        return "SKIP";
+    }
+
+    // Isolate highest-ranking opportunity element inside the verified array matrix
+    const isolatedTarget = marketData[0];
+    const targetTokenAddress = String(isolatedTarget.address).toLowerCase().trim();
+    const targetedWinnerSymbol = String(isolatedTarget.symbol).toUpperCase().trim();
+    const winnerNetworkType = String(isolatedTarget.tokentype || "bep20").toLowerCase().trim();
+
+    // Verify self-trading execution loops are safely gate-checked
+    if (targetTokenAddress === sourceTokenAddress) {
+        logToPanel("🔄 [CYCLE BOUNDARY] Highest momentum asset matches current asset position. Cycle skipped.");
+        return "SKIP";
+    }
+
+    // Calculate precision allocation configurations matching exact 18-decimal configurations
+    const allocationWei = (BigInt(Math.floor(tradingBalance * 10000)) * 10n ** 14n).toString();
+    
+    // Explicit Endpoint Selector Logic Map
+    let targetEndpoint = `${base}/prodbot/swap/bscuniswap`;
+    let activeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; 
+
+    let sourceSymbolFallback = "USDT";
+    if (window.coins_list && Array.isArray(window.coins_list)) {
+        const matchedSource = window.coins_list.find(c => String(c.address).toLowerCase().trim() === sourceTokenAddress);
         if (matchedSource) sourceSymbolFallback = matchedSource.symbol;
     }
 
@@ -193,7 +243,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 }
 window.simulateCycle = simulateCycle;
 
-
 // ==================================================================
 // 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY
 // ==================================================================
@@ -231,3 +280,4 @@ async function startSimulation(totalCycles) {
     logToPanel("[BOT FINISHED] Processing complete.");
 }
 window.startSimulation = startSimulation;
+
