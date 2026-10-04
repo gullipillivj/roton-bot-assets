@@ -241,3 +241,5 @@ async function startSimulation(totalCycles) {
     logToPanel("[BOT FINISHED] Processing complete.");
 }
 
+window.startSimulation = startSimulation;
+window.simulateCycle = simulateCycle;
