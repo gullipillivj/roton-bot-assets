@@ -485,84 +485,248 @@ const BSC_CHAIN_ID_CAIP = "eip155:56"; // Exact BSC Mainnet identifier map
 /**
  * Updates UI layout parameters and fires parallel on-chain sync checks
  */
-async function finalizeInterfaceSyncState() {
-    const label = document.getElementById("currentWalletLabel");
-    if (label) {
-        label.innerText = "Wallet Address: " + window.USER_ADDR;
-    }
-    
-    window.logToPanel(`🎉 Interface Sync Success! Active Wallet Session: ${window.USER_ADDR}`);
+/*
+ * ============================================================
+ * WALLET UI SYNCHRONIZATION
+ * ============================================================
+ */
 
-    if (typeof window.syncBalanceFromFund === "function") {
-        await window.syncBalanceFromFund();
+async function finalizeInterfaceSyncState() {
+
+    const label =
+        document.getElementById("currentWalletLabel");
+
+    if (label && window.USER_ADDR) {
+
+        label.innerText =
+            "Wallet Address: " +
+            window.USER_ADDR;
+    }
+
+    window.logToPanel(
+        "🎉 Interface Sync Success! Active Wallet Session: " +
+        window.USER_ADDR
+    );
+
+
+    /*
+     * Synchronize your existing balance logic.
+     */
+    if (
+        typeof window.syncBalanceFromFund === "function"
+    ) {
+
+        try {
+
+            await window.syncBalanceFromFund();
+
+        } catch (err) {
+
+            console.error(
+                "Balance synchronization failed:",
+                err
+            );
+
+            window.logToPanel(
+                "⚠️ Balance synchronization failed: " +
+                err.message
+            );
+        }
     }
 }
-window.finalizeInterfaceSyncState = finalizeInterfaceSyncState;
-// Execute UI setup bindings instantly on browser ready cycles
+
+
+window.finalizeInterfaceSyncState =
+    finalizeInterfaceSyncState;
+
+
+/*
+ * ============================================================
+ * CONNECT WALLET
+ * ============================================================
+ */
+
 window.addEventListener("DOMContentLoaded", () => {
+
     initializeLabels();
     setupActionListeners();
 
-    const connBtn = document.getElementById("connectwalletBtn");
-    
-    if (connBtn) {
-        connBtn.onclick = async function() {
-            
-            // 🥇 STEP 1: PRIORITIZE BUILT-IN WALLET BROWSERS (Trust Wallet / MetaMask Mobile App)
-            if (typeof window.ethereum !== "undefined" && !window.ethereum_is_reown_rpc) {
+
+    const connectButton =
+        document.getElementById("connectwalletBtn");
+
+
+    if (!connectButton) {
+
+        console.error(
+            "connectwalletBtn was not found."
+        );
+
+        return;
+    }
+
+
+    connectButton.addEventListener(
+        "click",
+        async function () {
+
+            window.logToPanel(
+                "🔌 Starting wallet connection..."
+            );
+
+
+            /*
+             * ====================================================
+             * STEP 1
+             *
+             * Check whether the page already has an injected
+             * Ethereum provider.
+             *
+             * This handles:
+             *
+             * - MetaMask browser extension
+             * - Trust Wallet browser
+             * - Other injected EVM wallets
+             * ====================================================
+             */
+
+            if (
+                window.ethereum &&
+                typeof window.ethereum.request === "function"
+            ) {
+
                 try {
-                    window.logToPanel("⏳ Querying accounts from native built-in mobile wallet browser...");
-                    
-                    // Trigger the native mobile app's internal wallet connection request popup
-                    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-                    
-                    window.USER_ADDR = String(accounts[0] || accounts).toLowerCase();
-                    window.logToPanel(`✅ Natively Connected via Mobile Wallet App Browser. Address: ${window.USER_ADDR}`);
-                    
-                    // Ensure the background floating popup layers are hidden
-                    const pipelineForm = document.getElementById("reownPipelineForm");
-                    const pipelineBackdrop = document.getElementById("pipelineBackdrop");
-                    if (pipelineForm) pipelineForm.style.display = "none";
-                    if (pipelineBackdrop) pipelineBackdrop.style.display = "none";
+
+                    window.logToPanel(
+                        "📱 Injected wallet detected."
+                    );
+
+
+                    const accounts =
+                        await window.ethereum.request({
+                            method: "eth_requestAccounts"
+                        });
+
+
+                    if (
+                        !accounts ||
+                        !accounts.length
+                    ) {
+
+                        throw new Error(
+                            "No wallet account was returned."
+                        );
+                    }
+
+
+                    window.USER_ADDR =
+                        String(accounts[0]).toLowerCase();
+
+
+                    window.logToPanel(
+                        "✅ Wallet connected: " +
+                        window.USER_ADDR
+                    );
+
 
                     await window.finalizeInterfaceSyncState();
-                    return; // 🌟 PRIORITY MATCHED. Bypasses AppKit completely and exits.
-                    
-                } catch (nativeErr) {
-                    window.logToPanel(`❌ Native connection failed or rejected: ${nativeErr.message}`);
+
+
                     return;
+
+                } catch (err) {
+
+                    console.error(
+                        "Injected wallet connection error:",
+                        err
+                    );
+
+
+                    /*
+                     * User rejected the connection.
+                     */
+                    if (
+                        err &&
+                        (
+                            err.code === 4001 ||
+                            /reject/i.test(
+                                err.message || ""
+                            )
+                        )
+                    ) {
+
+                        window.logToPanel(
+                            "❌ Wallet connection rejected by user."
+                        );
+
+                        return;
+                    }
+
+
+                    /*
+                     * If injected wallet exists but fails,
+                     * continue to AppKit.
+                     */
+                    window.logToPanel(
+                        "⚠️ Injected wallet failed. Opening Reown..."
+                    );
                 }
             }
 
-            // 🥈 STEP 2: FALLBACK FOR STANDALONE BROWSERS (CHROME, FIREFOX, OPERA, SAFARI)
-            window.logToPanel("📡 Standalone web browser found. Activating Reown selection layout form...");
-            
-            // Bring the hidden form container and the darkening backdrop panel to the front of the screen
-            const pipelineForm = document.getElementById("reownPipelineForm");
-            const pipelineBackdrop = document.getElementById("pipelineBackdrop");
-            
-            if (pipelineForm) pipelineForm.style.display = "block";
-            if (pipelineBackdrop) pipelineBackdrop.style.display = "block";
-            
-            // Trigger Reown's wallet options grid selection modal window
-            if (window.reownAppKitInstance) {
-                window.reownAppKitInstance.open();
-                window.ethereum_is_reown_rpc = true;
-            } else {
-                // Programmatic click fallback targeting the shadow DOM button container
-                window.logToPanel("⏳ Triggering selector interface layer...");
-                const appKitButton = document.querySelector('appkit-button');
-                if (appKitButton) {
-                    appKitButton.click();
-                    window.ethereum_is_reown_rpc = true;
-                } else {
-                    window.logToPanel("❌ Error: Connection engine custom layout tags missing from template.");
-                }
+
+            /*
+             * ====================================================
+             * STEP 2
+             *
+             * No usable injected provider.
+             *
+             * Open Reown AppKit.
+             * ====================================================
+             */
+
+            const appKit =
+                window.reownAppKitInstance;
+
+
+            if (!appKit) {
+
+                window.logToPanel(
+                    "❌ Reown AppKit is not initialized yet."
+                );
+
+                return;
             }
-        };
-    }
+
+
+            try {
+
+                window.logToPanel(
+                    "🌐 Opening Reown wallet selector..."
+                );
+
+
+                /*
+                 * Open AppKit's native modal.
+                 */
+                await appKit.open();
+
+            } catch (err) {
+
+                console.error(
+                    "Reown AppKit open error:",
+                    err
+                );
+
+                window.logToPanel(
+                    "❌ Reown connection error: " +
+                    err.message
+                );
+            }
+
+        }
+    );
+
 });
-
 
 
 // ========================================================
