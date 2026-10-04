@@ -48,38 +48,35 @@ window.BSCSCAN_API_KEY = "T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4";
 // =============================================================
 // PRODUCTION COIN FILTER (WITH DYNAMIC NETWORK TAG PRESERVATION)
 // =============================================================
+// =============================================================
+// PRODUCTION COIN FILTER (WITH TOKENTYPE IDENTIFIER EXTRACTION)
+// =============================================================
 async function categorizeCoins() {
     try {
-        // Fetch pre-processed tokens directly from the Python filter pipeline
+        // Fetch pre-processed tokens directly from the multi-stage filter pipeline
         const backendUrl = "/prodbot/filtertokens";
         const res = await fetch(backendUrl);
         let responseData = await res.json();
 
         let shortTermList = [];
-        if (responseData && responseData.short_term) {
-            shortTermList = responseData.short_term;
-        } else if (Array.isArray(responseData)) {
-            shortTermList = responseData;
-        }
+        if (responseData && responseData.short_term) { shortTermList = responseData.short_term; }
+        else if (Array.isArray(responseData)) { shortTermList = responseData; }
 
-        // 🌟 LOCAL MAPPING ONLY: Safely bind the verified type without touching your contract functions
+        // 🌟 FRONTEND ISOLATION LAYER: Extract and lock token type parameters in client runtime state
         shortTermList.forEach(function(coin) {
             coin.network_assigned = coin.tokentype || "bep20";
         });
 
         window.logToPanel("✅ Filter Synchronized: " + shortTermList.length + " assets passed verification.");
-
-        return {
-            short_term: shortTermList,
-            mid_term: [],
-            long_term: []
-        };
+        return { short_term: shortTermList, mid_term: [], long_term: [] };
 
     } catch (err) {
         window.logToPanel("⚠️ Coin Filter Layer Exception: " + err.message);
         return { short_term: [], mid_term: [], long_term: [] };
     }
 }
+
+
 
 
 // =============================================================
