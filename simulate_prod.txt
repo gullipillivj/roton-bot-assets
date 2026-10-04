@@ -56,144 +56,118 @@ async function getCurrentTokenState() {
 // ==================================================================
 // 🔄 AUTOMATED MULTI-TOKEN PARAMETER ALTERATION LIFE-CYCLE LOOP
 // ==================================================================
+// ==================================================================
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP (DYNAMIC NETWORK RE-ROUTE)
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
     const base = window.API_BASE || "";
 
+    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
+    if (tradingBalance <= 0) return "STOP_ERROR"; 
+
     const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
     const allocationWei = totalBalance.toString();
 
-    // 1. Fetch live contextual state mapping
+    // 1. Fetch current on-chain state of the asset the bot is holding right now
     const srcAsset = await getCurrentTokenState();
-    
-    // 2. Query production-ready target variables from backend database cache
-    logToPanel("⏳ Fetching qualified candidate collection from server filter cache...");
-    let tokenCandidates = [];
+
+    // 🌟 2. CROSS-CHAIN DISCOVERY LAYER (RESTRICTED TO LOCAL CONTEXT ONLY)
+    // Pull the full candidates collection to evaluate the single winning target asset's true native deployment
+    const candidates = await window.getTradeCandidates();
+    let targetEndpoint = `${base}/prodbot/swap/bscuniswap`;
+    let activeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; // PancakeSwap V2 default
+
+    if (candidates && candidates.length > 0) {
+        // Find the absolute highest performance candidate (first item since it is pre-sorted)
+        const isolatedTarget = candidates[0];
+        const assignedNetworkType = isolatedTarget.tokentype || "bep20";
+
+        if (assignedNetworkType === "erc20") {
+            logToPanel(`🦄 Targeted Winner [${isolatedTarget.symbol}] matches an Ethereum asset configuration. Routing payload request to Eth Explorer Engine...`);
+            targetEndpoint = `${base}/prodbot/swap/ethuniswap`;
+            activeRouterAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // Uniswap V2 ETH Router
+        } else {
+            logToPanel(`🥞 Targeted Winner [${isolatedTarget.symbol}] matches a BSC asset configuration. Routing payload request to Pancake V2 Engine...`);
+        }
+    }
+
+    // 3. Dispatch the sweep parameters request directly to the chosen backend target route
     try {
-        const tokenRes = await fetch("/prodbot/filtertokens");
-        const tokenData = await tokenRes.json();
-        if (tokenData && tokenData.short_term) {
-            tokenCandidates = tokenData.short_term;
-        }
-    } catch (err) {
-        logToPanel("⚠️ Failed to load target list from filtered engine cache.");
-        return "CONTINUE";
-    }
+        logToPanel(`⏳ Cycle ${cycle}: Fetching simulation payload parameters...`);
+        
+        const res = await fetch(targetEndpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: activeRouterAddress,
+                tokenIn: srcAsset.token,
+                amountIn: allocationWei,
+                amountOutMin: "0" // Kept completely rigid
+            })
+        });
 
-    if (tokenCandidates.length === 0) {
-        logToPanel("⚠️ Filter registry empty. Skipping execution loop iteration.");
-        return "SKIP";
-    }
+        const data = await res.json();
 
-    // Determine parameter router mapping criteria based on token properties
-    let activeRouter = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; // BSC default
-    let networkEndpoint = `${base}/prodbot/swap/bscuniswap`;
-
-    if (["erc20", "eth"].includes(srcAsset.network.toLowerCase())) {
-        activeRouter = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // ETH default
-        networkEndpoint = `${base}/prodbot/swap/ethuniswap`;
-    }
-
-    let winningToken = null;
-    let highestYield = -99999.0;
-    let successfulBytecodePayload = null;
-    let successfulProjectedWei = "0";
-
-    // 3. FRONTEND ITERATION MATRIX: Sweeps assets and alters parameters to evaluate returns
-    logToPanel(`🔬 Sweeping ${tokenCandidates.length} tokens using wallet node simulation tests...`);
-    for (let candidate of tokenCandidates) {
-        if (!candidate.address || candidate.address.toLowerCase() === srcAsset.token.toLowerCase()) {
-            continue;
+        // Catch server-side skips smoothly
+        if (data && data.status === "skip_cycle") {
+            logToPanel(`⚠️ [CYCLE ALERT] ${data.message || 'Asset pool failed live lookahead simulation checks.'}`);
+            logToPanel(`⏭️ Skipping Cycle ${cycle} to safeguard master wallet gas fees.`);
+            return "SKIP";
         }
 
-        try {
-            // Alter parameters and dispatch transaction call signature to simulation compiler
-            const simRes = await fetch(`${base}/prodbot/swap/simulateuniswap`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    router: activeRouter,
-                    tokenIn: srcAsset.token,
-                    tokenOut: candidate.address,
-                    amountIn: allocationWei,
-                    amountOutMin: "0" // Rigid baseline parameter
-                })
-            });
-
-            const simData = await simRes.json();
-
-            // Check response payload conditions against strict profitability filters
-            if (simData && simData.status === "ok") {
-                const expectedOutWei = BigInt(simData.expected_output_wei || "0");
-                if (expectedOutWei <= 0n) continue;
-
-                const momentumChange = parseFloat(candidate["%profit"] || 0.0);
-
-                // Isolate the highest momentum token that clears node simulation rules
-                if (momentumChange > highestYield) {
-                    highestYield = momentumChange;
-                    winningToken = candidate;
-                    successfulBytecodePayload = simData.compiled_data;
-                    successfulProjectedWei = simData.expected_output_wei;
-                }
-            }
-        } catch (simErr) {
-            continue; // Safely skip problematic pairs
+        if (!data || data.status !== "ok") {
+            logToPanel(`⚠️ Engine compiled an invalid runtime payload: ${data ? data.message : 'Unknown'}`);
+            return "CONTINUE";
         }
-    }
 
-    if (!winningToken || !successfulBytecodePayload) {
-        logToPanel("⚠️ [CYCLE ALERT] No active candidate tokens passed structural profit targets.");
-        logToPanel(`⏭️ Skipping Cycle ${cycle} cleanly to protect working balance reserves.`);
-        return "SKIP";
-    }
+        logToPanel(`🏆 Simulation Winner Isolated: ${data.target_token_symbol}`);
+        logToPanel(`🎯 Address: ${data.target_token_address} | Momentum: ${data.momentum_checked}%`);
+        logToPanel(`📈 Projected Output: ${data.projected_output_units} Wei units.`);
 
-    logToPanel(`🏆 Target Selected: ${winningToken.symbol} | Yield: ${highestYield}%`);
-    logToPanel(`📈 Projected Output Returns: ${successfulProjectedWei} Wei units.`);
-
-    // 4. Send exact compiled rigid bytecode payload straight to the user's extension wallet
-    try {
-        logToPanel("[INFO] Requesting secure transaction signature execution from extension wallet...");
+        // 4. Broadcast the transaction payload directly via browser wallet extension provider
+        logToPanel("[INFO] Sending transaction bytecode directly to user extension wallet...");
         const txHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{
                 from: window.USER_ADDR,
-                to: V12_ADDR, // Rigid destination wrapper contract address variable
-                data: successfulBytecodePayload,
+                to: data.to_contract,
+                data: data.compiled_data,
                 value: "0x0"
             }]
         });
 
-        logToPanel(`✅ Broadcast Succeeded! Transaction Hash: ${txHash}`);
+        logToPanel(`✅ Active On-Chain Transaction Sent! Master Tracking Hash: ${txHash}`);
 
-        // 5. Track block confirmation lifecycle states
-        const initialWeiBox = document.getElementById("investBalance").value.toString().trim();
+        // 5. Track block confirmation cycles delta movements
+        const beforeWei = document.getElementById("investBalance").value.toString().trim();
         let confirmed = false;
-        for (let check = 1; check <= 45; check++) {
+        for (let i = 1; i <= 45; i++) {
             await blockDelay(10000);
-            if (typeof window.syncBalanceFromFund === "function") await window.syncBalanceFromFund();
-            if (document.getElementById("investBalance").value.toString().trim() !== initialWeiBox) {
-                confirmed = true;
+            if (typeof syncBalanceFromFund === "function") await syncBalanceFromFund();
+            if (document.getElementById("investBalance").value.toString().trim() !== beforeWei) {
+                confirmed = true; 
                 break;
             }
         }
-
+        
         if (!confirmed) {
-            logToPanel("🛑 Transaction validation surpassed allowed timeout constraints.");
+            logToPanel("🛑 Transaction pending past monitoring timeframe limits.");
             return "STOP_ERROR";
         }
+        
+        // 6. Settle tracking parameters inside local sqlite database records
+        await updateTokenRecord(srcAsset.token, data.target_token_address, srcAsset.network);
 
-        // 6. Settle tracking parameters inside database records
-        await updateTokenRecord(srcAsset.token, winningToken.address, srcAsset.network);
-
-    } catch (broadcastErr) {
-        logToPanel(`❌ Wallet execution rejected or crashed: ${broadcastErr.message}`);
+    } catch (err) {
+        logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
         return "STOP_ERROR";
     }
-
+    
     return "CONTINUE";
 }
+
 
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
