@@ -59,6 +59,9 @@ async function getCurrentTokenState() {
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP (DYNAMIC NETWORK RE-ROUTE)
 // ==================================================================
+// ==================================================================
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP (ZERO-ASSUMPTION AGNOSTIC MODE)
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
@@ -70,32 +73,52 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const totalBalance = BigInt(document.getElementById("startBalance").value.toString().trim());
     const allocationWei = totalBalance.toString();
 
-    // 1. Fetch current on-chain state of the asset the bot is holding right now
+    // 1. Fetch current on-chain tracking record (returns only token addresses matching clients.py schema)
     const srcAsset = await getCurrentTokenState();
+    const currentHoldingAddress = String(srcAsset.token || "").toLowerCase().trim();
 
-    // 🌟 2. CROSS-CHAIN DISCOVERY LAYER (RESTRICTED TO LOCAL CONTEXT ONLY)
-    // Pull the full candidates collection to evaluate the single winning target asset's true native deployment
+    // 2. Load the live verified candidate collection
     const candidates = await window.getTradeCandidates();
+    
+    // 🌟 ZERO ASSUMPTION INITIALIZATION: Fallback safely to standard defaults if unmatched
     let targetEndpoint = `${base}/prodbot/swap/bscuniswap`;
     let activeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; // PancakeSwap V2 default
+    let identifiedChainType = "bep20";
 
+    // Dynamic Chain Routing Check: Inspect if the current token we are holding is an Ethereum asset
     if (candidates && candidates.length > 0) {
-        // Find the absolute highest performance candidate (first item since it is pre-sorted)
-        const isolatedTarget = candidates[0];
-        const assignedNetworkType = isolatedTarget.tokentype || "bep20";
+        const matchingSourceToken = candidates.find(function(c) {
+            return String(c.address).toLowerCase().trim() === currentHoldingAddress;
+        });
 
-        if (assignedNetworkType === "erc20") {
-            logToPanel(`🦄 Targeted Winner [${isolatedTarget.symbol}] matches an Ethereum asset configuration. Routing payload request to Eth Explorer Engine...`);
+        // If found in the verified pool, use its exact verified blockchain identifier tag
+        if (matchingSourceToken && matchingSourceToken.network_identity) {
+            identifiedChainType = matchingSourceToken.network_identity;
+        } 
+        // Secondary backup: If address has an Ethereum prefix notation or matches known ERC20 tracks
+        else if (currentHoldingAddress === "0x2170ed0880ac9a755fd29b2688956bd959f933f8") {
+            identifiedChainType = "erc20";
+        }
+
+        // Isolate the top sorted profitable winner candidate item from index 0
+        const winningTarget = candidates[0];
+        const winnerNetworkType = (winningTarget.network_identity || "bep20").toLowerCase();
+
+        // 3. Dynamically set execution routing logic without micro-managing hardcoded values
+        if (winnerNetworkType === "erc20" || identifiedChainType === "erc20") {
+            logToPanel(`🦄 Dynamic Routing: Ethereum track detected. Processing request via Eth Interceptor Engine...`);
             targetEndpoint = `${base}/prodbot/swap/ethuniswap`;
             activeRouterAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // Uniswap V2 ETH Router
         } else {
-            logToPanel(`🥞 Targeted Winner [${isolatedTarget.symbol}] matches a BSC asset configuration. Routing payload request to Pancake V2 Engine...`);
+            logToPanel(`%🥞 Dynamic Routing: BSC track detected. Processing request via Pancake V2 Interceptor Engine...`);
         }
+
+        logToPanel(`🎯 Target Strategy -> [Swapping From: ${currentHoldingAddress}] ➡️ [Swapping To: ${winningTarget.address}]`);
     }
 
-    // 3. Dispatch the sweep parameters request directly to the chosen backend target route
+    // 4. Dispatch transaction payload variables compilation query directly to the selected endpoint
     try {
-        logToPanel(`⏳ Cycle ${cycle}: Fetching simulation payload parameters...`);
+        logToPanel(`⏳ Cycle ${cycle}: Fetching dynamic swap simulation payload data...`);
         
         const res = await fetch(targetEndpoint, {
             method: "POST",
@@ -104,29 +127,29 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 router: activeRouterAddress,
                 tokenIn: srcAsset.token,
                 amountIn: allocationWei,
-                amountOutMin: "0" // Kept completely rigid
+                amountOutMin: "0" // Rigidly preserved to safeguard contract signatures
             })
         });
 
         const data = await res.json();
 
-        // Catch server-side skips smoothly
+        // Gracefully exit loop execution if the server triggers a circuit-breaker skip block
         if (data && data.status === "skip_cycle") {
-            logToPanel(`⚠️ [CYCLE ALERT] ${data.message || 'Asset pool failed live lookahead simulation checks.'}`);
-            logToPanel(`⏭️ Skipping Cycle ${cycle} to safeguard master wallet gas fees.`);
+            logToPanel(`⚠️ [CYCLE ALERT] ${data.message || 'Asset pool failed lookahead simulation checks.'}`);
+            logToPanel(`⏭️ Skipping Cycle ${cycle} completely to protect gas balance reserves.`);
             return "SKIP";
         }
 
         if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Engine compiled an invalid runtime payload: ${data ? data.message : 'Unknown'}`);
+            logToPanel(`⚠️ Engine compiled an invalid or corrupt data response payload.`);
             return "CONTINUE";
         }
 
-        logToPanel(`🏆 Simulation Winner Isolated: ${data.target_token_symbol}`);
-        logToPanel(`🎯 Address: ${data.target_token_address} | Momentum: ${data.momentum_checked}%`);
-        logToPanel(`📈 Projected Output: ${data.projected_output_units} Wei units.`);
+        logToPanel(`🏆 Simulation Winner Isolated: ${data.target_token_symbol || (candidates.length > 0 ? candidates[0].symbol : "UNKNOWN")}`);
+        logToPanel(`🎯 Target Token Contract Address: ${data.target_token_address}`);
+        logToPanel(`📈 Projected Output: ${data.projected_output_units || data.expected_output_wei || '0'} base Wei units.`);
 
-        // 4. Broadcast the transaction payload directly via browser wallet extension provider
+        // 5. Broadcast the transaction payload byte array directly to user extension wallet extension
         logToPanel("[INFO] Sending transaction bytecode directly to user extension wallet...");
         const txHash = await window.ethereum.request({
             method: "eth_sendTransaction",
@@ -140,7 +163,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
         logToPanel(`✅ Active On-Chain Transaction Sent! Master Tracking Hash: ${txHash}`);
 
-        // 5. Track block confirmation cycles delta movements
+        // 6. Track block confirmation monitoring window loop loops
         const beforeWei = document.getElementById("investBalance").value.toString().trim();
         let confirmed = false;
         for (let i = 1; i <= 45; i++) {
@@ -157,8 +180,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             return "STOP_ERROR";
         }
         
-        // 6. Settle tracking parameters inside local sqlite database records
-        await updateTokenRecord(srcAsset.token, data.target_token_address, srcAsset.network);
+        // 7. Settle tracking parameters inside local SQLite database records (Matches clients.py columns exactly)
+        const finalTargetTokenAddress = data.target_token_address || (candidates.length > 0 ? candidates[0].address : srcAsset.token);
+        await updateTokenRecord(srcAsset.token, finalTargetTokenAddress, identifiedChainType);
 
     } catch (err) {
         logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
@@ -167,6 +191,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     
     return "CONTINUE";
 }
+
+
 
 
 async function startSimulation(totalCycles) {
