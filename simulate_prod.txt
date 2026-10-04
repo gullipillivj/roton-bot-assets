@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (Multi-Network Orchestration Engine)");
+logToPanel("simulate_prod.txt loaded (Multi-Network Orchestration Engine Mode)");
 
 // Global log dashboard adapter
 function logToPanel(msg) {
@@ -12,7 +12,7 @@ function logToPanel(msg) {
 }
 window.logToPanel = logToPanel;
 
-// Thread state delays
+// Thread state delays helper
 const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // UI Status label updater
@@ -26,209 +26,10 @@ function setStatus(msg) {
 }
 window.setStatus = setStatus;
 
-// Emergency Halt
+// Emergency Halt Button Hook
 function stopBot() {
     window.isBotRunning = false;
     setStatus("STOPPED");
     logToPanel("[BOT STOPPED] Trading halted by user.");
 }
 window.stopBot = stopBot;
-
-// Database tracker token and network synchronization mapping
-async function updateTokenRecord(lastToken, currentToken, networkType = "bep20") {
-    try {
-        const userid = window.USER_ID || localStorage.getItem("userid");
-        if (!userid) {
-            logToPanel("[TOKEN SYNC] Missing userid");
-            return false;
-        }
-        const resp = await fetch("/prodbot/tokens/update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                userid: userid, 
-                lasttoken: lastToken, 
-                currenttoken: currentToken,
-                network: networkType // Injects network key to the server pipeline payload
-            })
-        });
-        const data = await resp.json();
-        if (data && data.message) {
-            logToPanel(`[DATABASE COMMIT VERIFIED]\nLAST=${lastToken}\nCURRENT=${currentToken}\nNETWORK=${networkType}`);
-            return true;
-        }
-        return false;
-    } catch (err) {
-        logToPanel(`[TOKEN SYNC ERROR] ${err.message}`);
-        return false;
-    }
-}
-
-// Pipeline asset fetcher helper
-async function getCurrentTokenState() {
-    let state = { token: "0x55d398326f99059fF775485246999027B3197955", network: "bep20" };
-    try {
-        const resp = await fetch("/prodbot/tokens/get", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userid: window.USER_ID })
-        });
-        const data = await resp.json();
-        if (data && data.currenttoken) {
-            state.token = data.currenttoken;
-            state.network = data.network || "bep20"; // Natively reads from your tokens schema column
-        }
-    } catch (err) {
-        logToPanel(`[TOKEN LOAD ERROR] Using USDT fallback: ${err.message}`);
-    }
-    return state;
-}
-
-// ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP (DATABASE NETWORK POWERED)
-// ==================================================================
-// ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP (DETAILED LOGGING MODE)
-// ==================================================================
-async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
-    setStatus(`RUNNING ${cycle}/${totalCycles}`);
-    const base = window.API_BASE || "";
-
-    let tradingBalance = parseFloat(document.getElementById("investBalance").value) || 0;
-    if (tradingBalance  String(c.address).toLowerCase().trim() === sourceTokenAddress);
-        if (matchedSource) sourceSymbolFallback = matchedSource.symbol;
-    }
-
-    // 🌟 🎛️ NEW: HIGH-VISIBILITY LOGVIEW HANDSHAKE OUTPUTS
-    logToPanel(`🔀 [SWAP LIFECYCLE INITIATED]`);
-    logToPanel(`   ➡️ FROM: ${sourceSymbolFallback} [${sourceTokenAddress}] (${sourceNetwork.toUpperCase()})`);
-    logToPanel(`   ➡️ TO:   ${targetedWinnerSymbol} [${targetTokenAddress}] (${winnerNetworkType.toUpperCase()})`);
-
-    // DYNAMIC MATRIX SWITCHING (ZERO CONFLICT FROM FIXED SIGNATURES)
-    if (winnerNetworkType === "erc20" || sourceNetwork === "erc20") {
-        logToPanel(`🦄 [ROUTE] Ethereum network layer invoked for Winner: ${targetedWinnerSymbol}`);
-        targetEndpoint = `${base}/prodbot/swap/ethuniswap`;
-        activeRouterAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; // Uniswap V2 ETH Router
-    } else {
-        logToPanel(`🥞 [ROUTE] BSC network layer invoked for Winner: ${targetedWinnerSymbol}`);
-    }
-
-    // 3. Dispatch the payload parameters directly to the targeted endpoint route
-    try {
-        logToPanel(`⏳ Cycle ${cycle}: Fetching dynamic maximum-profit simulation sweep from server...`);
-        
-        const res = await fetch(targetEndpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: activeRouterAddress,
-                tokenIn: srcAsset.token,
-                tokenOut: targetTokenAddress, 
-                amountIn: allocationWei,
-                amountOutMin: "0" // Kept strictly fixed to maintain signature matching parameters
-            })
-        });
-
-        const data = await res.json();
-
-        // Catch server side skips cleanly
-        if (data && data.status === "skip_cycle") {
-            logToPanel(`⚠️ [CYCLE ALERT] ${data.message || 'All targets failed simulation or printed losses.'}`);
-            logToPanel(`箱 Skipped Swap: ${sourceSymbolFallback} ➡️ ${targetedWinnerSymbol} aborted.`);
-            return "SKIP";
-        }
-
-        if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Pipeline dropped or compiled invalid payload data: ${data ? data.message : 'Unknown'}`);
-            return "CONTINUE";
-        }
-
-        logToPanel(`🏆 Simulation Winner Isolated: ${data.target_token_symbol || targetedWinnerSymbol}`);
-        logToPanel(`🎯 Address: ${data.target_token_address || targetTokenAddress} | Momentum: ${data.momentum_checked || isolatedTarget["%profit"]}%`);
-        logToPanel(`📈 Projected Output: ${data.projected_output_units || data.expected_output_wei || '0'} Wei units.`);
-
-        // 4. Broadcast the transaction payload directly via browser extension provider context
-        logToPanel(`📢 [WALLET PROMPT] Authorizing Swap: ${sourceSymbolFallback} ➡️ ${data.target_token_symbol || targetedWinnerSymbol}...`);
-        const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: window.USER_ADDR,
-                to: data.to_contract,
-                data: data.compiled_data,
-                value: "0x0"
-            }]
-        });
-
-        logToPanel(`✅ On-Chain Transaction Dispatched! Hash: ${txHash}`);
-
-        // 5. Track block confirmation monitoring window intervals
-        const beforeWei = document.getElementById("investBalance").value.toString().trim();
-        let confirmed = false;
-        for (let i = 1; i <= 45; i++) {
-            await blockDelay(10000);
-            if (typeof syncBalanceFromFund === "function") await syncBalanceFromFund();
-            if (document.getElementById("investBalance").value.toString().trim() !== beforeWei) {
-                confirmed = true; 
-                break;
-            }
-        }
-        
-        if (!confirmed) {
-            logToPanel(`🛑 Timeout: Swap execution profile ${sourceSymbolFallback} ➡️ ${targetedWinnerSymbol} remains pending.`);
-            return "STOP_ERROR";
-        }
-        
-        logToPanel(`🎉 Swap Successfully Settled on Ledger! ${sourceSymbolFallback} ➡️ ${targetedWinnerSymbol}`);
-
-        // 6. Commit the updated token coordinates directly to the tokens table row
-        const nextAddressToCommit = data.target_token_address || targetTokenAddress;
-        await updateTokenRecord(srcAsset.token, nextAddressToCommit, winnerNetworkType);
-
-    } catch (err) {
-        logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
-        return "STOP_ERROR";
-    }
-    
-    return "CONTINUE";
-}
-
-
-
-
-async function startSimulation(totalCycles) {
-    if (window.isBotRunning) return;
-    window.isBotRunning = true;
-    window.cumulativePnL = 0;
-
-    const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
-    const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
-
-    logToPanel(`🚀 [BOT INITIATED] Processing up to ${totalCycles} execution cycles.`);
-
-    for (let i = 1; i <= totalCycles; i++) {
-        if (!window.isBotRunning) break;
-        
-        const signal = await simulateCycle(i, totalCycles, pTarget, sLoss);
-        
-        if (signal === "STOP_ERROR") {
-            logToPanel("🛑 State mismatch runtime alert. Aborting framework loops.");
-            break;
-        }
-        if (signal === "SKIP") {
-            await blockDelay(1000); 
-            continue;
-        }
-        if (i < totalCycles) {
-            setStatus("WAITING");
-            await blockDelay(10000);
-        }
-    }
-    
-    window.isBotRunning = false;
-    setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Processing complete.");
-}
-
-window.startSimulation = startSimulation;
-window.simulateCycle = simulateCycle;
