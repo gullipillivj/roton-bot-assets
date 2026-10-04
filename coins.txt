@@ -45,8 +45,12 @@ window.BSCSCAN_API_KEY = "T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4";
 // =============================================================
 // PRODUCTION COIN FILTER (ADAPTED FOR DIRECT BACKEND PIPELINE)
 // =============================================================
+// =============================================================
+// PRODUCTION COIN FILTER (WITH DYNAMIC NETWORK TAG PRESERVATION)
+// =============================================================
 async function categorizeCoins() {
     try {
+        // Fetch pre-processed tokens directly from the Python filter pipeline
         const backendUrl = "/prodbot/filtertokens";
         const res = await fetch(backendUrl);
         let responseData = await res.json();
@@ -58,11 +62,12 @@ async function categorizeCoins() {
             shortTermList = responseData;
         }
 
-        // 🌟 SYSTEMATIC UPGRADE: Output the raw received token catalog straight to visual logs
-        window.logToPanel(`\n📥 [COINS ENGINE] Received ${shortTermList.length} filtered tokens from server:`);
-        shortTermList.forEach((coin, index) => {
-            window.logToPanel(`   -> #${index + 1}: ${coin.symbol} | Address: ${coin.address} | Momentum: ${coin["%profit"]}%`);
+        // 🌟 LOCAL MAPPING ONLY: Safely bind the verified type without touching your contract functions
+        shortTermList.forEach(function(coin) {
+            coin.network_assigned = coin.tokentype || "bep20";
         });
+
+        window.logToPanel("✅ Filter Synchronized: " + shortTermList.length + " assets passed verification.");
 
         return {
             short_term: shortTermList,
@@ -71,7 +76,7 @@ async function categorizeCoins() {
         };
 
     } catch (err) {
-        window.logToPanel("⚠️ Coin Filter Error: " + err.message);
+        window.logToPanel("⚠️ Coin Filter Layer Exception: " + err.message);
         return { short_term: [], mid_term: [], long_term: [] };
     }
 }
