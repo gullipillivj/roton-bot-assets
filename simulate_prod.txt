@@ -138,7 +138,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     // Calculate precision allocation configurations matching exact 18-decimal configurations
-    const allocationWei = (BigInt(Math.floor(tradingBalance * 10000)) * 10n ** 14n).toString();
+// 🌟 FIXED: Read the 18-digit token value directly as a raw string asset
+// Bypasses secondary Math.floor and BigInt decimal padding operations
+const allocationWei = document.getElementById("investBalance").value.toString().trim();
     
     // Explicit Endpoint Selector Logic Map
     let targetEndpoint = `${base}/prodbot/swap/bscuniswap`;
