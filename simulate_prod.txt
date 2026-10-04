@@ -182,19 +182,29 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             return "CONTINUE";
         }
 
-        logToPanel(`🏆 Winner Isolated: ${data.target_token_symbol || targetedWinnerSymbol}`);
+                logToPanel(`🏆 Winner Isolated: ${data.target_token_symbol || targetedWinnerSymbol}`);
         logToPanel(`📈 Rigid Parameter Passed Intact: ${allocationWei} Units`);
 
-        logToPanel(`📢 [WALLET PROMPT] Authorizing Swap...`);
-        const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: window.USER_ADDR,
-                to: data.to_contract,
-                data: data.compiled_data,
-                value: "0x0"
-            }]
-        });
+        // Execute unified web3 pipeline logic directly via pancake_prod routines
+        let txHash;
+        if (winnerNetworkType === "erc20" || sourceNetwork === "erc20") {
+            const ethResult = await window.runethSwapUniswap(window.USER_ADDR, allocationWei, srcAsset.token, targetTokenAddress, activeRouterAddress);
+            if (ethResult.status !== "ok") throw new Error(ethResult.message || "ETH Interceptor failed");
+            
+            txHash = await window.ethereum.request({
+                method: "eth_sendTransaction",
+                params: [{ from: window.USER_ADDR, to: ethResult.to_contract, data: ethResult.compiled_data, value: "0x0" }]
+            });
+        } else {
+            const bscResult = await window.runbscSwapUniswap(window.USER_ADDR, allocationWei, srcAsset.token, targetTokenAddress, activeRouterAddress);
+            if (bscResult.status !== "ok") throw new Error(bscResult.message || "BSC Interceptor failed");
+            
+            txHash = await window.ethereum.request({
+                method: "eth_sendTransaction",
+                params: [{ from: window.USER_ADDR, to: bscResult.to_contract, data: bscResult.compiled_data, value: "0x0" }]
+            });
+        }
+
 
         logToPanel(`✅ On-Chain Transaction Dispatched! Hash: ${txHash}`);
 
