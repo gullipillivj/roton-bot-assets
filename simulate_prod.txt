@@ -199,7 +199,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
         const beforeWei = document.getElementById("investBalance").value.toString().trim();
         let confirmed = false;
-        for (let i = 1; i <= 45; i++) {
+        for (let i = 1; i <= 15; i++) {
             await blockDelay(10000);
             if (typeof syncBalanceFromFund === "function") await syncBalanceFromFund();
             if (document.getElementById("investBalance").value.toString().trim() !== beforeWei) {
@@ -250,7 +250,7 @@ async function handleTwoStepTxPipeline(payload, inputToken, outBridgeToken, targ
     
     let verified = false;
     const beforeWeiBridge = document.getElementById("investBalance").value.toString().trim();
-    for (let index = 1; index <= 45; index++) {
+    for (let index = 1; index <= 15; index++) {
         await blockDelay(10000);
         if (typeof syncBalanceFromFund === "function") await syncBalanceFromFund();
         if (document.getElementById("investBalance").value.toString().trim() !== beforeWeiBridge) { 
