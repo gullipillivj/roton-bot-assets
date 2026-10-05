@@ -34,7 +34,6 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
-
 // Database tracker token and network synchronization mapping
 async function updateTokenRecord(lastToken, currentToken, networkType) {
     try {
@@ -66,7 +65,7 @@ async function updateTokenRecord(lastToken, currentToken, networkType) {
 }
 window.updateTokenRecord = updateTokenRecord;
 
-// Pipeline asset fetcher helper (Matches clients.py table exactly)
+// Pipeline asset fetcher helper
 async function getCurrentTokenState() {
     let state = { token: "0x55d398326f99059fF775485246999027B3197955", network: "bep20" };
     try {
@@ -86,7 +85,6 @@ async function getCurrentTokenState() {
     return state;
 }
 window.getCurrentTokenState = getCurrentTokenState;
-
 
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - INIT & SCANNING
@@ -135,9 +133,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     const allocationWei = balanceInput;
-    let targetEndpoint = `${base}/prodbot/swap/bscuniswap`;
-    let activeRouterAddress = "0x10ED43C718714eb63d5aA57B78B54704E256024E"; 
-
     let sourceSymbolFallback = "USDT";
     if (window.coins_list && Array.isArray(window.coins_list)) {
         const matchedSource = window.coins_list.find(c => String(c.address).toLowerCase().trim() === sourceTokenAddress);
@@ -148,60 +143,59 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`   ➡️ FROM: ${sourceSymbolFallback} [${sourceTokenAddress}] (${sourceNetwork.toUpperCase()})`);
     logToPanel(`   ➡️ TO:   ${targetedWinnerSymbol} [${targetTokenAddress}] (${winnerNetworkType.toUpperCase()})`);
 
-    if (winnerNetworkType === "erc20" || sourceNetwork === "erc20") {
-        logToPanel(`🦄 [ROUTE] Ethereum network layer invoked for Winner: ${targetedWinnerSymbol}`);
-        targetEndpoint = `${base}/prodbot/swap/ethuniswap`;
-        activeRouterAddress = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; 
-    } else {
-        logToPanel(`🥞 [ROUTE] BSC network layer invoked for Winner: ${targetedWinnerSymbol}`);
-    }
-
     try {
-        logToPanel(`⏳ Cycle ${cycle}: Fetching dynamic maximum-profit simulation sweep...`);
-        const res = await fetch(targetEndpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: activeRouterAddress,
-                tokenIn: srcAsset.token,
-                tokenOut: targetTokenAddress, 
-                amountIn: allocationWei
-            })
-        });
+        // ==================================================================
+        // 🌟 UNIVERSAL DUAL-NETWORK TO-BASE INTERMEDIARY BRIDGE MATRIX
+        // ==================================================================
+        let activeTokenIn = sourceTokenAddress;
+        let currentAllocationWei = allocationWei;
+        let currentNetwork = sourceNetwork;
+        let data = null;
 
-        const data = await res.json();
+        const WBNB_ADDR = window.WBNB_TOKEN_ADDRESS.toLowerCase().trim();
+        const WETH_ADDR = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"; 
+
+        // --- STEP 1: CONVERT CUSTOM POSITION TO BASE WRAPPER ---
+        if (currentNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
+            logToPanel(`⚠️ Custom Ethereum Asset detected. Executing Step 1/2: Selling into WETH bridge pool...`);
+            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
+            await handleTwoStepTxPipeline(data, activeTokenIn, WETH_ADDR, "erc20");
+            activeTokenIn = WETH_ADDR;
+            currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
+        } else if (currentNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
+            logToPanel(`⚠️ Custom Binance Asset detected. Executing Step 1/2: Selling into WBNB bridge pool...`);
+            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
+            await handleTwoStepTxPipeline(data, activeTokenIn, WBNB_ADDR, "bep20");
+            activeTokenIn = WBNB_ADDR;
+            currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
+        }
+
+        // --- STEP 2: PURCHASE TARGET TOKEN CANDIDATE ---
+        logToPanel(`⏳ Executing Step 2/2: Ordering deployment target: ${targetedWinnerSymbol}...`);
+        if (winnerNetworkType === "erc20") {
+            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
+        } else {
+            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
+        }
+
         if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Pipeline dropped or compiled invalid payload data: ${data.message || 'unknown error'}`);
+            logToPanel(`⚠️ Target pipeline dropped or compiled invalid backend payload data structure.`);
             return "CONTINUE";
         }
 
-        // 🌟 STEP 1: EXECUTE TOKEN ALLOWANCE APPROVAL PACKET NATIVELY
-        logToPanel(`📢 [WALLET PROMPT 1/2] Authorizing Token Spending Allowance...`);
+        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance parameters...`);
         const approveHash = await window.ethereum.request({
             method: "eth_sendTransaction",
-            params: [{
-                from: window.USER_ADDR,
-                to: data.approval_packet.to_contract,
-                data: data.approval_packet.compiled_data,
-                value: "0x0"
-            }]
+            params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
         });
-        logToPanel(`⏳ Allowance Tx Dispatched: ${approveHash}. Waiting 12s for block inclusion...`);
-        await blockDelay(12000); // Prevents execution race conditions
+        await blockDelay(12000);
 
-        // 🌟 STEP 2: EXECUTE NATIVE CONTRACT SWAP ACTION PACKET NATIVELY
-        logToPanel(`📢 [WALLET PROMPT 2/2] Confirming Exchange Execution...`);
+        logToPanel(`📢 [WALLET PROMPT] Confirming target candidate exchange processing...`);
         const txHash = await window.ethereum.request({
             method: "eth_sendTransaction",
-            params: [{
-                from: window.USER_ADDR,
-                to: data.swap_packet.to_contract,
-                data: data.swap_packet.compiled_data,
-                value: "0x0"
-            }]
+            params: [{ from: window.USER_ADDR, to: data.swap_packet.to_contract, data: data.swap_packet.compiled_data, value: "0x0" }]
         });
-
-        logToPanel(`✅ On-Chain Transaction Dispatched! Hash: ${txHash}`);
+        logToPanel(`✅ Target On-Chain Transaction Dispatched! Hash: ${txHash}`);
 
         const beforeWei = document.getElementById("investBalance").value.toString().trim();
         let confirmed = false;
@@ -221,14 +215,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         
         logToPanel(`🎉 Swap Successfully Settled!`);
         
-        // ==================================================================
-        // 🌟 ADD THESE lines to chain the state together before the loop exits
-        // ==================================================================
-        await window.updateTokenRecord(srcAsset.token, targetTokenAddress, winnerNetworkType);
+        await window.updateTokenRecord(activeTokenIn, targetTokenAddress, winnerNetworkType);
         if (typeof window.syncBalanceFromFund === "function") {
             await window.syncBalanceFromFund();
         }
-        // ==================================================================
 
     } catch (err) {
         logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
@@ -237,7 +227,44 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
+// ==================================================================
+// 🛠️ STANDALONE TWO-STEP PIPELINE TRANSACTION PROMPTER
+// ==================================================================
+async function handleTwoStepTxPipeline(payload, inputToken, outBridgeToken, targetNet) {
+    if (!payload || payload.status !== "ok") throw new Error("Bridge route serialization compilation exception.");
+    
+    // 1. Fire wallet popup layer for Allowance confirmation step
+    const appHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [{ from: window.USER_ADDR, to: payload.approval_packet.to_contract, data: payload.approval_packet.compiled_data, value: "0x0" }]
+    });
+    await blockDelay(12000);
 
+    // 2. Fire wallet popup layer for actual Swap contract execution call
+    const txHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [{ from: window.USER_ADDR, to: payload.swap_packet.to_contract, data: payload.swap_packet.compiled_data, value: "0x0" }]
+    });
+    
+    logToPanel(`⏳ Bridge Tx Sent: ${txHash}. Waiting for block confirmation cycles...`);
+    
+    let verified = false;
+    const beforeWeiBridge = document.getElementById("investBalance").value.toString().trim();
+    for (let index = 1; index <= 45; index++) {
+        await blockDelay(10000);
+        if (typeof syncBalanceFromFund === "function") await syncBalanceFromFund();
+        if (document.getElementById("investBalance").value.toString().trim() !== beforeWeiBridge) { 
+            verified = true; 
+            break; 
+        }
+    }
+    if (!verified) throw new Error("Intermediate bridge asset routing transaction stalled or failed.");
+    
+    // 3. Keep backend clients.db synchronized precisely before shooting to the next step
+    await updateTokenRecord(inputToken, outBridgeToken, targetNet);
+    logToPanel(`✅ Wrapped Base Token Position Ledger successfully logged to database schema row.`);
+    await blockDelay(4000);
+}
 
 // ==================================================================
 // 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY
