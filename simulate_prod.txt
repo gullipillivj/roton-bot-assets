@@ -220,7 +220,15 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
         
         logToPanel(`🎉 Swap Successfully Settled!`);
-        await updateTokenRecord(srcAsset.token, targetTokenAddress, winnerNetworkType);
+        
+        // ==================================================================
+        // 🌟 ADD THESE lines to chain the state together before the loop exits
+        // ==================================================================
+        await window.updateTokenRecord(srcAsset.token, targetTokenAddress, winnerNetworkType);
+        if (typeof window.syncBalanceFromFund === "function") {
+            await window.syncBalanceFromFund();
+        }
+        // ==================================================================
 
     } catch (err) {
         logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
