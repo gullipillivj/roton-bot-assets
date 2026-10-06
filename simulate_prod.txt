@@ -89,6 +89,9 @@ window.getCurrentTokenState = getCurrentTokenState;
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - INIT & SCANNING
 // ==================================================================
+// ==================================================================
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - INIT & SCANNING
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
@@ -122,15 +125,28 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "SKIP";
     }
 
-    const isolatedTarget = marketData[0];
+    // 🌟 FLEXIBLE SELECTION MATRIX: Iterate through the ranked token array 
+    // to find the highest momentum asset that you do NOT currently hold.
+    let isolatedTarget = null;
+    for (let i = 0; i < marketData.length; i++) {
+        let currentCandidateAddress = String(marketData[i].address).toLowerCase().trim();
+        if (currentCandidateAddress !== sourceTokenAddress) {
+            isolatedTarget = marketData[i];
+            break; // Found the next best trade candidate! Break loop.
+        }
+    }
+
+    // Safety fallback: If all candidates in the scanned table match your current position
+    if (!isolatedTarget) {
+        logToPanel("🔄 [CYCLE BOUNDARY] All matching momentum assets are already held in your active position. Skipping cycle...");
+        return "SKIP";
+    }
+
     const targetTokenAddress = String(isolatedTarget.address).toLowerCase().trim();
     const targetedWinnerSymbol = String(isolatedTarget.symbol).toUpperCase().trim();
     const winnerNetworkType = String(isolatedTarget.tokentype || "bep20").toLowerCase().trim();
 
-    if (targetTokenAddress === sourceTokenAddress) {
-        logToPanel("🔄 [CYCLE BOUNDARY] Highest momentum asset matches current asset position. Cycle skipped.");
-        return "SKIP";
-    }
+    logToPanel(`🎯 [TARGET CHOSEN] Next eligible high-yield candidate identified: ${targetedWinnerSymbol} at index allocation.`);
 
     const allocationWei = balanceInput;
     let sourceSymbolFallback = "USDT";
