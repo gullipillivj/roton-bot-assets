@@ -42,21 +42,9 @@ window.BSCSCAN_API_KEY = "T2CK29IN37KQKD54X7UCG1XRNH14NTYTA4";
 // =============================================================
 // PRODUCTION COIN FILTER (ADAPTED FOR DIRECT BACKEND PIPELINE)
 // =============================================================
-// =============================================================
-// PRODUCTION COIN FILTER (ADAPTED FOR DIRECT BACKEND PIPELINE)
-// =============================================================
-// =============================================================
-// PRODUCTION COIN FILTER (WITH DYNAMIC NETWORK TAG PRESERVATION)
-// =============================================================
-// =============================================================
-// PRODUCTION COIN FILTER (WITH TOKENTYPE IDENTIFIER EXTRACTION)
-// =============================================================
-// =============================================================
-// PRODUCTION COIN FILTER (HIGH-SPEED PASS-THROUGH SYNC LAYER)
-// =============================================================
-// =============================================================
-// PRODUCTION COIN FILTER (HIGH-SPEED PASS-THROUGH SYNC LAYER)
-// =============================================================
+// ==================================================================
+// 🎛️ FIXED UI RECOGNITION REGISTRY ENGINE - SECTION 2 OF 2
+// ==================================================================
 async function categorizeCoins() {
     try {
         const backendUrl = "/prodbot/filtertokens";
@@ -70,22 +58,32 @@ async function categorizeCoins() {
             shortTermList = responseData;
         }
 
-        shortTermList.forEach(function(coin) {
+        // FIXED: Frontend sanity filter to isolate pure EVM records from leakages
+        let fullySanitizedList = shortTermList.filter(function(coin) {
+            let addr = coin.address || "";
+            // Instant drop if any network delimiter symbols exist
+            if (addr.includes(":")) return false;
+            return addr.startsWith("0x") && addr.length === 42;
+        });
+
+        fullySanitizedList.forEach(function(coin) {
             coin.network_identity = (coin.tokentype || "bep20").toLowerCase();
         });
 
-        window.logToPanel("✅ Filter Synchronized: " + shortTermList.length + " candidate targets loaded for live simulation tests.");
+        window.logToPanel("✅ Ingestion Synced: Loaded " + fullySanitizedList.length + " clean EVM candidates.");
         return {
-            short_term: shortTermList,
+            short_term: fullySanitizedList,
             mid_term: [],
             long_term: []
         };
 
     } catch (err) {
-        window.logToPanel("⚠️ Coin Filter Layer Exception: " + err.message);
+        window.logToPanel("⚠️ Coin Ingestion Layer Exception: " + err.message);
         return { short_term: [], mid_term: [], long_term: [] };
     }
 }
+
+
 
 
 
@@ -111,6 +109,8 @@ async function getTradeCandidates() {
     }
 }
 window.getTradeCandidates = getTradeCandidates;
+
+
 
 window.getBinancePairs = async function () {
     var candidates = await window.getTradeCandidates();
