@@ -123,132 +123,57 @@ window.getCurrentTokenState = getCurrentTokenState;
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - FIXED & CORRECTED
 // ==================================================================
 // ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 1 OF 2
-// ==================================================================
-// ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 1 OF 2
+// 🔍 SINGLE-FUNCTION PURE INVENTORY INSPECTOR (ROUTERS TRUNCATED)
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
-    setStatus(`RUNNING ${cycle}/${totalCycles}`);
+    logToPanel(`\n=== 📊 [INVENTORY SCAN] Cycle ${cycle}/${totalCycles} ===`);
+    setStatus(`SCANNING ${cycle}/${totalCycles}`);
 
+    // Fetch account parameters straight from the interface elements
     let balanceInputBefore = document.getElementById("investBalance").value.toString().trim();
-    if (!balanceInputBefore || balanceInputBefore === "0") {
-        logToPanel("⚠️ [CYCLE ABORTED] Visual input field 'investBalance' is empty or zero.");
-        return "STOP_ERROR";
-    }
-
     const srcAsset = await getCurrentTokenState();
     const sourceTokenAddress = String(srcAsset.token).toLowerCase().trim();
-    logToPanel(`💳 [PORTFOLIO BALANCE STATE] Current Active Asset Hex: [${sourceTokenAddress}]`);
 
+    logToPanel(`💳 Account: [${sourceTokenAddress}] | Balance: ${balanceInputBefore} Wei`);
+
+    // Ingest the trending array from your script data registry
     let marketData = [];
     try {
         if (typeof window.getTradeCandidates === "function") {
             marketData = await window.getTradeCandidates();
         }
     } catch (fErr) {
-        logToPanel(`⚠️ [SCANNER DELAY] Failed to invoke window.getTradeCandidates: ${fErr.message}`);
+        logToPanel(`❌ Data Retrieval Error: ${fErr.message}`);
         return "CONTINUE";
     }
 
     if (!Array.isArray(marketData) || marketData.length === 0) {
-        logToPanel("⚠️ [SCANNER COLD] Zero validated tokens compiled by data layer registry. Skipping cycle...");
+        logToPanel("❌ Ingestion data tracking array is completely empty.");
         return "SKIP";
     }
 
-    // DIAGNOSTIC 1: Print the complete cleaned array data inside the layout text panel
-    logToPanel(`📊 [INGESTION REPORT] Discovered ${marketData.length} clean market targets inside registry data vector.`);
-    let targetSymbolsList = marketData.map(t => t.symbol || t.name || "UNKNWN");
-    logToPanel(`📋 [SCANNER TRACKING ARRAY]: ${JSON.stringify(targetSymbolsList)}`);
+    logToPanel(`📋 Parsing ${marketData.length} active records inside token trend matrix:`);
 
-    let executionSuccessful = false;
-    let currentCandidateIndex = 0;
+    // Loop through the data collection sequentially inside a single unified block
+    for (let index = 0; index < marketData.length; index++) {
+        let candidate = marketData[index];
+        
+        let symbolLabel = candidate.symbol || candidate.token_symbol || candidate.name || "UNKNWN";
+        let targetAddress = candidate.address || candidate.address_or_geckoid || "MISSING";
+        let profitVelocity = candidate.change_24h_percent || candidate["%profit"] || 0;
+        let networkFramework = candidate.tokentype || "bep20";
+        let marketPrice = candidate.price || candidate.live_price_usd || 0;
 
-    while (currentCandidateIndex < marketData.length) {
-        let candidate = marketData[currentCandidateIndex];
-        let candidateAddress = String(candidate.address).toLowerCase().trim();
-        let targetedWinnerSymbol = String(candidate.symbol || "UNKNWN").toUpperCase().trim();
-        let winnerNetworkType = String(candidate.tokentype || "bep20").toLowerCase().trim();
-
-        if (!candidateAddress || candidateAddress === "n/a" || candidateAddress === sourceTokenAddress) {
-            currentCandidateIndex++;
-            continue;
-        }
-
-        // DIAGNOSTIC 2: Log explicit route parameters to track exactly what inputs hit your simulation endpoint
-        logToPanel(`\n🔍 [PRE-FLIGHT CHECK ENGINE] Testing Path Configuration:`);
-        logToPanel(`   ➡️ Input Token In  (You Hold) : [${sourceTokenAddress}]`);
-        logToPanel(`   ➡️ Output Token Out (Candidate): [${candidateAddress}] (${targetedWinnerSymbol})`);
-        logToPanel(`   ➡️ Expected Allocation Size   : ${balanceInputBefore} Wei`);
-
-        try {
-            const simRes = await fetch("/prodbot/swap/simulateuniswap", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    router: "0x10ED43C718714eb63d5aA57B78B54704E256024E",
-                    tokenIn: sourceTokenAddress,
-                    tokenOut: candidateAddress,
-                    amountIn: balanceInputBefore,
-                    amountOutMin: "0"
-                })
-            });
-
-            const contentType = simRes.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                const rawCrashHTML = await simRes.text();
-                logToPanel(`❌ [SIMULATION CRASHED] Backend returned HTML error code payload block instead of JSON.`);
-                console.error("HTML Crash Log:", rawCrashHTML);
-                currentCandidateIndex++;
-                continue;
-            }
-
-            const simData = await simRes.json();
-            
-            // DIAGNOSTIC 3: Print the exact structural JSON object returned by the server simulation endpoint
-            logToPanel(`📦 [RAW BACKEND SIMULATION RESPONSE]:\n${JSON.stringify(simData, None, 2)}`);
-            
-            // THE FINANCIAL FIREWALL: Instantly drop the candidate if backend validation checks return errors
-            if (!simData || simData.status !== "ok" || !simData.expected_output_wei || BigInt(simData.expected_output_wei) <= 0n) {
-                logToPanel(`⚠️ [ROUTE REJECTED] Token ${targetedWinnerSymbol} failed simulation verification. Moving to next target...`);
-                currentCandidateIndex++;
-                continue; 
-            }
-
-            let calculatedOutput = BigInt(simData.expected_output_wei);
-            let baselineInput = BigInt(balanceInputBefore);
-            
-            if (calculatedOutput <= baselineInput) {
-                logToPanel(`⏭️ [ROUTE REJECTED] Token ${targetedWinnerSymbol} skipped: Simulation indicates negative returns or high slippage impact.`);
-                currentCandidateIndex++;
-                continue;
-            }
-
-            // Verification Complete! Direct swap execution will only run if parameters are 100% clean
-            logToPanel(`🎯 [ROUTE VERIFIED CLEAN] Target verified successfully. Dispatched straight to contract routers...`);
-            executionSuccessful = await executeDirectOnChainSwap(
-                candidateAddress, targetedWinnerSymbol, winnerNetworkType, sourceTokenAddress, balanceInputBefore
-            );
-
-            if (executionSuccessful) {
-                break; 
-            } else {
-                currentCandidateIndex++;
-            }
-
-        } catch (err) {
-            logToPanel(`⚠️ [SIMULATION ENGINE EXCEPTION] Simulation failed for ${targetedWinnerSymbol}: ${err.message || err}`);
-            currentCandidateIndex++;
-        }
+        logToPanel(`🔹 [Token ${index + 1}/${marketData.length}]: ${String(symbolLabel).toUpperCase()}
+   ▫️ Address Hex  : ${String(targetAddress).toLowerCase().trim()}
+   ▫️ Network Type : ${networkFramework}
+   ▫️ 24h Momentum : ${profitVelocity}%
+   ▫️ Market Price : $${marketPrice}
+   ───────────────────────────────────────────────────────`);
     }
 
-    if (!executionSuccessful) {
-        logToPanel("🔄 [CYCLE SKIPPED] Processing complete. No liquid or profitable swappable paths were cleared in this batch.");
-        return "SKIP";
-    }
-
-    return "CONTINUE";
+    logToPanel(`=== 📊 [SCAN SUCCESSFUL] Token registry variables printed. All routers bypassed. ===`);
+    return "SKIP"; 
 }
 window.simulateCycle = simulateCycle;
 
