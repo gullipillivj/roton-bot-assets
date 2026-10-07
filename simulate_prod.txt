@@ -125,82 +125,64 @@ window.getCurrentTokenState = getCurrentTokenState;
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 1 OF 2
 // ==================================================================
+// ==================================================================
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 1 OF 2
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
 
-    // Grab the live balance string populated straight from your smart contract views
     let balanceInputBefore = document.getElementById("investBalance").value.toString().trim();
     if (!balanceInputBefore || balanceInputBefore === "0") {
-        logToPanel("⚠️ [CYCLE ABORTED] Balance field is empty or zero.");
+        logToPanel("⚠️ [CYCLE ABORTED] Visual input field 'investBalance' is empty or zero.");
         return "STOP_ERROR";
     }
 
     const srcAsset = await getCurrentTokenState();
     const sourceTokenAddress = String(srcAsset.token).toLowerCase().trim();
-    const sourceNetwork = String(srcAsset.network).toLowerCase().trim();
-    logToPanel(`[PORTFOLIO ROOT] Active Position: ${srcAsset.token} (${sourceNetwork.toUpperCase()})`);
+    logToPanel(`💳 [PORTFOLIO BALANCE STATE] Current Active Asset Hex: [${sourceTokenAddress}]`);
 
-    // Fetch market data candidates directly from your coins.txt runtime array engine
     let marketData = [];
     try {
         if (typeof window.getTradeCandidates === "function") {
             marketData = await window.getTradeCandidates();
-        } else {
-            const filterResp = await fetch("/prodbot/filtertokens");
-            const filterJson = await filterResp.json();
-            if (filterJson && filterJson.status === "ok") {
-                marketData = filterJson.short_term || filterJson;
-            }
         }
     } catch (fErr) {
-        logToPanel(`⚠️ [SCANNER DELAY] Unable to pull candidate tokens array: ${fErr.message}`);
+        logToPanel(`⚠️ [SCANNER DELAY] Failed to invoke window.getTradeCandidates: ${fErr.message}`);
         return "CONTINUE";
     }
 
     if (!Array.isArray(marketData) || marketData.length === 0) {
-        logToPanel("⚠️ [SCANNER COLD] Zero validated tokens compiled. Skipping cycle...");
+        logToPanel("⚠️ [SCANNER COLD] Zero validated tokens compiled by data layer registry. Skipping cycle...");
         return "SKIP";
     }
 
-    logToPanel(`🔬 Inspecting ${marketData.length} trending candidates sorted by momentum...`);
+    // DIAGNOSTIC 1: Print the complete cleaned array data inside the layout text panel
+    logToPanel(`📊 [INGESTION REPORT] Discovered ${marketData.length} clean market targets inside registry data vector.`);
+    let targetSymbolsList = marketData.map(t => t.symbol || t.name || "UNKNWN");
+    logToPanel(`📋 [SCANNER TRACKING ARRAY]: ${JSON.stringify(targetSymbolsList)}`);
 
     let executionSuccessful = false;
     let currentCandidateIndex = 0;
 
-    // Loop through the token trend array elements sequentially
     while (currentCandidateIndex < marketData.length) {
         let candidate = marketData[currentCandidateIndex];
-        
-        let rawAddress = candidate.address_or_geckoid || candidate.address || "n/a";
-        let targetedWinnerSymbol = String(candidate.token_symbol || candidate.symbol || candidate.name || "UNKNWN").toUpperCase().trim();
-        let candidateMomentum = parseFloat(candidate.change_24h_percent || candidate["%profit"] || 0);
+        let candidateAddress = String(candidate.address).toLowerCase().trim();
+        let targetedWinnerSymbol = String(candidate.symbol || "UNKNWN").toUpperCase().trim();
         let winnerNetworkType = String(candidate.tokentype || "bep20").toLowerCase().trim();
 
-        // Safe Clean: Strip internet scrape prefixes safely (e.g. "bsc:0x...", "ethereum:0x...")
-        if (String(rawAddress).includes(":")) {
-            const structuralParts = String(rawAddress).split(":");
-            rawAddress = structuralParts[1];
-        }
-
-        let candidateAddress = String(rawAddress).toLowerCase().trim();
-
-        // Guard A: Skip empty slots or instances trying to buy the asset we already hold
         if (!candidateAddress || candidateAddress === "n/a" || candidateAddress === sourceTokenAddress) {
             currentCandidateIndex++;
             continue;
         }
 
-        // Guard B: Instantly drop non-EVM address slots (like raw Solana entries)
-        if (!candidateAddress.startsWith("0x") || candidateAddress.length !== 42) {
-            currentCandidateIndex++;
-            continue;
-        }
-
-        logToPanel(`🔍 Testing Candidate [${currentCandidateIndex + 1}/${marketData.length}]: ${targetedWinnerSymbol} (+${candidateMomentum.toFixed(2)}%)`);
+        // DIAGNOSTIC 2: Log explicit route parameters to track exactly what inputs hit your simulation endpoint
+        logToPanel(`\n🔍 [PRE-FLIGHT CHECK ENGINE] Testing Path Configuration:`);
+        logToPanel(`   ➡️ Input Token In  (You Hold) : [${sourceTokenAddress}]`);
+        logToPanel(`   ➡️ Output Token Out (Candidate): [${candidateAddress}] (${targetedWinnerSymbol})`);
+        logToPanel(`   ➡️ Expected Allocation Size   : ${balanceInputBefore} Wei`);
 
         try {
-            // --- PURE PRE-FLIGHT SIMULATION CHECK ---
             const simRes = await fetch("/prodbot/swap/simulateuniswap", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -213,40 +195,65 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 })
             });
 
-            const simData = await simRes.json();
-            
-            // Validate simulation data fields safely BEFORE calling wallet actions
-            if (!simData || simData.status !== "ok" || !simData.expected_output_wei || BigInt(simData.expected_output_wei) <= 0n) {
-                logToPanel(`⚠️ [SIMULATION REJECTED] ${targetedWinnerSymbol} skipped: Shallow liquidity depths or execution revert.`);
+            const contentType = simRes.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const rawCrashHTML = await simRes.text();
+                logToPanel(`❌ [SIMULATION CRASHED] Backend returned HTML error code payload block instead of JSON.`);
+                console.error("HTML Crash Log:", rawCrashHTML);
                 currentCandidateIndex++;
-                continue; // Immediately jumps down to evaluate the next token item in your array
+                continue;
             }
 
-            // Target token passes the backend simulation check -> Proceed to Section 2 for execution
-            executionSuccessful = await executeVerifiedSwapPipeline(
-                simData, candidateAddress, targetedWinnerSymbol, winnerNetworkType, sourceNetwork, sourceTokenAddress, balanceInputBefore
+            const simData = await simRes.json();
+            
+            // DIAGNOSTIC 3: Print the exact structural JSON object returned by the server simulation endpoint
+            logToPanel(`📦 [RAW BACKEND SIMULATION RESPONSE]:\n${JSON.stringify(simData, None, 2)}`);
+            
+            // THE FINANCIAL FIREWALL: Instantly drop the candidate if backend validation checks return errors
+            if (!simData || simData.status !== "ok" || !simData.expected_output_wei || BigInt(simData.expected_output_wei) <= 0n) {
+                logToPanel(`⚠️ [ROUTE REJECTED] Token ${targetedWinnerSymbol} failed simulation verification. Moving to next target...`);
+                currentCandidateIndex++;
+                continue; 
+            }
+
+            let calculatedOutput = BigInt(simData.expected_output_wei);
+            let baselineInput = BigInt(balanceInputBefore);
+            
+            if (calculatedOutput <= baselineInput) {
+                logToPanel(`⏭️ [ROUTE REJECTED] Token ${targetedWinnerSymbol} skipped: Simulation indicates negative returns or high slippage impact.`);
+                currentCandidateIndex++;
+                continue;
+            }
+
+            // Verification Complete! Direct swap execution will only run if parameters are 100% clean
+            logToPanel(`🎯 [ROUTE VERIFIED CLEAN] Target verified successfully. Dispatched straight to contract routers...`);
+            executionSuccessful = await executeDirectOnChainSwap(
+                candidateAddress, targetedWinnerSymbol, winnerNetworkType, sourceTokenAddress, balanceInputBefore
             );
 
             if (executionSuccessful) {
-                break; // Break the candidate index tracking loop cleanly upon successful trade completion
+                break; 
             } else {
                 currentCandidateIndex++;
             }
 
         } catch (err) {
-            logToPanel(`⚠️ [PIPELINE EXCEPTION] Token ${targetedWinnerSymbol} execution dropped: ${err.message || err}`);
+            logToPanel(`⚠️ [SIMULATION ENGINE EXCEPTION] Simulation failed for ${targetedWinnerSymbol}: ${err.message || err}`);
             currentCandidateIndex++;
         }
     }
 
     if (!executionSuccessful) {
-        logToPanel("🔄 [CYCLE SKIPPED] Sequenced analysis complete. No verified swappable targets found in current token batch.");
+        logToPanel("🔄 [CYCLE SKIPPED] Processing complete. No liquid or profitable swappable paths were cleared in this batch.");
         return "SKIP";
     }
 
     return "CONTINUE";
 }
 window.simulateCycle = simulateCycle;
+
+
+
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 2 OF 2
 // ==================================================================
