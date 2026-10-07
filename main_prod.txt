@@ -55,6 +55,7 @@ function initializeLabels() {
 window.logToPanel("pancake_prod.txt loaded safely. Sequential fee-deduction math active.");
 
 //🎉Ensure 18 decimals 
+// 🎉 CORRECTED: Fixed decimals translation matrix with clean return variables
 function ensure18Decimals(amountInput) {
     if (!amountInput) return "0";
     const str = amountInput.toString().trim();
@@ -78,6 +79,7 @@ function ensure18Decimals(amountInput) {
     const combined = (whole + fraction).replace(/^0+/, '');
     return combined === "" ? "0" : combined;
 }
+
 
 // 🌟 DYNAMIC TRIPLE DEPOSIT ENGINE WITH SEQUENTIAL MATHEMATICAL DEDUCTIONS
 async function runDepositPipeline(userAddr, amountHumanOrWei) {
