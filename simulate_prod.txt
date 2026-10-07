@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (Multi-Network Orchestration Engine Mode)");
+logToPanel("simulate_prod.txt loaded (DEBUG MODE - LEGACY DB LAYERS REMOVED)");
 
 // Global log dashboard adapter
 function logToPanel(msg) {
@@ -26,135 +26,51 @@ function setStatus(msg) {
 }
 window.setStatus = setStatus;
 
-// Fetch tokens list helper view routing
-async function fetchRawLedgerLists() {
-    try {
-        const response = await fetch("/prodbot/ledger/balances", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user: window.USER_ADDR })
-        });
-        
-        const data = await response.json();
-        if (data && data.status === "ok") {
-            window.logToPanel(`📊 Discovered ${data.total_tracked_assets} tracked ledger asset addresses.`);
-            console.log("Tokens:", data.tokens);
-            console.log("Balances:", data.balances);
-        }
-    } catch (err) {
-        window.logToPanel(`❌ Ledger retrieval failure: ${err.message}`);
-    }
-}
-
 // Emergency Halt Button Hook
 function stopBot() {
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[BOT STOPPED] Trading halted by user.");
+    logToPanel("[BOT STOPPED] Tracking execution cycle paused by user.");
 }
 window.stopBot = stopBot;
 
 // ==================================================================
-// 🟢 PURE ON-CHAIN STATE RETRIEVAL MATRIX (REPLACED CLIENTS.DB LOGIC)
-// ==================================================================
-
-/**
- * Clean pass-through bridge function matching legacy function names.
- * Bypasses old database tracking tables since the V12 contract ledger takes priority.
- */
-async function updateTokenRecord(lastToken, currentToken, networkType) {
-    try {
-        logToPanel(`⏳ Syncing active token state boundaries directly on-chain...`);
-        
-        const resp = await fetch("/prodbot/tokens/update", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ 
-                userid: window.USER_ADDR || window.USER_ID, 
-                lasttoken: lastToken, 
-                currenttoken: currentToken,
-                network: networkType || "bep20"
-            })
-        });
-        
-        logToPanel(`✅ [STATE CACHE VERIFIED]\nLAST POOL: ${lastToken}\nCURRENT TARGET: ${currentToken}`);
-        return true;
-    } catch (err) {
-        logToPanel(`⚠️ State sync logging alert: ${err.message}`);
-        return false;
-    }
-}
-window.updateTokenRecord = updateTokenRecord;
-
-/**
- * On-chain token state resolver.
- * Hits the updated backend route to read active positions from getUserBalanceList tuple fields.
- */
-async function getCurrentTokenState() {
-    let state = { token: "0x55d398326f99059fF775485246999027B3197955", network: "bep20" };
-    
-    try {
-        const activeIdentityVector = window.USER_ADDR || window.USER_ID;
-        if (!activeIdentityVector) {
-            return state;
-        }
-
-        const resp = await fetch("/prodbot/tokens/get", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userid: activeIdentityVector })
-        });
-        
-        const data = await resp.json();
-        if (data && data.status === "ok" && data.currenttoken) {
-            state.token = data.currenttoken;
-            state.network = data.network || "bep20";
-        }
-    } catch (err) {
-        logToPanel(`[ON-CHAIN POSITION LOOKUP FAILED] Defaulting to USDT: ${err.message}`);
-    }
-    
-    return state;
-}
-window.getCurrentTokenState = getCurrentTokenState;
-
-
-// ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - FIXED & CORRECTED
-// ==================================================================
-// ==================================================================
-// 🔍 SINGLE-FUNCTION PURE INVENTORY INSPECTOR (ROUTERS TRUNCATED)
+// 🔍 SINGLE-FUNCTION PURE INVENTORY INSPECTOR (NO ROUTERS / NO DB ROUTES)
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n=== 📊 [INVENTORY SCAN] Cycle ${cycle}/${totalCycles} ===`);
     setStatus(`SCANNING ${cycle}/${totalCycles}`);
 
-    // Fetch account parameters straight from the interface elements
-    let balanceInputBefore = document.getElementById("investBalance").value.toString().trim();
-    const srcAsset = await getCurrentTokenState();
-    const sourceTokenAddress = String(srcAsset.token).toLowerCase().trim();
+    // Read the current live balance parameter straight from the form element container properties
+    let balanceInputBefore = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
+    
+    // FIXED: Pulled live coordinates straight from the synchronized memory variable populated by syncBalanceFromFund()
+    // Defaulting directly to the token address or standard USDT coordinate without triggering broken database endpoints
+    let currentTokenAddress = window.USER_ADDR || "0x55d398326f99059fF775485246999027B3197955";
+    logToPanel(`💳 Account Address Vector: [${currentTokenAddress}] | Parameter Balance: ${balanceInputBefore} Wei`);
 
-    logToPanel(`💳 Account: [${sourceTokenAddress}] | Balance: ${balanceInputBefore} Wei`);
-
-    // Ingest the trending array from your script data registry
+    // Ingest the token trend data array from your coins.txt registry function
     let marketData = [];
     try {
         if (typeof window.getTradeCandidates === "function") {
             marketData = await window.getTradeCandidates();
+        } else {
+            logToPanel("⚠️ window.getTradeCandidates function is missing from current visibility layout context.");
+            return "SKIP";
         }
     } catch (fErr) {
-        logToPanel(`❌ Data Retrieval Error: ${fErr.message}`);
+        logToPanel(`❌ Data Array Retrieval Interrupted: ${fErr.message}`);
         return "CONTINUE";
     }
 
     if (!Array.isArray(marketData) || marketData.length === 0) {
-        logToPanel("❌ Ingestion data tracking array is completely empty.");
+        logToPanel("❌ Ingestion tracking market data array is completely empty.");
         return "SKIP";
     }
 
-    logToPanel(`📋 Parsing ${marketData.length} active records inside token trend matrix:`);
+    logToPanel(`📋 Printing ${marketData.length} records discovered inside coins.txt array matrix:`);
 
-    // Loop through the data collection sequentially inside a single unified block
+    // Parse and view properties sequentially inside a pure single execution loop block
     for (let index = 0; index < marketData.length; index++) {
         let candidate = marketData[index];
         
@@ -172,200 +88,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
    ───────────────────────────────────────────────────────`);
     }
 
-    logToPanel(`=== 📊 [SCAN SUCCESSFUL] Token registry variables printed. All routers bypassed. ===`);
-    return "SKIP"; 
+    logToPanel(`=== 📊 [SCAN SUCCESSFUL] Cycle loop finished. Wallet providers bypassed. ===`);
+    return "SKIP"; // Instructs master loop manager to skip transaction executions cleanly
 }
 window.simulateCycle = simulateCycle;
-
-
-
-// ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 2 OF 2
-// ==================================================================
-async function executeVerifiedSwapPipeline(simData, candidateAddress, targetedWinnerSymbol, winnerNetworkType, sourceNetwork, sourceTokenAddress, balanceInputBefore) {
-    logToPanel(`🔥 [PRE-FLIGHT PASSED] Expected: ${simData.expected_output_wei} Wei. Initiating live Web3 execution chain for: ${targetedWinnerSymbol}`);
-
-    let activeTokenIn = sourceTokenAddress;
-    let currentAllocationWei = balanceInputBefore;
-    let data = null;
-
-    const WBNB_ADDR = window.WBNB_TOKEN_ADDRESS ? window.WBNB_TOKEN_ADDRESS.toLowerCase().trim() : "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
-    const WETH_ADDR = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"; 
-
-    // --- STEP 1: BRIDGING INTERMEDIARY CHECK ---
-    try {
-        if (sourceNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
-            logToPanel(`⚠️ Custom Ethereum Asset. Selling into WETH bridge...`);
-            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-            await handleTwoStepTxPipeline(data, activeTokenIn, WETH_ADDR, "erc20");
-            if (typeof window.syncBalanceFromFund === "function") await window.syncBalanceFromFund();
-            activeTokenIn = WETH_ADDR;
-            currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
-        } else if (sourceNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
-            logToPanel(`⚠️ Custom Binance Asset. Selling into WBNB bridge...`);
-            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
-            await handleTwoStepTxPipeline(data, activeTokenIn, WBNB_ADDR, "bep20");
-            if (typeof window.syncBalanceFromFund === "function") await window.syncBalanceFromFund();
-            activeTokenIn = WBNB_ADDR;
-            currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
-        }
-    } catch (bridgeErr) {
-        logToPanel(`⚠️ [BRIDGE ROUTE CRASH] Pipeline error during route parsing: ${bridgeErr.message}`);
-        return false; 
-    }
-
-    // --- STEP 2: DYNAMIC ROUTER SWAP EXECUTION ---
-    try {
-        if (winnerNetworkType === "erc20") {
-            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, candidateAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-        } else {
-            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, candidateAddress, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
-        }
-
-        if (!data || data.status !== "ok" || !data.approval_packet || !data.swap_packet) {
-            logToPanel(`⚠️ [ROUTER PAYLOAD ERROR] Serialization dropped for ${targetedWinnerSymbol}.`);
-            return false;
-        }
-
-        // Prompt wallet token permissions step safely with explicit rejection catch blocks
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spend allocation...`);
-        await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
-        });
-        await blockDelay(10000);
-
-        // Dispatch execution transaction payload parameters
-        logToPanel(`📢 [WALLET PROMPT] Confirming asset exchange processing...`);
-        const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ from: window.USER_ADDR, to: data.swap_packet.to_contract, data: data.swap_packet.compiled_data, value: "0x0" }]
-        });
-        logToPanel(`✅ Exchange Transaction Dispatched! Hash: ${txHash}`);
-
-        // Polling cycle logic checking on-chain data transitions
-        let settledOnChain = false;
-        logToPanel(`⏳ Awaiting block state confirmation rules...`);
-        
-        for (let i = 1; i <= 60; i++) {
-            await blockDelay(8000);
-            if (typeof window.syncBalanceFromFund === "function") {
-                await window.syncBalanceFromFund();
-            }
-            let checkCurrentFormValue = document.getElementById("investBalance").value.toString().trim();
-            if (checkCurrentFormValue !== balanceInputBefore && checkCurrentFormValue !== "0") {
-                settledOnChain = true;
-                break;
-            }
-        }
-
-        if (!settledOnChain) {
-            logToPanel(`🛑 [TIMEOUT] On-chain indices remained static for ${targetedWinnerSymbol}.`);
-            return false;
-        }
-
-        // Sync storage tracking maps on-chain
-        await updateTokenRecord(activeTokenIn, candidateAddress, winnerNetworkType);
-        return true;
-
-    } catch (txRuntimeErr) {
-        logToPanel(`❌ [USER REJECTION OR EVM EXCEPTION] Swap pipeline interrupted: ${txRuntimeErr.message || txRuntimeErr}`);
-        return false;
-    }
-}
-window.executeVerifiedSwapPipeline = executeVerifiedSwapPipeline;
-
-
-// ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 2 OF 2
-// ==================================================================
-async function executeDirectOnChainSwap(candidateAddress, targetedWinnerSymbol, winnerNetworkType, sourceTokenAddress, balanceInputBefore) {
-    try {
-        logToPanel(`📡 Fetching final transaction calldata details from router generator endpoints...`);
-        
-        const res = await fetch("/prodbot/swap/bscuniswap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: "0x10ED43C718714eb63d5aA57B78B54704E256024E",
-                tokenIn: sourceTokenAddress,
-                tokenOut: candidateAddress,
-                amountIn: balanceInputBefore,
-                amountOutMin: "0"
-            })
-        });
-
-        const data = await res.json();
-        
-        // DIAGNOSTIC 4: Print the exact structural router transaction payloads generated by the server layout
-        logToPanel(`📦 [RAW BACKEND SWAP ROUTE PAYLOAD]:\n${JSON.stringify(data, None, 2)}`);
-
-        if (!data || data.status !== "ok" || !data.approval_packet || !data.swap_packet) {
-            logToPanel(`⚠️ [ROUTE EXCEPTION] Router payload configuration compilation dropped for ${targetedWinnerSymbol}.`);
-            return false;
-        }
-
-        // 1. Single spend approval request for the active token asset
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spend allocation for contract: ${data.approval_packet.to_contract}`);
-        await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ 
-                from: window.USER_ADDR, 
-                to: data.approval_packet.to_contract, 
-                data: data.approval_packet.compiled_data, 
-                value: "0x0" 
-            }]
-        });
-        
-        logToPanel("⏳ Allowance authorized. Waiting 8s for block confirmation...");
-        await blockDelay(8000);
-
-        // 2. Execute the single direct swap through your V12 contract instance coordinates
-        logToPanel(`📢 [WALLET PROMPT] Confirming single direct swap exchange via contract: ${data.swap_packet.to_contract}`);
-        const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ 
-                from: window.USER_ADDR, 
-                to: data.swap_packet.to_contract, 
-                data: data.swap_packet.compiled_data, 
-                value: "0x0" 
-            }]
-        });
-        
-        logToPanel(`✅ Live Swap Dispatched! Tx Hash: ${txHash}. Monitoring ledger adjustments...`);
-
-        // 3. Simple block checking confirmation loop logic
-        let settled = false;
-        for (let i = 1; i <= 30; i++) {
-            await blockDelay(7000);
-            if (typeof window.syncBalanceFromFund === "function") {
-                await window.syncBalanceFromFund();
-            }
-            let checkVal = document.getElementById("investBalance").value.toString().trim();
-            if (checkVal !== balanceInputBefore && checkVal !== "0") {
-                settled = true;
-                break;
-            }
-        }
-
-        if (!settled) {
-            logToPanel(`🛑 [CONFIRMATION TIMEOUT] Transaction successfully sent, but ledger parameters remained unchanged.`);
-            return false;
-        }
-
-        // Write new token state bounds into registry caching memory points
-        await updateTokenRecord(sourceTokenAddress, candidateAddress, winnerNetworkType);
-        logToPanel(`🎉 Trade successfully settled! Direct allocation swap to ${targetedWinnerSymbol} complete.`);
-        return true;
-
-    } catch (err) {
-        logToPanel(`❌ [TRANSACTION BLOCKED] Direct swap operation dropped: ${err.message || err}`);
-        return false;
-    }
-}
-window.executeDirectOnChainSwap = executeDirectOnCh
-ainSwap;
-
 
 // ==================================================================
 // 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY
@@ -373,27 +99,22 @@ ainSwap;
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
-    window.cumulativePnL = 0;
 
-    const pTarget = parseFloat(document.getElementById("profitTarget").value) || 1.0;
-    const sLoss = parseFloat(document.getElementById("stopLoss").value) || 0.5;
-    logToPanel(`🚀 [BOT INITIATED] Processing up to ${totalCycles} execution cycles.`);
+    logToPanel(`🚀 [DEBUG BOT STARTED] Initiated data array inspection for up to ${totalCycles} loops.`);
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
-        const signal = await simulateCycle(i, totalCycles, pTarget, sLoss);
+        
+        // Triggers the pure isolated data parsing layout function defined above
+        const signal = await simulateCycle(i, totalCycles, 0, 0);
+        
         if (signal === "STOP_ERROR") {
-            logToPanel("🛑 State mismatch runtime alert. Aborting framework loops.");
+            logToPanel("🛑 Debug run interrupted execution check.");
             break;
         }
-        if (signal === "SKIP") {
-            await blockDelay(1000); 
-            continue;
-        }
-        if (i < totalCycles) {
-            setStatus("WAITING");
-            await blockDelay(10000);
-        }
+        
+        // Small interval loop separation buffer delay parameter
+        await blockDelay(1000);
     }
     window.isBotRunning = false;
     setStatus("STOPPED");
