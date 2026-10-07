@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (DEBUG MODE - LEGACY DB LAYERS REMOVED)");
+logToPanel("simulate_prod.txt loaded (DEBUG LOGVIEW MODE - ROUTERS DESTROYED)");
 
 // Global log dashboard adapter
 function logToPanel(msg) {
@@ -35,18 +35,16 @@ function stopBot() {
 window.stopBot = stopBot;
 
 // ==================================================================
-// 🔍 SINGLE-FUNCTION PURE INVENTORY INSPECTOR (NO ROUTERS / NO DB ROUTES)
+// 🔍 CLEAN SINGLE-FUNCTION INVENTORY SCANNER (NO SWAPPING STAGES)
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n=== 📊 [INVENTORY SCAN] Cycle ${cycle}/${totalCycles} ===`);
     setStatus(`SCANNING ${cycle}/${totalCycles}`);
 
-    // Read the current live balance parameter straight from the form element container properties
+    // Read the current live balance straight from the form element properties safely
     let balanceInputBefore = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
-    
-    // FIXED: Pulled live coordinates straight from the synchronized memory variable populated by syncBalanceFromFund()
-    // Defaulting directly to the token address or standard USDT coordinate without triggering broken database endpoints
     let currentTokenAddress = window.USER_ADDR || "0x55d398326f99059fF775485246999027B3197955";
+    
     logToPanel(`💳 Account Address Vector: [${currentTokenAddress}] | Parameter Balance: ${balanceInputBefore} Wei`);
 
     // Ingest the token trend data array from your coins.txt registry function
@@ -55,12 +53,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         if (typeof window.getTradeCandidates === "function") {
             marketData = await window.getTradeCandidates();
         } else {
-            logToPanel("⚠️ window.getTradeCandidates function is missing from current visibility layout context.");
-            return "SKIP";
+            logToPanel("⚠️ window.getTradeCandidates function is missing from memory context.");
+            return "SKIP"; // Moves to the next cycle immediately
         }
     } catch (fErr) {
-        logToPanel(`❌ Data Array Retrieval Interrupted: ${fErr.message}`);
-        return "CONTINUE";
+        logToPanel(`❌ Data Array Ingestion Interrupted: ${fErr.message}`);
+        return "SKIP"; // Bypasses errors and steps to the next loop iteration
     }
 
     if (!Array.isArray(marketData) || marketData.length === 0) {
@@ -68,9 +66,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "SKIP";
     }
 
-    logToPanel(`📋 Printing ${marketData.length} records discovered inside coins.txt array matrix:`);
+    logToPanel(`📋 Discovered ${marketData.length} records inside array stream:`);
 
-    // Parse and view properties sequentially inside a pure single execution loop block
+    // Loop through the data array elements inside a single unified block
     for (let index = 0; index < marketData.length; index++) {
         let candidate = marketData[index];
         
@@ -88,19 +86,21 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
    ───────────────────────────────────────────────────────`);
     }
 
-    logToPanel(`=== 📊 [SCAN SUCCESSFUL] Cycle loop finished. Wallet providers bypassed. ===`);
-    return "SKIP"; // Instructs master loop manager to skip transaction executions cleanly
+    logToPanel(`=== 📊 [SCAN SUCCESSFUL] Cycle ${cycle} finished. Bypassing swap actions. ===`);
+    
+    // FIXED: Returning "SKIP" guarantees the master loop transitions cleanly to the next cycle index number
+    return "SKIP"; 
 }
 window.simulateCycle = simulateCycle;
 
 // ==================================================================
-// 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY
+// 🚀 CONTROLLER AND INTERFACE CONTROLLER GATEWAY
 // ==================================================================
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
 
-    logToPanel(`🚀 [DEBUG BOT STARTED] Initiated data array inspection for up to ${totalCycles} loops.`);
+    logToPanel(`🚀 [DEBUG BOT STARTED] Scanning configurations up to ${totalCycles} loops.`);
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
@@ -113,8 +113,9 @@ async function startSimulation(totalCycles) {
             break;
         }
         
-        // Small interval loop separation buffer delay parameter
-        await blockDelay(1000);
+        // Short time delay before starting the next index loop increment
+        setStatus("WAITING");
+        await blockDelay(2000);
     }
     window.isBotRunning = false;
     setStatus("STOPPED");
