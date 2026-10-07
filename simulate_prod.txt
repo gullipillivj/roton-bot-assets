@@ -221,6 +221,23 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             return "CONTINUE";
         }
 
+       // Example invocation snippet inside your automated loops:
+if (winnerNetworkType === "crosschain") {
+    const BSC_CCIP_ROUTER = "0x34B03Cb9086d7D758AC55af71584F81A598759FE"; // BSC Mainnet CCIP Router
+    const ARBITRUM_SELECTOR = "4949039107694359620";                        // Destination Selector
+
+    let bridgeResult = await window.runcrossChainSwap(
+        window.USER_ADDR,            // User's active connected wallet wallet address
+        currentAllocationWei,        // Amount to bridge in string Wei
+        activeTokenIn,               // Source asset contract address (e.g. WBNB)
+        BSC_CCIP_ROUTER,             // Target CCIP network gateway
+        ARBITRUM_SELECTOR,           // Target chain ID index representation
+        window.USER_ADDR             // Target destination recipient address
+    );
+}
+
+
+
         logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance parameters...`);
         const approveHash = await window.ethereum.request({
             method: "eth_sendTransaction",
