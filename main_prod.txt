@@ -493,11 +493,14 @@ async function finalizeInterfaceSyncState() {
     
     window.logToPanel(`🎉 Interface Sync Success! Active Wallet Session: ${window.USER_ADDR}`);
 
+    // This guarantees that as soon as the wallet links, the 0 values are overwritten with contract funds
     if (typeof window.syncBalanceFromFund === "function") {
         await window.syncBalanceFromFund();
     }
 }
 window.finalizeInterfaceSyncState = finalizeInterfaceSyncState;
+
+
 // Execute UI setup bindings instantly on browser ready cycles
 window.addEventListener("DOMContentLoaded", () => {
     initializeLabels();
