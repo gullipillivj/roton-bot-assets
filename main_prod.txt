@@ -6,6 +6,7 @@ logToPanel("main_prod.txt loaded (BEP20 Mode)");
 window.API_BASE = window.location.origin; 
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
+//🤹‍♂️🤹‍♂️Log to Panel
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -17,6 +18,8 @@ function logToPanel(msg) {
 }
 window.logToPanel = logToPanel;
 
+
+//😵‍💫Query parameters 
 function getQueryParams() {
   try {
     const url = new URL(window.location.href);
@@ -36,6 +39,7 @@ window.USER_ID = q.userid;
 window.USER_ADDR = q.wallet ? q.wallet.toLowerCase() : null;
 window.WALLET_NAME = q.walletname;
 
+//👌Initialise Labels
 function initializeLabels() {
   const userLabel = document.getElementById("currentUserLabel");
   const walletLabel = document.getElementById("currentWalletLabel");
@@ -50,6 +54,7 @@ function initializeLabels() {
 // ==================================================================
 window.logToPanel("pancake_prod.txt loaded safely. Sequential fee-deduction math active.");
 
+//🎉Ensure 18 decimals 
 function ensure18Decimals(amountInput) {
     if (!amountInput) return "0";
     const str = amountInput.toString().trim();
@@ -221,8 +226,6 @@ window.runWithdrawPipeline = runWithdrawPipeline;
 
 
 // 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
-// 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DATABASE TOKEN SLOT MATCHING
-// 📊 OPTIMIZED FAST DUAL-TOKEN PORTFOLIO SYNCHRONIZER
 async function syncBalanceFromFund() {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
@@ -368,7 +371,7 @@ async function syncBalanceFromFund() {
 window.syncBalanceFromFund = syncBalanceFromFund;
 
 
-// Secure page entry setup executor function container loop mapping 
+// 🤓Secure page entry setup executor function container loop mapping 
 function initDashboardPipeline() {
   initializeLabels();
   setupActionListeners();
@@ -482,8 +485,10 @@ const BSC_CHAIN_ID_CAIP = "eip155:56"; // Exact BSC Mainnet identifier map
 // 📱 PART B: DYNAMIC WALLET ROUTER & INTERFACE SYNCHRONIZER
 // ========================================================
 
+
+
 /**
- * Updates UI layout parameters and fires parallel on-chain sync checks
+ * 🔗Updates UI layout parameters and fires parallel on-chain sync checks
  */
 async function finalizeInterfaceSyncState() {
     const label = document.getElementById("currentWalletLabel");
