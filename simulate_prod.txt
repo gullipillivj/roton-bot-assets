@@ -26,7 +26,7 @@ function setStatus(msg) {
 }
 window.setStatus = setStatus;
 
-//Fetch tokens list
+// Fetch tokens list helper view routing
 async function fetchRawLedgerLists() {
     try {
         const response = await fetch("/prodbot/ledger/balances", {
@@ -38,7 +38,6 @@ async function fetchRawLedgerLists() {
         const data = await response.json();
         if (data && data.status === "ok") {
             window.logToPanel(`📊 Discovered ${data.total_tracked_assets} tracked ledger asset addresses.`);
-            // Loop over data.tokens and data.balances arrays directly here
             console.log("Tokens:", data.tokens);
             console.log("Balances:", data.balances);
         }
@@ -46,7 +45,6 @@ async function fetchRawLedgerLists() {
         window.logToPanel(`❌ Ledger retrieval failure: ${err.message}`);
     }
 }
-
 
 // Emergency Halt Button Hook
 function stopBot() {
@@ -56,7 +54,6 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
-// Database tracker token and network synchronization mapping
 // ==================================================================
 // 🟢 PURE ON-CHAIN STATE RETRIEVAL MATRIX (REPLACED CLIENTS.DB LOGIC)
 // ==================================================================
@@ -69,7 +66,6 @@ async function updateTokenRecord(lastToken, currentToken, networkType) {
     try {
         logToPanel(`⏳ Syncing active token state boundaries directly on-chain...`);
         
-        // Triggers the background dynamic endpoint to cleanly acknowledge the updated state mapping
         const resp = await fetch("/prodbot/tokens/update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -95,7 +91,6 @@ window.updateTokenRecord = updateTokenRecord;
  * Hits the updated backend route to read active positions from getUserBalanceList tuple fields.
  */
 async function getCurrentTokenState() {
-    // High-reliability default position: Safe Binance-Peg USDT
     let state = { token: "0x55d398326f99059fF775485246999027B3197955", network: "bep20" };
     
     try {
@@ -104,7 +99,6 @@ async function getCurrentTokenState() {
             return state;
         }
 
-        // Direct fetch targeting the on-chain engine registry router payload
         const resp = await fetch("/prodbot/tokens/get", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -124,16 +118,13 @@ async function getCurrentTokenState() {
 }
 window.getCurrentTokenState = getCurrentTokenState;
 
+
 // ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - INIT & SCANNING
-// ==================================================================
-// ==================================================================
-// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - INIT & SCANNING
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - FIXED & CORRECTED
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
-    const base = window.API_BASE || "";
 
     let balanceInput = document.getElementById("investBalance").value.toString().trim();
     if (!balanceInput || balanceInput === "0") {
@@ -159,24 +150,21 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     if (marketData.length === 0) {
-        logToPanel("⚠️ [SCANNER COLD] Zero token profiles verified by validation checks. Skipping cycle...");
+        logToPanel("⚠️ [SCANNER COLD] Zero token profiles verified by checks. Skipping cycle...");
         return "SKIP";
     }
 
-    // 🌟 FLEXIBLE SELECTION MATRIX: Iterate through the ranked token array 
-    // to find the highest momentum asset that you do NOT currently hold.
     let isolatedTarget = null;
     for (let i = 0; i < marketData.length; i++) {
         let currentCandidateAddress = String(marketData[i].address).toLowerCase().trim();
         if (currentCandidateAddress !== sourceTokenAddress) {
             isolatedTarget = marketData[i];
-            break; // Found the next best trade candidate! Break loop.
+            break;
         }
     }
 
-    // Safety fallback: If all candidates in the scanned table match your current position
     if (!isolatedTarget) {
-        logToPanel("🔄 [CYCLE BOUNDARY] All matching momentum assets are already held in your active position. Skipping cycle...");
+        logToPanel("🔄 [CYCLE BOUNDARY] All matching momentum assets are already held. Skipping...");
         return "SKIP";
     }
 
@@ -184,7 +172,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const targetedWinnerSymbol = String(isolatedTarget.symbol).toUpperCase().trim();
     const winnerNetworkType = String(isolatedTarget.tokentype || "bep20").toLowerCase().trim();
 
-    logToPanel(`🎯 [TARGET CHOSEN] Next eligible high-yield candidate identified: ${targetedWinnerSymbol} at index allocation.`);
+    logToPanel(`🎯 [TARGET CHOSEN] Next high-yield candidate: ${targetedWinnerSymbol}`);
 
     const allocationWei = balanceInput;
     let sourceSymbolFallback = "USDT";
@@ -198,9 +186,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`   ➡️ TO:   ${targetedWinnerSymbol} [${targetTokenAddress}] (${winnerNetworkType.toUpperCase()})`);
 
     try {
-        // ==================================================================
-        // 🌟 UNIVERSAL DUAL-NETWORK TO-BASE INTERMEDIARY BRIDGE MATRIX
-        // ==================================================================
         let activeTokenIn = sourceTokenAddress;
         let currentAllocationWei = allocationWei;
         let currentNetwork = sourceNetwork;
@@ -211,20 +196,20 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
         // --- STEP 1: CONVERT CUSTOM POSITION TO BASE WRAPPER ---
         if (currentNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
-            logToPanel(`⚠️ Custom Ethereum Asset detected. Executing Step 1/2: Selling into WETH bridge pool...`);
+            logToPanel(`⚠️ Custom Ethereum Asset detected. Step 1/2: Selling into WETH bridge...`);
             data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
             await handleTwoStepTxPipeline(data, activeTokenIn, WETH_ADDR, "erc20");
             activeTokenIn = WETH_ADDR;
             currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
         } else if (currentNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
-            logToPanel(`⚠️ Custom Binance Asset detected. Executing Step 1/2: Selling into WBNB bridge pool...`);
+            logToPanel(`⚠️ Custom Binance Asset detected. Step 1/2: Selling into WBNB bridge...`);
             data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
             await handleTwoStepTxPipeline(data, activeTokenIn, WBNB_ADDR, "bep20");
             activeTokenIn = WBNB_ADDR;
             currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
         }
 
-        // --- STEP 2: PURCHASE TARGET TOKEN CANDIDATE ---
+        // --- STEP 2: PURCHASE TARGET TOKEN CANDIDATE (ONLY ONCE) ---
         logToPanel(`⏳ Executing Step 2/2: Ordering deployment target: ${targetedWinnerSymbol}...`);
         if (winnerNetworkType === "erc20") {
             data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
@@ -233,44 +218,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Target pipeline dropped or compiled invalid backend payload data structure.`);
+            logToPanel(`⚠️ Target pipeline dropped or compiled invalid backend payload.`);
             return "CONTINUE";
         }
 
-        // --- STEP 2: PURCHASE TARGET TOKEN CANDIDATE ---
-        logToPanel(`⏳ Executing Step 2/2: Ordering deployment target: ${targetedWinnerSymbol}...`);
-        if (winnerNetworkType === "erc20") {
-            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-        } else {
-            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
-        }
-
-        if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Target pipeline dropped or compiled invalid backend payload data structure.`);
-            return "CONTINUE";
-        }
-
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance parameters...`);
-        const approveHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
-        });
-        await blockDelay(12000);
-
-        logToPanel(`📢 [WALLET PROMPT] Confirming target candidate exchange processing...`);
-        const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ from: window.USER_ADDR, to: data.swap_packet.to_contract, data: data.swap_packet.compiled_data, value: "0x0" }]
-        });
-        logToPanel(`✅ Target On-Chain Transaction Dispatched! Hash: ${txHash}
-`);
-
- 
-}
-
-
-
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance parameters...`);
+        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance...`);
         const approveHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
@@ -314,26 +266,25 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     return "CONTINUE";
 }
 
+
 // ==================================================================
 // 🛠️ STANDALONE TWO-STEP PIPELINE TRANSACTION PROMPTER
 // ==================================================================
 async function handleTwoStepTxPipeline(payload, inputToken, outBridgeToken, targetNet) {
     if (!payload || payload.status !== "ok") throw new Error("Bridge route serialization compilation exception.");
     
-    // 1. Fire wallet popup layer for Allowance confirmation step
     const appHash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [{ from: window.USER_ADDR, to: payload.approval_packet.to_contract, data: payload.approval_packet.compiled_data, value: "0x0" }]
     });
     await blockDelay(12000);
 
-    // 2. Fire wallet popup layer for actual Swap contract execution call
     const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [{ from: window.USER_ADDR, to: payload.swap_packet.to_contract, data: payload.swap_packet.compiled_data, value: "0x0" }]
     });
     
-    logToPanel(`⏳ Bridge Tx Sent: ${txHash}. Waiting for block confirmation cycles...`);
+    logToPanel(`⏳ Bridge Tx Sent: ${txHash}. Waiting for block confirmation...`);
     
     let verified = false;
     const beforeWeiBridge = document.getElementById("investBalance").value.toString().trim();
@@ -347,9 +298,8 @@ async function handleTwoStepTxPipeline(payload, inputToken, outBridgeToken, targ
     }
     if (!verified) throw new Error("Intermediate bridge asset routing transaction stalled or failed.");
     
-    // 3. Keep backend clients.db synchronized precisely before shooting to the next step
     await updateTokenRecord(inputToken, outBridgeToken, targetNet);
-    logToPanel(`✅ Wrapped Base Token Position Ledger successfully logged to database schema row.`);
+    logToPanel(`✅ Wrapped Base Token Position Ledger successfully logged.`);
     await blockDelay(4000);
 }
 
