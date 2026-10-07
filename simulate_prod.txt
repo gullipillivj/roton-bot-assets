@@ -36,15 +36,18 @@ window.stopBot = stopBot;
 
 // ==================================================================
 // 🔍 CLEAN SINGLE-FUNCTION INVENTORY SCANNER (NO SWAPPING STAGES)
+// ==================================================================// ==================================================================
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 1 OF 2
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`\n=== 📊 [INVENTORY SCAN] Cycle ${cycle}/${totalCycles} ===`);
-    setStatus(`SCANNING ${cycle}/${totalCycles}`);
+    logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
+    setStatus(`RUNNING ${cycle}/${totalCycles}`);
 
-    // Read the current live balance straight from the form element properties safely
+    // Read form elements directly to populate tracking strings
     let balanceInputBefore = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
-    let currentTokenAddress = window.USER_ADDR || "0x55d398326f99059fF775485246999027B3197955";
     
+    // Fallback assignment to keep account coordinates safe without database hits
+    let currentTokenAddress = window.USER_ADDR || "0x55d398326f99059fF775485246999027B3197955";
     logToPanel(`💳 Account Address Vector: [${currentTokenAddress}] | Parameter Balance: ${balanceInputBefore} Wei`);
 
     // Ingest the token trend data array from your coins.txt registry function
@@ -53,12 +56,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         if (typeof window.getTradeCandidates === "function") {
             marketData = await window.getTradeCandidates();
         } else {
-            logToPanel("⚠️ window.getTradeCandidates function is missing from memory context.");
-            return "SKIP"; // Moves to the next cycle immediately
+            logToPanel("⚠️ window.getTradeCandidates function is missing from current layout memory context.");
+            return "SKIP"; // Transitions directly to the next cycle calculation
         }
     } catch (fErr) {
-        logToPanel(`❌ Data Array Ingestion Interrupted: ${fErr.message}`);
-        return "SKIP"; // Bypasses errors and steps to the next loop iteration
+        logToPanel(`❌ Data Array Retrieval Interrupted: ${fErr.message}`);
+        return "SKIP"; // Prevents exception crashes, moves smoothly forward
     }
 
     if (!Array.isArray(marketData) || marketData.length === 0) {
@@ -66,9 +69,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "SKIP";
     }
 
-    logToPanel(`📋 Discovered ${marketData.length} records inside array stream:`);
+    logToPanel(`🎯 [CYCLE ${cycle} TARGET DATA ARRAY]:`);
 
-    // Loop through the data array elements inside a single unified block
+    // Loop through the data blocks sequentially inside a single unified block handler
     for (let index = 0; index < marketData.length; index++) {
         let candidate = marketData[index];
         
@@ -78,34 +81,35 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         let networkFramework = candidate.tokentype || "bep20";
         let marketPrice = candidate.price || candidate.live_price_usd || 0;
 
-        logToPanel(`🔹 [Token ${index + 1}/${marketData.length}]: ${String(symbolLabel).toUpperCase()}
-   ▫️ Address Hex  : ${String(targetAddress).toLowerCase().trim()}
-   ▫️ Network Type : ${networkFramework}
-   ▫️ 24h Momentum : ${profitVelocity}%
-   ▫️ Market Price : $${marketPrice}
-   ───────────────────────────────────────────────────────`);
+        logToPanel(`   🔹 [Token ${index + 1}/${marketData.length}]: ${String(symbolLabel).toUpperCase()} | Address: ${String(targetAddress).toLowerCase().trim()} | Type: ${networkFramework} | Momentum: ${profitVelocity}% | Price: $${marketPrice}`);
     }
 
-    logToPanel(`=== 📊 [SCAN SUCCESSFUL] Cycle ${cycle} finished. Bypassing swap actions. ===`);
+    logToPanel(`✅ Cycle ${cycle}/${totalCycles} scan complete. Bypassing all wallet spend calls.`);
     
-    // FIXED: Returning "SKIP" guarantees the master loop transitions cleanly to the next cycle index number
+    // Returning "SKIP" causes the supervisor loop to step straight into the next cycle
     return "SKIP"; 
 }
 window.simulateCycle = simulateCycle;
 
+
+
+
 // ==================================================================
 // 🚀 CONTROLLER AND INTERFACE CONTROLLER GATEWAY
+// ==================================================================
+a// ==================================================================
+// 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY - SECTION 2 OF 2
 // ==================================================================
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
 
-    logToPanel(`🚀 [DEBUG BOT STARTED] Scanning configurations up to ${totalCycles} loops.`);
+    logToPanel(`🚀 [DEBUG BOT ENGINE ACTIVE] Iterating 1 to ${totalCycles} execution loops sequentially...`);
 
     for (let i = 1; i <= totalCycles; i++) {
         if (!window.isBotRunning) break;
         
-        // Triggers the pure isolated data parsing layout function defined above
+        // Execute our clean data loop logic defined above
         const signal = await simulateCycle(i, totalCycles, 0, 0);
         
         if (signal === "STOP_ERROR") {
@@ -115,10 +119,23 @@ async function startSimulation(totalCycles) {
         
         // Short time delay before starting the next index loop increment
         setStatus("WAITING");
-        await blockDelay(2000);
+        await blockDelay(1500);
     }
+    
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Processing complete.");
+    logToPanel("[BOT FINISHED] Processing complete. Data diagnostics loop settled successfully.");
 }
 window.startSimulation = startSimulation;
+
+// ==================================================================
+// 🛑 TRUNCATED WALLET PIPELINES - COMPLETELY DEACTIVATED FOR DEBUGGING
+// ==================================================================
+async function handleTwoStepTxPipeline() { return false; }
+async function executeVerifiedSwapPipeline() { return false; }
+async function executeDirectOnChainSwap() { return false; }
+
+window.handleTwoStepTxPipeline = handleTwoStepTxPipeline;
+window.executeVerifiedSwapPipeline = executeVerifiedSwapPipeline;
+window.executeDirectOnChainSwap = executeDirectOnChainSwap;
+
