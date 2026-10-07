@@ -125,11 +125,14 @@ window.getCurrentTokenState = getCurrentTokenState;
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - FULLY INTEGRATED
 // ==================================================================
+// ==================================================================
+// 🔄 AUTOMATED SWEEP CYCLE LOOP - PART 1: MOMENTUM DISCOVERY MATRIX
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
 
-    // Capture the initial investment baseline value before any transactions execute
+    // Capture the initial asset baseline values before execution parameters propagate
     let balanceInputBefore = document.getElementById("investBalance").value.toString().trim();
     if (!balanceInputBefore || balanceInputBefore === "0") {
         logToPanel("⚠️ [CYCLE ABORTED] Balance field is empty or zero.");
@@ -139,7 +142,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const srcAsset = await getCurrentTokenState();
     const sourceTokenAddress = String(srcAsset.token).toLowerCase().trim();
     const sourceNetwork = String(srcAsset.network).toLowerCase().trim();
-    logToPanel(`[PORTFOLIO ROOT IDENTIFIED] Active position: ${srcAsset.token} (${sourceNetwork.toUpperCase()})`);
+    logToPanel(`[PORTFOLIO ROOT] Active Position: ${srcAsset.token} (${sourceNetwork.toUpperCase()})`);
 
     let marketData = [];
     try {
@@ -149,38 +152,87 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             marketData = filterJson.short_term;
         }
     } catch (fErr) {
-        logToPanel(`⚠️ [SCANNER DELAY] Master filter table route dropped: ${fErr.message}`);
+        logToPanel(`⚠️ [SCANNER DELAY] Filter table route dropped: ${fErr.message}`);
         return "CONTINUE";
     }
 
     if (marketData.length === 0) {
-        logToPanel("⚠️ [SCANNER COLD] Zero token profiles verified. Skipping cycle...");
+        logToPanel("⚠️ [SCANNER COLD] Zero validated tokens compiled. Skipping cycle...");
         return "SKIP";
     }
 
-    // Discover the highest yield candidate asset profile that you do not currently hold
+    // Sort market candidate targets explicitly by highest 24h momentum velocity
+    logToPanel(`🔬 Sorting ${marketData.length} tokens by highest 24h %profit change velocity...`);
+    marketData.sort(function (a, b) {
+        return Number(b["%profit"] || b.change_24h_percent || 0) - Number(a["%profit"] || a.change_24h_percent || 0);
+    });
+
     let isolatedTarget = null;
-    for (let i = 0; i < marketData.length; i++) {
-        let currentCandidateAddress = String(marketData[i].address).toLowerCase().trim();
-        if (currentCandidateAddress !== sourceTokenAddress) {
-            isolatedTarget = marketData[i];
-            break;
+    let currentCandidateIndex = 0;
+
+    // Scan through the sorted high-velocity targets until a valid on-chain target is matched
+    while (currentCandidateIndex < marketData.length) {
+        let candidate = marketData[currentCandidateIndex];
+        let candidateAddress = String(candidate.address || candidate.address_or_geckoid).toLowerCase().trim();
+        let candidateMomentum = parseFloat(candidate["%profit"] || candidate.change_24h_percent || 0);
+
+        // Rule A: Skip empty address layout structures ("N/A") or your own portfolio address vector
+        if (!candidateAddress || candidateAddress === "n/a" || candidateAddress === sourceTokenAddress) {
+            currentCandidateIndex++;
+            continue;
         }
+
+        // Rule B: Confirm string layout follows standard 42-character hexadecimal formatting parameters
+        if (!candidateAddress.startsWith("0x") || candidateAddress.length !== 42) {
+            currentCandidateIndex++;
+            continue;
+        }
+
+        // Rule C: Pre-Flight Wallet Simulation verification check to protect capital from dead pool slippage
+        try {
+            const simRes = await fetch("/prodbot/swap/simulateuniswap", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    router: "0x10ED43C718714eb63d5aA57B78B54704E256024E",
+                    tokenIn: sourceTokenAddress,
+                    tokenOut: candidateAddress,
+                    amountIn: balanceInputBefore,
+                    amountOutMin: "0"
+                })
+            });
+
+            const simData = await simRes.json();
+            
+            if (simData && simData.status === "ok" && BigInt(simData.expected_output_wei || 0) > 0n) {
+                // If it passes liquidity depth tests, lock this highest percent momentum asset as the target!
+                isolatedTarget = candidate;
+                logToPanel(`🔥 [MOMENTUM TARGET MATCHED] Chosen: ${candidate.name || candidate.symbol} | 24h Yield Delta: +${candidateMomentum.toFixed(2)}%`);
+                break;
+            } else {
+                logToPanel(`⚠️ [SLIPPAGE OVERLAP] Skipping high momentum token ${candidate.name || candidate.symbol} due to shallow on-chain LP pools.`);
+            }
+        } catch (simErr) {
+            console.warn("Pre-flight calculation skipped for candidate target index:", simErr);
+        }
+
+        currentCandidateIndex++;
     }
 
     if (!isolatedTarget) {
-        logToPanel("🔄 All high-momentum assets are already held in portfolio. Skipping...");
+        logToPanel("🔄 [CYCLE SKIPPED] No high-momentum candidate targets passed on-chain liquidity depth checks in this block.");
         return "SKIP";
     }
 
-    const targetTokenAddress = String(isolatedTarget.address).toLowerCase().trim();
-    const targetedWinnerSymbol = String(isolatedTarget.symbol).toUpperCase().trim();
+
+    // ==================================================================
+    // 🔀 AUTOMATED SWEEP CYCLE LOOP - PART 2: TRANSACTION SIGNING & GATES
+    // ==================================================================
+    const targetTokenAddress = String(isolatedTarget.address || isolatedTarget.address_or_geckoid).toLowerCase().trim();
+    const targetedWinnerSymbol = String(isolatedTarget.symbol || isolatedTarget.name).toUpperCase().trim();
     const winnerNetworkType = String(isolatedTarget.tokentype || "bep20").toLowerCase().trim();
 
-    logToPanel(`🎯 [TARGET CHOSEN] Next candidate: ${targetedWinnerSymbol}`);
-    logToPanel(`🔀 [SWAP LIFECYCLE INITIATED]`);
-    logToPanel(`   ➡️ FROM: [${sourceTokenAddress}] (${sourceNetwork.toUpperCase()})`);
-    logToPanel(`   ➡️ TO:   ${targetedWinnerSymbol} [${targetTokenAddress}] (${winnerNetworkType.toUpperCase()})`);
+    logToPanel(`⏳ Deploying order parameters against: ${targetedWinnerSymbol}...`);
 
     try {
         let activeTokenIn = sourceTokenAddress;
@@ -190,16 +242,16 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         const WBNB_ADDR = window.WBNB_TOKEN_ADDRESS.toLowerCase().trim();
         const WETH_ADDR = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"; 
 
-        // --- STEP 1: CONVERT CUSTOM POSITION TO BASE INTERMEDIARY WRAPPERS ---
+        // --- STEP 1: CONVERT POSITION TO BASE INTERMEDIARY WRAPPERS ---
         if (sourceNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
-            logToPanel(`⚠️ Custom Ethereum Asset detected. Step 1/2: Transferring into WETH...`);
+            logToPanel(`⚠️ Custom Ethereum Asset detected. Step 1/2: Selling into WETH bridge...`);
             data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
             await handleTwoStepTxPipeline(data);
             if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
             activeTokenIn = WETH_ADDR;
             currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
         } else if (sourceNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
-            logToPanel(`⚠️ Custom Binance Asset detected. Step 1/2: Transferring into WBNB...`);
+            logToPanel(`⚠️ Custom Binance Asset detected. Step 1/2: Selling into WBNB bridge...`);
             data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
             await handleTwoStepTxPipeline(data);
             if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
@@ -207,8 +259,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
         }
 
-        // --- STEP 2: DEPLOY ORDER TRANSFERS AGAINST THE DISCOVERED MOMENTUM TARGET ---
-        logToPanel(`⏳ Executing deployment target purchase step: ${targetedWinnerSymbol}...`);
+        // --- STEP 2: EXECUTE PURCHASE OF DISCOVERED MOMENTUM TARGET ---
         if (winnerNetworkType === "erc20") {
             data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
         } else {
@@ -220,7 +271,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             return "CONTINUE";
         }
 
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spend allocation limits...`);
+        logToPanel(`📢 [WALLET PROMPT] Authorizing token spend allocation...`);
         await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
@@ -232,11 +283,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             method: "eth_sendTransaction",
             params: [{ from: window.USER_ADDR, to: data.swap_packet.to_contract, data: data.swap_packet.compiled_data, value: "0x0" }]
         });
-        logToPanel(`Exchange Transaction Dispatched! Hash: ${txHash}`);
+        logToPanel(`✅ Exchange Transaction Dispatched! Hash: ${txHash}`);
 
-        // 🌟 STRICTOR CONTROL GATEWAY: Prevents proceeding until the form input shifts
+        // --- STEP 3: LOCK THREAD UNTIL STATUS ADJUSTMENTS CONFIRM SETTLEMENT ---
         let settledOnChain = false;
-        logToPanel(`⏳ Locking thread loop. Interrogating on-chain ledger arrays until values change...`);
+        logToPanel(`⏳ Locking thread execution loop. Awaiting on-chain ledger parameter adjustments...`);
         
         for (let i = 1; i <= 60; i++) {
             await blockDelay(8000);
@@ -244,8 +295,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 await window.syncBalanceFromFund();
             }
             let checkCurrentFormValue = document.getElementById("investBalance").value.toString().trim();
-            
-            // The gate requires the input balance to register a change, and prevents running if it accidentally clears to 0 mid-sync
             if (checkCurrentFormValue !== balanceInputBefore && checkCurrentFormValue !== "0") {
                 settledOnChain = true;
                 break;
@@ -253,9 +302,43 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         if (!settledOnChain) {
-            logToPanel(`🛑 [TIMEOUT WARNING] Control parameters remained unchanged. Halting pipeline execution...`);
+            logToPanel(`🛑 [TIMEOUT WARNING] Ledger parameters unchanged. Halting routine steps...`);
             return "STOP_ERROR";
         }
+
+        // ==================================================================
+        // 📈 TELEMETRY INTERFACE UPDATE RENDERS
+        // ==================================================================
+        const currentUsdValueField = document.getElementById("usd");
+        const currentUsdValue = currentUsdValueField ? parseFloat(currentUsdValueField.value) : 0;
+        
+        if (typeof window.initialSessionUsdValue === "undefined" || window.initialSessionUsdValue === 0) {
+            window.initialSessionUsdValue = parseFloat(balanceInputBefore) / 1e18;
+        }
+
+        const sessionProfitUsd = currentUsdValue - window.initialSessionUsdValue;
+        window.cumulativePnL = sessionProfitUsd;
+
+        const liveProfitValueContainer = document.getElementById("liveProfitValue");
+        if (liveProfitValueContainer) {
+            const formattedProfitString = sessionProfitUsd >= 0 ? `+${sessionProfitUsd.toFixed(4)}` : `${sessionProfitUsd.toFixed(4)}`;
+            liveProfitValueContainer.style.color = sessionProfitUsd >= 0 ? "#00FF00" : "#dc3545";
+            liveProfitValueContainer.innerText = `${formattedProfitString} USDT`;
+        }
+
+        if (typeof window.updateChart === "function") {
+            window.updateChart(currentUsdValue, window.cumulativePnL);
+        }
+
+        logToPanel(`🎉 Transaction confirmed! New Position Net Valuation: $${currentUsdValue.toFixed(4)}`);
+
+    } catch (err) {
+        logToPanel(`❌ Loop Boundary Crash: ${err.message}`);
+        return "STOP_ERROR";
+    }
+    return "CONTINUE";
+}
+
 
         // ==================================================================
         // 📈 LIVE CALCULATIONS & CHART UPDATE EXTENSION MATRIX
