@@ -157,6 +157,9 @@ window.runDepositPipeline = runDepositPipeline;
 // ========================================================
 // 📊 ON-CHAIN REGISTRY SYNCHRONIZATION MATRIX
 // ========================================================
+// ========================================================
+// 📊 SECTION 3: ON-CHAIN MULTI-TOKEN LEDGER BALANCES SYNC
+// ========================================================
 async function syncBalanceFromFund() {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
@@ -166,10 +169,12 @@ async function syncBalanceFromFund() {
         }
 
         logToPanel(`🔎 Inspecting decentralized tuple mappings for: ${window.USER_ADDR}...`);
-        let resolvedTokenAddress = "0x55d398326f99059fF775485246999027B3197955"; 
+        
+        // Autoritative system constants
+        let resolvedTokenAddress = "0x55d398326f99059fF775485246999027B3197955"; // Default fallback (USDT)
         let finalWeiString = "0";
 
-        // 🟢 PHASE 1: Query the user's active array via getUserBalanceList
+        // 🟢 PHASE 1: Query the user's token arrays via the getUserBalanceList registry endpoint
         try {
             const ledgerRes = await fetch(`${baseApiUrl}/prodbot/ledger/balances`, {
                 method: "POST",
@@ -178,23 +183,37 @@ async function syncBalanceFromFund() {
             });
             const ledgerData = await ledgerRes.json();
             
-            if (ledgerData && ledgerData.status === "ok" && ledgerData.tokens.length > 0) {
+            if (ledgerData && ledgerData.status === "ok" && Array.isArray(ledgerData.tokens) && Array.isArray(ledgerData.balances)) {
+                logToPanel(`📊 Scan complete. Found ${ledgerData.tokens.length} potential asset coordinates in contract mapping memory.`);
+                
+                // Explicit sequential loop execution through available contract storage indexes
                 for (let i = 0; i < ledgerData.tokens.length; i++) {
-                    if (BigInt(ledgerData.balances[i]) > 0n) {
-                        resolvedTokenAddress = ledgerData.tokens[i];
-                        finalWeiString = ledgerData.balances[i];
-                        break;
+                    const currentTokenInLoop = String(ledgerData.tokens[i]).toLowerCase().trim();
+                    const currentBalanceWeiString = String(ledgerData.balances[i]).trim();
+                    
+                    try {
+                        const numericBalanceValue = BigInt(currentBalanceWeiString);
+                        if (numericBalanceValue > 0n) {
+                            resolvedTokenAddress = ledgerData.tokens[i];
+                            finalWeiString = currentBalanceWeiString;
+                            logToPanel(`✨ High yield matching coordinate located: [Token: ${resolvedTokenAddress}] with Balance: ${finalWeiString}`);
+                            break; // Break execution at the first active balance holding pool index slot
+                        }
+                    } catch (innerBigIntErr) {
+                        console.error("Failed to parse BigInt array element tracking strings:", innerBigIntErr);
                     }
                 }
+                
+                // Secondary recovery mapping sequence if all index array balances are zero
                 if (finalWeiString === "0" && ledgerData.tokens.length > 0) {
                     resolvedTokenAddress = ledgerData.tokens[0];
                 }
             }
         } catch (ledgerErr) {
-            console.error("Ledger router lookup bypassed:", ledgerErr);
+            console.error("Ledger router lookup bypassed or dropped:", ledgerErr);
         }
 
-        // 🟢 PHASE 2: Force exact value synchronization directly from mapping storage
+        // 🟢 PHASE 2: Force secondary storage state lookup cross-check boundary validation
         try {
             const balanceCheckRes = await fetch(`${baseApiUrl}/prodbot/balance`, {
                 method: "POST",
@@ -202,17 +221,17 @@ async function syncBalanceFromFund() {
                 body: JSON.stringify({ user: window.USER_ADDR, token: resolvedTokenAddress })
             });
             const freshBalText = await balanceCheckRes.text();
-            if (freshBalText.trim() !== "") {
+            if (freshBalText && freshBalText.trim() !== "" && !isNaN(freshBalText.trim())) {
                 finalWeiString = freshBalText.trim();
             }
         } catch (balErr) {
-            console.error("Direct ledger verification exception:", balErr);
+            console.error("Direct ledger individual balance cross-check failed:", balErr);
         }
 
-        logToPanel("[LEDGER SYNC] Succeeded. Live Balance Units: " + finalWeiString);
+        logToPanel(`[LEDGER SYNC] Process complete. Active Target Address: [${resolvedTokenAddress}] | Live Balance: ${finalWeiString}`);
         window.SolidarityFundBalance = parseFloat(finalWeiString);
 
-        // 🟢 PHASE 3: Write balance data into starting and investment form text inputs
+        // 🟢 PHASE 3: Write extracted contract values directly to browser control element form boxes
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
         const usdBox = document.getElementById("usd");
@@ -220,39 +239,45 @@ async function syncBalanceFromFund() {
         if (startBox) startBox.value = finalWeiString;
         if (investBox) investBox.value = finalWeiString;
         
-        // 🟢 PHASE 4: Fetch live market data to compute actual floating valuation changes
+        // 🟢 PHASE 4: Execute token decimals normalization and format market values into USD controls
         if (usdBox) {
             try {
                 const marketRes = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
                 const marketData = await marketRes.json();
+                
                 const activeTickerList = [
                     ...(marketData.data?.short_term || marketData.short_term || []),
                     ...(marketData.data?.mid_term || marketData.mid_term || []),
                     ...(marketData.data?.long_term || marketData.long_term || [])
                 ];
 
-                const lowerAddress = resolvedTokenAddress.toLowerCase();
-                const matchedToken = activeTickerList.find(t => t.address && t.address.toLowerCase() === lowerAddress);
+                const lowerAddress = String(resolvedTokenAddress).toLowerCase().trim();
+                const matchedToken = activeTickerList.find(t => t.address && String(t.address).toLowerCase().trim() === lowerAddress);
 
                 if (matchedToken && matchedToken.price) {
+                    // Override rule for alternative token types like BabyDoge (9 decimals)
                     let decimals = lowerAddress === "0xc748673057861a797275cd8a068abb95a902e8de" ? 9 : 18;
                     const tokenCount = parseFloat(finalWeiString) / Math.pow(10, decimals);
-                    usdBox.value = (tokenCount * parseFloat(matchedToken.price)).toFixed(4);
+                    const trueUsdValuation = tokenCount * parseFloat(matchedToken.price);
+                    
+                    usdBox.value = trueUsdValuation.toFixed(4);
+                    logToPanel(`📈 Live Token Ticker Synced: 1 ${matchedToken.symbol} = $${matchedToken.price}. Valuation updated.`);
                 } else {
+                    // Standard 1:1 conversion ratio fallback for stable asset metrics like standard USDT tokens
                     usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
                 }
             } catch (apiErr) {
+                console.error("Failed to compile pricing data valuation updates:", apiErr);
                 usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
             }
         }
         return window.SolidarityFundBalance;
     } catch (err) {
-        logToPanel("❌ Synchronization breakdown: " + err.message);
+        logToPanel("❌ Synchronization breakdown exception: " + err.message);
         return null;
     }
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
-
 
 // ========================================================
 // 🎛️ OPERATIONAL INTERFACE BUTTON LISTENERS & EXECUTION
