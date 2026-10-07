@@ -537,6 +537,9 @@ function getSelectedToken() {
 // ========================================================
 // 📱 PART C: TRADING Lifecycles & WALLET WRAPPER HOOKS
 // ========================================================
+// ========================================================
+// 📱 PART C: TRADING Lifecycles & WALLET WRAPPER HOOKS (CORRECTED)
+// ========================================================
 const strtBtn = document.getElementById("startBtn");
 if (strtBtn) {
   strtBtn.onclick = function() {
@@ -552,7 +555,6 @@ if (strtBtn) {
     }
 
     if (typeof window.startSimulation === "function") {
-      // Runs the simulation tracking engine
       window.startSimulation(10);
     } else {
       logToPanel("❌ Execution Exception: startSimulation engine method missing from context maps.");
@@ -565,7 +567,8 @@ if (stpBtn) {
   stpBtn.onclick = function() {
     logToPanel("⏹ Safety Stop loop activation sequence engaged.");
     window.isBotRunning = false;
-    if (typeof window.setStatus === "function")
-window.setStatus("STOPPED");
+    if (typeof window.setStatus === "function") {
+        window.setStatus("STOPPED");
+    }
   };
-}
+} // 🟢 FIXED: Closed all statement loops cleanly
