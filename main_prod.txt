@@ -493,6 +493,34 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 
+//🎉 connect button 
+document.getElementById("pipelineBackdrop");
+            
+            if (pipelineForm) pipelineForm.style.display = "block";
+            if (pipelineBackdrop) pipelineBackdrop.style.display = "block";
+            
+            // Trigger Reown's wallet options grid selection modal window
+            if (window.reownAppKitInstance) {
+                window.reownAppKitInstance.open();
+                window.ethereum_is_reown_rpc = true;
+            } else {
+                // Programmatic click fallback targeting the shadow DOM button container
+                window.logToPanel("⏳ Triggering selector interface layer...");
+                const appKitButton = document.querySelector('appkit-button');
+                if (appKitButton) {
+                    appKitButton.click();
+                    window.ethereum_is_reown_rpc = true;
+                } else {
+                    window.logToPanel("❌ Error: Connection engine custom layout tags missing from template.");
+                }
+            }
+        };
+    }
+});
+
+
+
+
 
 
 
@@ -539,6 +567,7 @@ if (strtBtn) {
   };
 }
 
+//👏 stop button 
 const stpBtn = document.getElementById("stopBtn");
 if (stpBtn) {
   stpBtn.onclick = function() {
