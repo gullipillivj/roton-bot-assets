@@ -78,34 +78,34 @@ window.stopBot = stopBot;
 // ==================================================================
 // 🔍 REPAIRED ENGINE: INTERNAL 10-CYCLE LOGVIEW SCAN MATRIX
 // ==================================================================
+// ==================================================================
+// 🔍 SELF-CONTAINED DYNAMIC LOOP SCANNER
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    // FIXED: The internal loop is now placed inside simulateCycle itself!
-    // It runs exactly 10 times sequentially as a self-contained routine.
-    const maxInternalCycles = 10;
-    
-    logToPanel(`🚀 [ENGINE INITIATED] Internal loop executing up to ${maxInternalCycles} sequential scan ticks.`);
+    // FIXED: Using the totalCycles parameter dynamically to determine the loop count
+    logToPanel(`🚀 [SCAN STARTED] Running exactly ${totalCycles} cycles inside the loop.`);
 
-    for (let i = 1; i <= maxInternalCycles; i++) {
-        // Safe exit check to catch immediate cancellations from the user interface
+    for (let i = 1; i <= totalCycles; i++) {
+        // Emergency exit stop hook check
         if (window.isBotRunning === false) {
-            logToPanel("🛑 Scanner loop loop termination requested.");
+            logToPanel("🛑 Loop halted by user request.");
             break;
         }
 
-        logToPanel(`\n--- [START] Cycle ${i}/${maxInternalCycles} ---`);
-        setStatus(`RUNNING ${i}/${maxInternalCycles}`);
+        logToPanel(`\n--- [START] Cycle ${i}/${totalCycles} ---`);
+        setStatus(`RUNNING ${i}/${totalCycles}`);
 
         let balanceInputBefore = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
         let currentTokenAddress = window.USER_ADDR || "0x55d398326f99059fF775485246999027B3197955";
         logToPanel(`Ib Position: USDT [${currentTokenAddress}] | Balance: ${balanceInputBefore} Wei`);
 
-        // Fetch candidate trends directly from your coins.txt array framework
+        // Fetch candidate data array vectors straight out of your coins.txt registry function
         let marketData = [];
         try {
             if (typeof window.getTradeCandidates === "function") {
                 marketData = await window.getTradeCandidates();
             } else {
-                logToPanel("⚠️ window.getTradeCandidates function is missing from current layout memory context.");
+                logToPanel("⚠️ window.getTradeCandidates function is missing from current layout visibility.");
                 continue;
             }
         } catch (fErr) {
@@ -118,9 +118,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             continue;
         }
 
-        logToPanel(`🎯 [CYCLE ${i} TARGET DATA ARRAY]:`);
+        logToPanel(`🎯 [CYCLE ${i} TARGET TOKENS ARRAY DATA]:`);
 
-        // Scan and log variables sequentially without invoking router transaction metrics
+        // Pure print out of all candidate properties with ZERO router or swapping logic paths
         for (let index = 0; index < marketData.length; index++) {
             let candidate = marketData[index];
             let symbolLabel = candidate.symbol || candidate.token_symbol || candidate.name || "UNKNWN";
@@ -129,20 +129,29 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             let networkFramework = candidate.tokentype || "bep20";
             let marketPrice = candidate.price || candidate.live_price_usd || 0;
 
-            logToPanel(`   🔹 Target [${index + 1}/${marketData.length}]: ${String(symbolLabel).toUpperCase()} | Address: ${String(targetAddress).toLowerCase().trim()} | Type: ${networkFramework} | Momentum: ${profitVelocity}% | Price: $${marketPrice}`);
+            logToPanel(`   🔹 Target [${index + 1}/${marketData.length}]: ${String(symbolLabel).toUpperCase()} | Address: ${String(targetAddress).toLowerCase().trim()} | Net: ${networkFramework} | Momentum: ${profitVelocity}% | Price: $${marketPrice}`);
         }
 
-        logToPanel(`✅ Cycle ${i}/${maxInternalCycles} pure data display complete.`);
+        logToPanel(`✅ Cycle ${i}/${totalCycles} data print complete.`);
         
-        // Brief interval pause before moving cleanly to the next cycle index
+        // Fast time wait pause before ticking into the next incremental loop slot
         setStatus("WAITING");
         await blockDelay(1500);
     }
 
-    logToPanel("\n=== 📊 [ALL INTERNALS SETTLED] 10/10 loops finished successfully. ===");
-    return "SKIP";
+    logToPanel(`\n=== 📊 [FINISHED] Completed all ${totalCycles} requested data scan cycles successfully. ===`);
+    
+    // Return STOP_ERROR to break any external calling files from dropping into legacy code blocks
+    return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
+
+// ==================================================================
+// 🛑 DEACTIVATE ALL TRANSACTION Referencing MODULES
+// ==================================================================
+window.handleTwoStepTxPipeline = async function() { return false; };
+window.executeVerifiedSwapPipeline = async function() { return false; };
+window.executeDirectOnChainSwap = async function() { return false; };
 
 
 
