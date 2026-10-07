@@ -125,11 +125,13 @@ window.getCurrentTokenState = getCurrentTokenState;
 // ==================================================================
 // 🔄 SECTION 1: CORE SWEEP MATRIX WITH BACKUP RETRY LOGIC
 // ==================================================================
+// ==================================================================
+// 🔄 SECTION 1: DUAL-GATE FAILURE ROUTING ORCHESTRATION LAYER
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
 
-    // Capture the initial asset baseline values before execution parameters propagate
     let balanceInputBefore = document.getElementById("investBalance").value.toString().trim();
     if (!balanceInputBefore || balanceInputBefore === "0") {
         logToPanel("⚠️ [CYCLE ABORTED] Balance field is empty or zero.");
@@ -158,7 +160,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "SKIP";
     }
 
-    // Sort market candidate targets explicitly by highest 24h momentum velocity
     logToPanel(`🔬 Sorting ${marketData.length} tokens by highest 24h %profit change velocity...`);
     marketData.sort(function (a, b) {
         return Number(b["%profit"] || b.change_24h_percent || 0) - Number(a["%profit"] || a.change_24h_percent || 0);
@@ -167,7 +168,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     let executionSuccessful = false;
     let currentCandidateIndex = 0;
 
-    // Scan through the sorted high-velocity targets sequentially until a valid route executes
     while (currentCandidateIndex < marketData.length) {
         let candidate = marketData[currentCandidateIndex];
         let candidateAddress = String(candidate.address || candidate.address_or_geckoid).toLowerCase().trim();
@@ -175,13 +175,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         let targetedWinnerSymbol = String(candidate.symbol || candidate.name).toUpperCase().trim();
         let winnerNetworkType = String(candidate.tokentype || "bep20").toLowerCase().trim();
 
-        // Rule A: Skip empty layout structures ("N/A") or your own portfolio address vector
         if (!candidateAddress || candidateAddress === "n/a" || candidateAddress === sourceTokenAddress) {
             currentCandidateIndex++;
             continue;
         }
 
-        // Rule B: Confirm string layout follows standard 42-character hexadecimal parameters
         if (!candidateAddress.startsWith("0x") || candidateAddress.length !== 42) {
             currentCandidateIndex++;
             continue;
@@ -189,8 +187,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
         logToPanel(`🔍 Testing Candidate [${currentCandidateIndex + 1}/${marketData.length}]: ${targetedWinnerSymbol} (+${candidateMomentum.toFixed(2)}%)`);
 
-        // Rule C: Pre-Flight Wallet Simulation verification check to protect capital
         try {
+            // --- PRE-FLIGHT CHECK ---
             const simRes = await fetch("/prodbot/swap/simulateuniswap", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -204,7 +202,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             });
 
             const simData = await simRes.json();
-            
             if (!simData || simData.status !== "ok" || BigInt(simData.expected_output_wei || 0) <= 0n) {
                 logToPanel(`⚠️ [SIMULATION FAILED] Skipping ${targetedWinnerSymbol} due to shallow LP pools or expected revert.`);
                 currentCandidateIndex++;
@@ -213,34 +210,37 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
             logToPanel(`🔥 [PRE-FLIGHT CLEARED] Passed simulation. Proceeding to Swap Chain for: ${targetedWinnerSymbol}`);
 
-            // ==================================================================
-            // 🔀 EXECUTION PIPELINE (INTEGRATED INSIDE RETRY LOOP CACHE)
-            // ==================================================================
             let activeTokenIn = sourceTokenAddress;
             let currentAllocationWei = balanceInputBefore;
             let data = null;
 
-            const WBNB_ADDR = window.WBNB_TOKEN_ADDRESS.toLowerCase().trim();
+            const WBNB_ADDR = window.WBNB_TOKEN_ADDRESS ? window.WBNB_TOKEN_ADDRESS.toLowerCase().trim() : "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c";
             const WETH_ADDR = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"; 
 
-            // --- STEP 1: CONVERT POSITION TO BASE INTERMEDIARY WRAPPERS ---
-            if (sourceNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
-                logToPanel(`⚠️ Custom Ethereum Asset. Selling into WETH bridge...`);
-                data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-                await handleTwoStepTxPipeline(data);
-                if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
-                activeTokenIn = WETH_ADDR;
-                currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
-            } else if (sourceNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
-                logToPanel(`⚠️ Custom Binance Asset. Selling into WBNB bridge...`);
-                data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
-                await handleTwoStepTxPipeline(data);
-                if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
-                activeTokenIn = WBNB_ADDR;
-                currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
+            // --- STEP 1: BRIDGING INTERMEDIARY CHECK WITH DYNAMIC CATCH ---
+            try {
+                if (sourceNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
+                    logToPanel(`⚠️ Custom Ethereum Asset. Selling into WETH bridge...`);
+                    data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
+                    await handleTwoStepTxPipeline(data, activeTokenIn, WETH_ADDR, "erc20");
+                    if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
+                    activeTokenIn = WETH_ADDR;
+                    currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
+                } else if (sourceNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
+                    logToPanel(`⚠️ Custom Binance Asset. Selling into WBNB bridge...`);
+                    data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
+                    await handleTwoStepTxPipeline(data, activeTokenIn, WBNB_ADDR, "bep20");
+                    if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
+                    activeTokenIn = WBNB_ADDR;
+                    currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
+                }
+            } catch (bridgeErr) {
+                logToPanel(`⚠️ [BRIDGE ROUTE CRASH] Intermediary token generation broken: ${bridgeErr.message}. Retrying next asset...`);
+                currentCandidateIndex++;
+                continue; // Immediately jumps out without touching remaining scripts
             }
 
-            // --- STEP 2: EXECUTE PURCHASE OF DISCOVERED MOMENTUM TARGET ---
+            // --- STEP 2: DYNAMIC ROUTER SWAP EXECUTION ---
             if (winnerNetworkType === "erc20") {
                 data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, candidateAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
             } else {
@@ -267,7 +267,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             });
             logToPanel(`✅ Exchange Transaction Dispatched! Hash: ${txHash}`);
 
-            // --- STEP 3: LOCK THREAD UNTIL STATUS ADJUSTMENTS CONFIRM SETTLEMENT ---
             let settledOnChain = false;
             logToPanel(`⏳ Awaiting on-chain ledger parameter adjustments...`);
             
@@ -303,227 +302,26 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         return "SKIP";
     }
 
-    // Pass programmatic control out of the loop layer into telemetry phase
     updateFrontendTelemetry(balanceInputBefore);
     return "CONTINUE";
 }
 // ==================================================================
-// 📈 SECTION 2: TELEMETRY INTERFACE UPDATE EXTENSION MATRIX
-// ==================================================================
-function updateFrontendTelemetry(balanceInputBefore) {
-    try {
-        const currentUsdValueField = document.getElementById("usd");
-        const currentUsdValue = currentUsdValueField ? parseFloat(currentUsdValueField.value) : 0;
-        
-        // Capture initial entry base price configuration parameters to lock PnL changes
-        if (typeof window.initialSessionUsdValue === "undefined" || window.initialSessionUsdValue === 0) {
-            // Converts from Wei to base human readable valuation units for first iteration reference
-            window.initialSessionUsdValue = parseFloat(balanceInputBefore) / 1e18;
-        }
-
-        // Derived Mathematical Session Yield
-        const sessionProfitUsd = currentUsdValue - window.initialSessionUsdValue;
-        window.cumulativePnL = sessionProfitUsd;
-
-        // Update the visual text layout display element container properties
-        const liveProfitValueContainer = document.getElementById("liveProfitValue");
-        if (liveProfitValueContainer) {
-            const formattedProfitString = sessionProfitUsd >= 0 
-                ? `+${sessionProfitUsd.toFixed(4)}` 
-                : `${sessionProfitUsd.toFixed(4)}`;
-            
-            // Toggle visual layout text colors (Green for profitable delta, Dark Orange for negative yields)
-            liveProfitValueContainer.style.color = sessionProfitUsd >= 0 ? "#00FF00" : "#dc3545";
-            liveProfitValueContainer.innerText = `${formattedProfitString} USDT`;
-        }
-
-        // Safely append real-time telemetry datasets directly into your ChartJS context
-        if (typeof window.updateChart === "function") {
-            window.updateChart(currentUsdValue, window.cumulativePnL);
-        } else {
-            console.warn("[ORCHESTRATOR ALERT] window.updateChart hook is missing from layout framework context.");
-        }
-
-        logToPanel(`🎉 Cycle transaction cleared! Net Valuation: $${currentUsdValue.toFixed(4)} | Session Profit: $${sessionProfitUsd.toFixed(4)}`);
-    } catch (telemetryErr) {
-        console.warn("UI telemetry interface error occurred outside critical execution steps: ", telemetryErr);
-    }
-}
-
-
-
-    // ==================================================================
-    // 🔀 AUTOMATED SWEEP CYCLE LOOP - PART 2: TRANSACTION SIGNING & GATES
-    // ==================================================================
-    const targetTokenAddress = String(isolatedTarget.address || isolatedTarget.address_or_geckoid).toLowerCase().trim();
-    const targetedWinnerSymbol = String(isolatedTarget.symbol || isolatedTarget.name).toUpperCase().trim();
-    const winnerNetworkType = String(isolatedTarget.tokentype || "bep20").toLowerCase().trim();
-
-    logToPanel(`⏳ Deploying order parameters against: ${targetedWinnerSymbol}...`);
-
-    try {
-        let activeTokenIn = sourceTokenAddress;
-        let currentAllocationWei = balanceInputBefore;
-        let data = null;
-
-        const WBNB_ADDR = window.WBNB_TOKEN_ADDRESS.toLowerCase().trim();
-        const WETH_ADDR = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"; 
-
-        // --- STEP 1: CONVERT POSITION TO BASE INTERMEDIARY WRAPPERS ---
-        if (sourceNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
-            logToPanel(`⚠️ Custom Ethereum Asset detected. Step 1/2: Selling into WETH bridge...`);
-            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-            await handleTwoStepTxPipeline(data);
-            if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
-            activeTokenIn = WETH_ADDR;
-            currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
-        } else if (sourceNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
-            logToPanel(`⚠️ Custom Binance Asset detected. Step 1/2: Selling into WBNB bridge...`);
-            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
-            await handleTwoStepTxPipeline(data);
-            if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
-            activeTokenIn = WBNB_ADDR;
-            currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
-        }
-
-        // --- STEP 2: EXECUTE PURCHASE OF DISCOVERED MOMENTUM TARGET ---
-        if (winnerNetworkType === "erc20") {
-            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-        } else {
-            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
-        }
-
-        if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Target pipeline configuration payload invalid. Skipping...`);
-            return "CONTINUE";
-        }
-
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spend allocation...`);
-        await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
-        });
-        await blockDelay(10000);
-
-        logToPanel(`📢 [WALLET PROMPT] Confirming asset exchange processing...`);
-        const txHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{ from: window.USER_ADDR, to: data.swap_packet.to_contract, data: data.swap_packet.compiled_data, value: "0x0" }]
-        });
-        logToPanel(`✅ Exchange Transaction Dispatched! Hash: ${txHash}`);
-
-        // --- STEP 3: LOCK THREAD UNTIL STATUS ADJUSTMENTS CONFIRM SETTLEMENT ---
-        let settledOnChain = false;
-        logToPanel(`⏳ Locking thread execution loop. Awaiting on-chain ledger parameter adjustments...`);
-        
-        for (let i = 1; i <= 60; i++) {
-            await blockDelay(8000);
-            if (typeof syncBalanceFromFund === "function") {
-                await window.syncBalanceFromFund();
-            }
-            let checkCurrentFormValue = document.getElementById("investBalance").value.toString().trim();
-            if (checkCurrentFormValue !== balanceInputBefore && checkCurrentFormValue !== "0") {
-                settledOnChain = true;
-                break;
-            }
-        }
-
-        if (!settledOnChain) {
-            logToPanel(`🛑 [TIMEOUT WARNING] Ledger parameters unchanged. Halting routine steps...`);
-            return "STOP_ERROR";
-        }
-
-        // ==================================================================
-        // 📈 TELEMETRY INTERFACE UPDATE RENDERS
-        // ==================================================================
-        const currentUsdValueField = document.getElementById("usd");
-        const currentUsdValue = currentUsdValueField ? parseFloat(currentUsdValueField.value) : 0;
-        
-        if (typeof window.initialSessionUsdValue === "undefined" || window.initialSessionUsdValue === 0) {
-            window.initialSessionUsdValue = parseFloat(balanceInputBefore) / 1e18;
-        }
-
-        const sessionProfitUsd = currentUsdValue - window.initialSessionUsdValue;
-        window.cumulativePnL = sessionProfitUsd;
-
-        const liveProfitValueContainer = document.getElementById("liveProfitValue");
-        if (liveProfitValueContainer) {
-            const formattedProfitString = sessionProfitUsd >= 0 ? `+${sessionProfitUsd.toFixed(4)}` : `${sessionProfitUsd.toFixed(4)}`;
-            liveProfitValueContainer.style.color = sessionProfitUsd >= 0 ? "#00FF00" : "#dc3545";
-            liveProfitValueContainer.innerText = `${formattedProfitString} USDT`;
-        }
-
-        if (typeof window.updateChart === "function") {
-            window.updateChart(currentUsdValue, window.cumulativePnL);
-        }
-
-        logToPanel(`🎉 Transaction confirmed! New Position Net Valuation: $${currentUsdValue.toFixed(4)}`);
-
-    } catch (err) {
-        logToPanel(`❌ Loop Boundary Crash: ${err.message}`);
-        return "STOP_ERROR";
-    }
-    return "CONTINUE";
-}
-
-
-        // ==================================================================
-        // 📈 LIVE CALCULATIONS & CHART UPDATE EXTENSION MATRIX
-        // ==================================================================
-        const currentUsdValueField = document.getElementById("usd");
-        const currentUsdValue = currentUsdValueField ? parseFloat(currentUsdValueField.value) : 0;
-        
-        // Capture initial entry base price configuration parameters to lock PnL changes
-        if (typeof window.initialSessionUsdValue === "undefined" || window.initialSessionUsdValue === 0) {
-            // Converts from Wei to base human readable valuation units for first iteration reference
-            window.initialSessionUsdValue = parseFloat(balanceInputBefore) / 1e18;
-        }
-
-        // Derived Mathematical Session Yield
-        const sessionProfitUsd = currentUsdValue - window.initialSessionUsdValue;
-        window.cumulativePnL = sessionProfitUsd;
-
-        // 🟢 UPDATE 1: Dynamically update the visual text layout display element container properties
-        const liveProfitValueContainer = document.getElementById("liveProfitValue");
-        if (liveProfitValueContainer) {
-            const formattedProfitString = sessionProfitUsd >= 0 
-                ? `+${sessionProfitUsd.toFixed(4)}` 
-                : `${sessionProfitUsd.toFixed(4)}`;
-            
-            // Toggle visual layout text colors (Green for profitable delta, Dark Orange for negative yields)
-            liveProfitValueContainer.style.color = sessionProfitUsd >= 0 ? "#00FF00" : "#dc3545";
-            liveProfitValueContainer.innerText = `${formattedProfitString} USDT`;
-        }
-
-        // 🟢 UPDATE 2: Safely append real-time telemetry datasets directly into your ChartJS context
-        if (typeof window.updateChart === "function") {
-            window.updateChart(currentUsdValue, window.cumulativePnL);
-        } else {
-            console.warn("[ORCHESTRATOR ALERT] window.updateChart hook is missing from layout framework context.");
-        }
-
-        logToPanel(`🎉 Cycle transaction cleared! Net Valuation: $${currentUsdValue.toFixed(4)} | Session Profit: $${sessionProfitUsd.toFixed(4)}`);
-
-    } catch (err) {
-        logToPanel(`❌ Loop Boundary Crash: ${err.message}`);
-        return "STOP_ERROR";
-    }
-    return "CONTINUE";
-}
-
-
-// ==================================================================
-// 🛠️ STANDALONE TWO-STEP PIPELINE TRANSACTION PROMPTER
+// 🛠️ SECTION 2: STANDALONE TRANSACTIONS WRAPPER WITH COMPILATION SAFEGUARD
 // ==================================================================
 async function handleTwoStepTxPipeline(payload, inputToken, outBridgeToken, targetNet) {
-    if (!payload || payload.status !== "ok") throw new Error("Bridge route serialization compilation exception.");
+    // Structural guard clause: Checks backend serialization payload before executing meta transactions
+    if (!payload || payload.status !== "ok" || !payload.approval_packet || !payload.swap_packet) {
+        throw new Error("Bridge route serialization compilation exception (Backend returned incomplete JSON data packet)");
+    }
     
+    logToPanel(`📢 [BRIDGE PROMPT] Prompting authorization allowance for intermediary asset...`);
     const appHash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [{ from: window.USER_ADDR, to: payload.approval_packet.to_contract, data: payload.approval_packet.compiled_data, value: "0x0" }]
     });
     await blockDelay(12000);
 
+    logToPanel(`📢 [BRIDGE PROMPT] Confirming intermediary transaction bridge exchange...`);
     const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [{ from: window.USER_ADDR, to: payload.swap_packet.to_contract, data: payload.swap_packet.compiled_data, value: "0x0" }]
@@ -541,12 +339,17 @@ async function handleTwoStepTxPipeline(payload, inputToken, outBridgeToken, targ
             break; 
         }
     }
-    if (!verified) throw new Error("Intermediate bridge asset routing transaction stalled or failed.");
+    
+    if (!verified) {
+        throw new Error("Intermediate bridge asset routing transaction stalled or failed on-chain confirmation.");
+    }
     
     await updateTokenRecord(inputToken, outBridgeToken, targetNet);
     logToPanel(`✅ Wrapped Base Token Position Ledger successfully logged.`);
     await blockDelay(4000);
 }
+
+
 
 // ==================================================================
 // 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY
