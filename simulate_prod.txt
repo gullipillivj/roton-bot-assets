@@ -237,19 +237,35 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             return "CONTINUE";
         }
 
-       // Example invocation snippet inside your automated loops:
-if (winnerNetworkType === "crosschain") {
-    const BSC_CCIP_ROUTER = "0x34B03Cb9086d7D758AC55af71584F81A598759FE"; // BSC Mainnet CCIP Router
-    const ARBITRUM_SELECTOR = "4949039107694359620";                        // Destination Selector
+        // --- STEP 2: PURCHASE TARGET TOKEN CANDIDATE ---
+        logToPanel(`⏳ Executing Step 2/2: Ordering deployment target: ${targetedWinnerSymbol}...`);
+        if (winnerNetworkType === "erc20") {
+            data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
+        } else {
+            data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
+        }
 
-    let bridgeResult = await window.runcrossChainSwap(
-        window.USER_ADDR,            // User's active connected wallet wallet address
-        currentAllocationWei,        // Amount to bridge in string Wei
-        activeTokenIn,               // Source asset contract address (e.g. WBNB)
-        BSC_CCIP_ROUTER,             // Target CCIP network gateway
-        ARBITRUM_SELECTOR,           // Target chain ID index representation
-        window.USER_ADDR             // Target destination recipient address
-    );
+        if (!data || data.status !== "ok") {
+            logToPanel(`⚠️ Target pipeline dropped or compiled invalid backend payload data structure.`);
+            return "CONTINUE";
+        }
+
+        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance parameters...`);
+        const approveHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
+        });
+        await blockDelay(12000);
+
+        logToPanel(`📢 [WALLET PROMPT] Confirming target candidate exchange processing...`);
+        const txHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{ from: window.USER_ADDR, to: data.swap_packet.to_contract, data: data.swap_packet.compiled_data, value: "0x0" }]
+        });
+        logToPanel(`✅ Target On-Chain Transaction Dispatched! Hash: ${txHash}
+`);
+
+ 
 }
 
 
