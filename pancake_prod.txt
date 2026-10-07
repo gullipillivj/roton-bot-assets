@@ -1,4 +1,4 @@
-logToPanel("pancake_prod.txt loaded successfully.");
+.logToPanel("pancake_prod.txt loaded successfully.");
 
 // ==================================================================
 // 📊 GLOBAL LOGGING UTILITY
@@ -112,3 +112,73 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
     }
 }
 window.runethSwapUniswap = runethSwapUniswap;
+
+
+// 🌟 STAGE 4: LINEAR LIVE CROSS-CHAIN BRIDGE PASS-THROUGH PIPELINE
+async function runcrossChainSwap(userAddr, amountWei, fromToken, ccipRouter, destinationChainSelector, recipient) {
+    try {
+        const ENGINE_ADDRESS = "0x1854170353ea89672638F9fa5acB477c45523871";
+        
+        logToPanel(`⏳ Initiating cross-chain pipeline request mapping...`);
+        
+        // 1. Request transaction calldata and parameters from your Flask backend
+        const res = await fetch("/prodbot/swap/crosschain", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                ccipRouter: ccipRouter,
+                tokenIn: fromToken,
+                destinationChainSelector: destinationChainSelector,
+                amountIn: amountWei,
+                recipient: recipient
+            })
+        });
+        
+        const payload = await res.json();
+        if (!payload || payload.status !== "ok") {
+            throw new Error(payload.message || "Failed to compile cross-chain transaction payloads.");
+        }
+
+        // 2. Step A: Prompt wallet to authorize the trading engine to move the local token entry
+        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance parameters...`);
+        const approveTxHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: userAddr,
+                to: payload.approval_packet.to_contract,
+                data: payload.approval_packet.compiled_data,
+                value: "0x0"
+            }]
+        });
+        
+        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 12s for block confirmation...`);
+        await new Promise(resolve => setTimeout(resolve, 12000));
+
+        // 3. Step B: Dispatch the actual cross-chain swap payload with the embedded Chainlink oracle fee
+        logToPanel(`📢 [WALLET PROMPT] Confirming cross-chain bridge processing via Chainlink CCIP...`);
+        
+        // Convert the backend native fee estimation (in Wei string) safely into a hexadecimal value
+        const hexFeeValue = "0x" + BigInt(payload.swap_packet.value_wei).toString(16);
+        
+        const bridgeTxHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: userAddr,
+                to: payload.swap_packet.to_contract,
+                data: payload.swap_packet.compiled_data,
+                value: hexFeeValue // Satisfies the native gas value needed for the decentralized router call
+            }]
+        });
+        
+        logToPanel(`🎉 Cross-Chain Bridge Transaction Dispatched! Hash: ${bridgeTxHash}`);
+        return { status: "ok", tx_hash: bridgeTxHash };
+
+    } catch (e) {
+        logToPanel(`❌ Cross-Chain Action Interrupted: ${e.message || e}`);
+        return { status: "error", message: e.toString() };
+    }
+}
+// Expose the method globally so it can be invoked safely from any engine orchestrator script
+window.runcrossChainSwap = runcrossChainSwap;
+
+
