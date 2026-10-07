@@ -122,12 +122,16 @@ window.getCurrentTokenState = getCurrentTokenState;
 // ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - FIXED & CORRECTED
 // ==================================================================
+// ==================================================================
+// 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - FULLY INTEGRATED
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel(`\n--- [START] Cycle ${cycle}/${totalCycles} ---`);
     setStatus(`RUNNING ${cycle}/${totalCycles}`);
 
-    let balanceInput = document.getElementById("investBalance").value.toString().trim();
-    if (!balanceInput || balanceInput === "0") {
+    // Capture the initial investment baseline value before any transactions execute
+    let balanceInputBefore = document.getElementById("investBalance").value.toString().trim();
+    if (!balanceInputBefore || balanceInputBefore === "0") {
         logToPanel("⚠️ [CYCLE ABORTED] Balance field is empty or zero.");
         return "STOP_ERROR";
     }
@@ -135,7 +139,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const srcAsset = await getCurrentTokenState();
     const sourceTokenAddress = String(srcAsset.token).toLowerCase().trim();
     const sourceNetwork = String(srcAsset.network).toLowerCase().trim();
-    logToPanel(`[PORTFOLIO ROOT IDENTIFIED] Active address coordinate: ${srcAsset.token} (${sourceNetwork.toUpperCase()})`);
+    logToPanel(`[PORTFOLIO ROOT IDENTIFIED] Active position: ${srcAsset.token} (${sourceNetwork.toUpperCase()})`);
 
     let marketData = [];
     try {
@@ -150,10 +154,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     if (marketData.length === 0) {
-        logToPanel("⚠️ [SCANNER COLD] Zero token profiles verified by checks. Skipping cycle...");
+        logToPanel("⚠️ [SCANNER COLD] Zero token profiles verified. Skipping cycle...");
         return "SKIP";
     }
 
+    // Discover the highest yield candidate asset profile that you do not currently hold
     let isolatedTarget = null;
     for (let i = 0; i < marketData.length; i++) {
         let currentCandidateAddress = String(marketData[i].address).toLowerCase().trim();
@@ -164,7 +169,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     if (!isolatedTarget) {
-        logToPanel("🔄 [CYCLE BOUNDARY] All matching momentum assets are already held. Skipping...");
+        logToPanel("🔄 All high-momentum assets are already held in portfolio. Skipping...");
         return "SKIP";
     }
 
@@ -172,45 +177,38 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const targetedWinnerSymbol = String(isolatedTarget.symbol).toUpperCase().trim();
     const winnerNetworkType = String(isolatedTarget.tokentype || "bep20").toLowerCase().trim();
 
-    logToPanel(`🎯 [TARGET CHOSEN] Next high-yield candidate: ${targetedWinnerSymbol}`);
-
-    const allocationWei = balanceInput;
-    let sourceSymbolFallback = "USDT";
-    if (window.coins_list && Array.isArray(window.coins_list)) {
-        const matchedSource = window.coins_list.find(c => String(c.address).toLowerCase().trim() === sourceTokenAddress);
-        if (matchedSource) sourceSymbolFallback = matchedSource.symbol;
-    }
-
+    logToPanel(`🎯 [TARGET CHOSEN] Next candidate: ${targetedWinnerSymbol}`);
     logToPanel(`🔀 [SWAP LIFECYCLE INITIATED]`);
-    logToPanel(`   ➡️ FROM: ${sourceSymbolFallback} [${sourceTokenAddress}] (${sourceNetwork.toUpperCase()})`);
+    logToPanel(`   ➡️ FROM: [${sourceTokenAddress}] (${sourceNetwork.toUpperCase()})`);
     logToPanel(`   ➡️ TO:   ${targetedWinnerSymbol} [${targetTokenAddress}] (${winnerNetworkType.toUpperCase()})`);
 
     try {
         let activeTokenIn = sourceTokenAddress;
-        let currentAllocationWei = allocationWei;
-        let currentNetwork = sourceNetwork;
+        let currentAllocationWei = balanceInputBefore;
         let data = null;
 
         const WBNB_ADDR = window.WBNB_TOKEN_ADDRESS.toLowerCase().trim();
         const WETH_ADDR = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"; 
 
-        // --- STEP 1: CONVERT CUSTOM POSITION TO BASE WRAPPER ---
-        if (currentNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
-            logToPanel(`⚠️ Custom Ethereum Asset detected. Step 1/2: Selling into WETH bridge...`);
+        // --- STEP 1: CONVERT CUSTOM POSITION TO BASE INTERMEDIARY WRAPPERS ---
+        if (sourceNetwork === "erc20" && activeTokenIn !== WETH_ADDR) {
+            logToPanel(`⚠️ Custom Ethereum Asset detected. Step 1/2: Transferring into WETH...`);
             data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WETH_ADDR, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
-            await handleTwoStepTxPipeline(data, activeTokenIn, WETH_ADDR, "erc20");
+            await handleTwoStepTxPipeline(data);
+            if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
             activeTokenIn = WETH_ADDR;
             currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
-        } else if (currentNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
-            logToPanel(`⚠️ Custom Binance Asset detected. Step 1/2: Selling into WBNB bridge...`);
+        } else if (sourceNetwork === "bep20" && activeTokenIn !== WBNB_ADDR) {
+            logToPanel(`⚠️ Custom Binance Asset detected. Step 1/2: Transferring into WBNB...`);
             data = await window.runbscSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, WBNB_ADDR, "0x10ED43C718714eb63d5aA57B78B54704E256024E");
-            await handleTwoStepTxPipeline(data, activeTokenIn, WBNB_ADDR, "bep20");
+            await handleTwoStepTxPipeline(data);
+            if (typeof syncBalanceFromFund === "function") await window.syncBalanceFromFund();
             activeTokenIn = WBNB_ADDR;
             currentAllocationWei = document.getElementById("investBalance").value.toString().trim();
         }
 
-        // --- STEP 2: PURCHASE TARGET TOKEN CANDIDATE (ONLY ONCE) ---
-        logToPanel(`⏳ Executing Step 2/2: Ordering deployment target: ${targetedWinnerSymbol}...`);
+        // --- STEP 2: DEPLOY ORDER TRANSFERS AGAINST THE DISCOVERED MOMENTUM TARGET ---
+        logToPanel(`⏳ Executing deployment target purchase step: ${targetedWinnerSymbol}...`);
         if (winnerNetworkType === "erc20") {
             data = await window.runethSwapUniswap(window.USER_ADDR, currentAllocationWei, activeTokenIn, targetTokenAddress, "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D");
         } else {
@@ -218,49 +216,86 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         if (!data || data.status !== "ok") {
-            logToPanel(`⚠️ Target pipeline dropped or compiled invalid backend payload.`);
+            logToPanel(`⚠️ Target pipeline configuration payload invalid. Skipping...`);
             return "CONTINUE";
         }
 
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance...`);
-        const approveHash = await window.ethereum.request({
+        logToPanel(`📢 [WALLET PROMPT] Authorizing token spend allocation limits...`);
+        await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{ from: window.USER_ADDR, to: data.approval_packet.to_contract, data: data.approval_packet.compiled_data, value: "0x0" }]
         });
-        await blockDelay(12000);
+        await blockDelay(10000);
 
-        logToPanel(`📢 [WALLET PROMPT] Confirming target candidate exchange processing...`);
+        logToPanel(`📢 [WALLET PROMPT] Confirming asset exchange processing...`);
         const txHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{ from: window.USER_ADDR, to: data.swap_packet.to_contract, data: data.swap_packet.compiled_data, value: "0x0" }]
         });
-        logToPanel(`✅ Target On-Chain Transaction Dispatched! Hash: ${txHash}`);
+        logToPanel(`Exchange Transaction Dispatched! Hash: ${txHash}`);
 
-        const beforeWei = document.getElementById("investBalance").value.toString().trim();
-        let confirmed = false;
-        for (let i = 1; i <= 45; i++) {
-            await blockDelay(10000);
-            if (typeof syncBalanceFromFund === "function") await syncBalanceFromFund();
-            if (document.getElementById("investBalance").value.toString().trim() !== beforeWei) {
-                confirmed = true; 
+        // 🌟 STRICTOR CONTROL GATEWAY: Prevents proceeding until the form input shifts
+        let settledOnChain = false;
+        logToPanel(`⏳ Locking thread loop. Interrogating on-chain ledger arrays until values change...`);
+        
+        for (let i = 1; i <= 60; i++) {
+            await blockDelay(8000);
+            if (typeof syncBalanceFromFund === "function") {
+                await window.syncBalanceFromFund();
+            }
+            let checkCurrentFormValue = document.getElementById("investBalance").value.toString().trim();
+            
+            // The gate requires the input balance to register a change, and prevents running if it accidentally clears to 0 mid-sync
+            if (checkCurrentFormValue !== balanceInputBefore && checkCurrentFormValue !== "0") {
+                settledOnChain = true;
                 break;
             }
         }
-        
-        if (!confirmed) {
-            logToPanel(`🛑 Timeout: Swap execution remains pending.`);
+
+        if (!settledOnChain) {
+            logToPanel(`🛑 [TIMEOUT WARNING] Control parameters remained unchanged. Halting pipeline execution...`);
             return "STOP_ERROR";
         }
+
+        // ==================================================================
+        // 📈 LIVE CALCULATIONS & CHART UPDATE EXTENSION MATRIX
+        // ==================================================================
+        const currentUsdValueField = document.getElementById("usd");
+        const currentUsdValue = currentUsdValueField ? parseFloat(currentUsdValueField.value) : 0;
         
-        logToPanel(`🎉 Swap Successfully Settled!`);
-        
-        await window.updateTokenRecord(activeTokenIn, targetTokenAddress, winnerNetworkType);
-        if (typeof window.syncBalanceFromFund === "function") {
-            await window.syncBalanceFromFund();
+        // Capture initial entry base price configuration parameters to lock PnL changes
+        if (typeof window.initialSessionUsdValue === "undefined" || window.initialSessionUsdValue === 0) {
+            // Converts from Wei to base human readable valuation units for first iteration reference
+            window.initialSessionUsdValue = parseFloat(balanceInputBefore) / 1e18;
         }
 
+        // Derived Mathematical Session Yield
+        const sessionProfitUsd = currentUsdValue - window.initialSessionUsdValue;
+        window.cumulativePnL = sessionProfitUsd;
+
+        // 🟢 UPDATE 1: Dynamically update the visual text layout display element container properties
+        const liveProfitValueContainer = document.getElementById("liveProfitValue");
+        if (liveProfitValueContainer) {
+            const formattedProfitString = sessionProfitUsd >= 0 
+                ? `+${sessionProfitUsd.toFixed(4)}` 
+                : `${sessionProfitUsd.toFixed(4)}`;
+            
+            // Toggle visual layout text colors (Green for profitable delta, Dark Orange for negative yields)
+            liveProfitValueContainer.style.color = sessionProfitUsd >= 0 ? "#00FF00" : "#dc3545";
+            liveProfitValueContainer.innerText = `${formattedProfitString} USDT`;
+        }
+
+        // 🟢 UPDATE 2: Safely append real-time telemetry datasets directly into your ChartJS context
+        if (typeof window.updateChart === "function") {
+            window.updateChart(currentUsdValue, window.cumulativePnL);
+        } else {
+            console.warn("[ORCHESTRATOR ALERT] window.updateChart hook is missing from layout framework context.");
+        }
+
+        logToPanel(`🎉 Cycle transaction cleared! Net Valuation: $${currentUsdValue.toFixed(4)} | Session Profit: $${sessionProfitUsd.toFixed(4)}`);
+
     } catch (err) {
-        logToPanel(`❌ Runtime execution loop crashed: ${err.message}`);
+        logToPanel(`❌ Loop Boundary Crash: ${err.message}`);
         return "STOP_ERROR";
     }
     return "CONTINUE";
