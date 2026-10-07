@@ -26,6 +26,28 @@ function setStatus(msg) {
 }
 window.setStatus = setStatus;
 
+//Fetch tokens list
+async function fetchRawLedgerLists() {
+    try {
+        const response = await fetch("/prodbot/ledger/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: window.USER_ADDR })
+        });
+        
+        const data = await response.json();
+        if (data && data.status === "ok") {
+            window.logToPanel(`📊 Discovered ${data.total_tracked_assets} tracked ledger asset addresses.`);
+            // Loop over data.tokens and data.balances arrays directly here
+            console.log("Tokens:", data.tokens);
+            console.log("Balances:", data.balances);
+        }
+    } catch (err) {
+        window.logToPanel(`❌ Ledger retrieval failure: ${err.message}`);
+    }
+}
+
+
 // Emergency Halt Button Hook
 function stopBot() {
     window.isBotRunning = false;
