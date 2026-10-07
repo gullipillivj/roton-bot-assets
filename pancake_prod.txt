@@ -1,4 +1,4 @@
-.logToPanel("pancake_prod.txt loaded successfully.");
+logToPanel("pancake_prod.txt loaded successfully.");
 
 // ==================================================================
 // 📊 GLOBAL LOGGING UTILITY
