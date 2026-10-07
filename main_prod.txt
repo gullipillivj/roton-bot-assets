@@ -506,10 +506,6 @@ async function finalizeInterfaceSyncState() {
 window.finalizeInterfaceSyncState = finalizeInterfaceSyncState;
 
 
-// Execute UI setup bindings instantly on browser ready cycles
-window.addEventListener("DOMContentLoaded", () => {
-    initializeLabels();
-    setupActionListeners();
 
     // 🟢 KEEP ONLY THIS SIMPLIFIED ENGINE LISTENER WRAPPER
 window.addEventListener("DOMContentLoaded", () => {
