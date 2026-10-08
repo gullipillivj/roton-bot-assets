@@ -117,108 +117,38 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         logToPanel(`   ❌ [NOT SWAPPABLE] ${symbolLabel} (${targetAddress.slice(0, 8)}...): Liquidity validation check returned 0 or dead pair routing paths.`);
                     } else {
                         logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
+                    }
+                } else {
+                    logToPanel(`   ❌ [BACKEND REJECTION] ${symbolLabel}: ${resData.message}`);
+                }
+            } catch (err) {
+                logToPanel(`   ❌ [ROUTE TIMEOUT] Failed calling simulation path for ${symbolLabel}: ${err.message}`);
+            }
 
-                        // ==================================================================
-                        // 📍 PLACEMENT LOCATION: GAS LOOKUP, DIRECT TRANSACTING & AUTO-SYNC
-                        // ==================================================================
-                        try {
-                            logToPanel(`   ⛽ Fetching active network metrics via window.ethereum...`);
-                            const hexGasPrice = await window.ethereum.request({ method: "eth_gasPrice" });
-                            const currentGasPriceWei = BigInt(hexGasPrice);
-                            
-                            // Establish token network properties for gas check criteria defaults
-                            let estimatedGasLimit = 150000n;
-                            if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
-                                estimatedGasLimit = 450000n;
-                            }
-                            
-                            const transactionGasCostWei = currentGasPriceWei * estimatedGasLimit;
-                            logToPanel(`   ⛽ [GAS METRICS] Dynamic path gas fee cost: ${transactionGasCostWei.toString()} Wei`);
+            // Short 150ms structural delay between checks to avoid spamming the local RPC node
+            await blockDelay(150);
+        }
 
-                            let transactionOutcome = null;
+        logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
+        setStatus("WAITING");
+        await blockDelay(3000);
+    }
 
-                            // Route directly to your pancake_prod.txt dispatch pipelines based on asset token network type
-                            if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
-                                logToPanel(`   ⚡ [ETH PIPELINE] Forwarding token payload to ERC20 swap pipeline...`);
-                                if (typeof window.runethSwapUniswap === "function") {
-                                    transactionOutcome = await window.runethSwapUniswap(
-                                        window.USER_ADDR, simulatedAmountInWei, BASE_TOKEN_IN, targetAddress, PANCAKE_ROUTER
-                                    );
-                                } else {
-                                    logToPanel("   ❌ window.runethSwapUniswap execution route handle is missing.");
-                                }
-                            } else {
-                                logToPanel(`   ⚡ [BSC PIPELINE] Forwarding token payload to BEP20 swap pipeline...`);
-                                if (typeof window.runbscSwapUniswap === "function") {
-                                    transactionOutcome = await window.runbscSwapUniswap(
-                                        window.USER_ADDR, simulatedAmountInWei, BASE_TOKEN_IN, targetAddress, PANCAKE_ROUTER
-                                    );
-                                } else {
-                                    logToPanel("   ❌ window.runbscSwapUniswap execution route handle is missing.");
-                                }
-                            }
-
-                            // If broadcast succeeded, await settlement via syncBalanceFromFund checks then refresh dashboard values
-                            if (transactionOutcome && transactionOutcome.status === "ok") {
-                                logToPanel(`   🚀 [BROADCAST SUCCESS] Transaction written to blockchain indices. Awaiting ledger update...`);
-                                
-                                let startBox = document.getElementById("startBalance");
-                                let previousWeiBalance = startBox ? startBox.value.toString().trim() : "0";
-                                let maxRetries = 20;
-                                
-                                for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                                    if (window.isBotRunning === false) break;
-                                    
-                                    if (typeof window.syncBalanceFromFund === "function") {
-                                        let currentRawWei = await window.syncBalanceFromFund();
-                                        if (BigInt(currentRawWei || "0") !== BigInt(previousWeiBalance)) {
-                                            logToPanel(`   🎉 [SETTLEMENT CONFIRMED] Ledger shift detected! Fresh Balance: ${currentRawWei} Wei.`);
-                                            
-                                            // Trigger visualization updates on chart layout elements
-                                            let usdValBox = document.getElementById("usd");
-                                            let liveUsdValue = usdValBox ? parseFloat(usdValBox.value) || 0 : 0;
-                                            if (typeof window.updateChart === "function") {
-                                                window.updateChart(liveUsdValue, liveUsdValue - (parseFloat(window.InitialBaseCapital) || 0));
-}
-break;
-}
-}
-logToPanel(      🔹 Check [${attempt}/${maxRetries}]: State unchanged. Waiting 6s...);
-await blockDelay(6000);
-}
-} else {
-logToPanel(   ❌ [ROUTING REJECTION] Live execution rejected payload: ${transactionOutcome ? transactionOutcome.message : "User denied signature or RPC failure."});
-}
-} catch (walletErr) {
-logToPanel(   ❌ [WALLET ERROR] Live execution block failed to complete: ${walletErr.message || walletErr});
-}
-// ==================================================================
-}
-} else {
-logToPanel(   ❌ [BACKEND REJECTION] ${symbolLabel}: ${resData.message});
-}
-} catch (err) {
-logToPanel(   ❌ [ROUTE TIMEOUT] Failed calling simulation path for ${symbolLabel}: ${err.message});
-}
-// Short 150ms structural delay between checks to avoid spamming the local RPC node
-await blockDelay(150);
-}
-logToPanel(✅ Cycle ${i}/${totalCycles} analysis finalized.);
-setStatus("WAITING");
-await blockDelay(3000);
-}
-logToPanel(\n=== 📊 [FINISHED] Pre-flight structural scan operations complete. ==);
-return "STOP_ERROR";
+    logToPanel(`\n=== 📊 [FINISHED] Pre-flight structural scan operations complete. ==`);
+    return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
+
 // Master controller dashboard trigger logic mapping
 async function startSimulation(totalCycles) {
-if (window.isBotRunning) return;
-window.isBotRunning = true;
-logToPanel(🚀 [LAUNCHING] Read-only background asset validation sequence engaged...);
-await simulateCycle(1, 10, 0, 0);
-window.isBotRunning = false;
-setStatus("STOPPED");
-logToPanel("[BOT FINISHED] Run parameters finalized.");
+    if (window.isBotRunning) return;
+    window.isBotRunning = true;
+
+    logToPanel(`🚀 [LAUNCHING] Read-only background asset validation sequence engaged...`);
+    await simulateCycle(1, 10, 0, 0);
+
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
 window.startSimulation = startSimulation;
