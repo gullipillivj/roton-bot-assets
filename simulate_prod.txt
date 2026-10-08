@@ -1,10 +1,12 @@
-logToPanel("simulate_prod.txt loaded (LIVE PRE-TRADE SLIPPAGE SIMULATION MODE)");
+logToPanel("simulate_prod.txt loaded (LIVE ASSET EXECUTION PIPELINE - CORE)");
 
-// Global log dashboard adapter
+// ==================================================================
+// 📊 GLOBAL LOGGING UTILITIES & SYSTEM STATUS CONTROL MATRIX
+// ==================================================================
 function logToPanel(msg) {
     const panel = document.getElementById("logPanel");
     if (panel) {
-        panel.innerText += "\n" + msg;
+        panel.value += msg + "\n";
         panel.scrollTop = panel.scrollHeight;
     } else {
         console.log(msg);
@@ -27,73 +29,134 @@ window.setStatus = setStatus;
 function stopBot() {
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[BOT STOPPED] Asset scan matrix paused by user.");
+    logToPanel("[BOT STOPPED] Live transaction orchestration engine paused by user.");
 }
 window.stopBot = stopBot;
-
 // ==================================================================
-// 🔍 ZERO-GAS BROWNIE SIMULATOR CORE (CALLS CALCULATE_ON_CHAIN_SLIPPAGE)
+// 🔄 ON-CHAIN STATE SETTLING MONITOR MATRIX
+// ==================================================================
+async function monitorOnChainSettlement(previousWeiBalance, maxRetries = 20) {
+    setStatus("SETTLING");
+    logToPanel("⏳ [CHAIN MONITOR] Transaction broadcasted. Polling ledger updates...");
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        if (window.isBotRunning === false) return previousWeiBalance;
+        
+        // Invoke the backend contract lookup array synced inside main_prod.txt
+        if (typeof window.syncBalanceFromFund === "function") {
+            let currentRawWei = await window.syncBalanceFromFund();
+            let currentWeiBig = BigInt(currentRawWei || "0");
+            
+            if (currentWeiBig !== BigInt(previousWeiBalance)) {
+                logToPanel(`🎉 [SETTLEMENT CONFIRMED] Ledger shift detected: ${previousWeiBalance} -> ${currentRawWei} Wei.`);
+                
+                // Read fresh normalized layout input balances updated by syncBalanceFromFund
+                let usdValBox = document.getElementById("usd");
+                let liveUsdValue = usdValBox ? parseFloat(usdValBox.value) || 0 : 0;
+                
+                // Plot the newly grown balance parameters directly onto your line graph canvas
+                if (typeof window.updateChart === "function") {
+                    window.updateChart(liveUsdValue, liveUsdValue - (parseFloat(window.InitialBaseCapital) || 0));
+                }
+                return currentRawWei;
+            }
+        }
+        
+        logToPanel(`   🔹 Check [${attempt}/${maxRetries}]: Block state unchanged. Waiting 6s...`);
+        await blockDelay(6000); // Wait for block propagation limits
+    }
+    
+    logToPanel("⚠️ [MONITOR TIMEOUT] Settlement window exceeded. Proceeding with fallback sequence.");
+    return previousWeiBalance;
+}
+window.monitorOnChainSettlement = monitorOnChainSettlement;
+// ==================================================================
+// 🚀 LIVE COMPOUNDING MATRIX & CROSS-ROUTER TRANSIT Core
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`🚀 [ROUTING DIAGNOSTIC] Accessing read-only backend slippage route...`);
+    logToPanel("🚀 [LIVE ORCHESTRATOR ACTIVE] Processing multi-router swaps...");
 
     const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
     const BASE_TOKEN_IN = "0x55d398326f99059fF775485246999027B3197955"; // USDT Base Contract
 
+    if (!window.USER_ADDR) {
+        logToPanel("❌ [ABORTED] No wallet connection found. Please connect MetaMask/TrustWallet.");
+        window.isBotRunning = false;
+        setStatus("STOPPED");
+        return;
+    }
+
+    let startBox = document.getElementById("startBalance");
+    let currentContractWei = startBox ? startBox.value.toString().trim() : "0";
+    let investBox = document.getElementById("investBalance");
+    let balanceInputStr = investBox ? investBox.value.toString().trim() : "0";
+    let userProfitTarget = parseFloat(document.getElementById("profitTarget") ? document.getElementById("profitTarget").value : "1.0") || 1.0;
+    let usdValBox = document.getElementById("usd");
+    
+    if (!window.InitialBaseCapital) {
+        window.InitialBaseCapital = usdValBox ? parseFloat(usdValBox.value) || 100.0 : 100.0;
+    }
+
     for (let i = 1; i <= totalCycles; i++) {
         if (window.isBotRunning === false) {
-            logToPanel("🛑 Loop halted by request.");
+            logToPanel("🛑 Loop stopped by user request.");
             break;
         }
 
-        logToPanel(`\n--- [START] Simulation Cycle ${i}/${totalCycles} ---`);
+        logToPanel(`\n--- [START] Compounding Cycle ${i}/${totalCycles} ---`);
         setStatus(`RUNNING ${i}/${totalCycles}`);
-
-        // Read layout balance field to model standard price impact calculations
-        let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "10";
-        if (!balanceInputStr || balanceInputStr === "0") balanceInputStr = "10";
         
-        // Pad out simulated amount to standard 18 decimal places (e.g. 10 -> 10000000000000000000 Wei)
-        let simulatedAmountInWei = balanceInputStr.includes("0000") ? balanceInputStr : balanceInputStr + "000000000000000000";
+        if (investBox) balanceInputStr = investBox.value.toString().trim();
+        if (startBox) currentContractWei = startBox.value.toString().trim();
+        
+        let principalUnitsForMath = parseFloat(balanceInputStr);
+        if (principalUnitsForMath > 1000000) principalUnitsForMath = principalUnitsForMath / 1e18; // Wei normalization step
+        
+        logToPanel(`💰 Operational Capital Principal: ${principalUnitsForMath.toFixed(4)} USDT`);
 
         let marketData = [];
         try {
             if (typeof window.getTradeCandidates === "function") {
                 marketData = await window.getTradeCandidates();
             } else {
-                logToPanel("⚠️ window.getTradeCandidates registry access function is missing.");
-                continue;
+                logToPanel("⚠️ window.getTradeCandidates registry parsing function is missing.");
+                window.isBotRunning = false;
+                setStatus("STOPPED");
+                return;
             }
         } catch (fErr) {
-            logToPanel(`❌ Local Array Ingestion Error: ${fErr.message}`);
+            logToPanel(`❌ Data Array Retrieval Interrupted: ${fErr.message}`);
             continue;
         }
 
         if (!Array.isArray(marketData) || marketData.length === 0) {
-            logToPanel("❌ Filtered token list data is completely empty.");
+            logToPanel("❌ Mapped candidate asset registry array is empty for this cycle.");
             continue;
         }
 
-        logToPanel(`🎯 Dispatching ${marketData.length} tokens to read-only validator endpoint...`);
+        let chosenCandidate = null;
+        let highestCalculatedNetYield = -999999;
+
+        logToPanel(`🎯 Auditing ${marketData.length} swappable targets via read-only backend simulation...`);
 
         for (let index = 0; index < marketData.length; index++) {
             let candidate = marketData[index];
             let symbolLabel = candidate.symbol || "UNKNOWN";
             let targetAddress = candidate.address || "MISSING";
             let tokenNetwork = (candidate.tokentype || "bep20").toLowerCase();
+            let momentum24h = parseFloat(candidate.change_24h_percent || candidate["%profit"] || "0.0");
 
-            if (targetAddress === "MISSING" || !targetAddress.startsWith("0x")) {
-                continue;
-            }
+            if (targetAddress === "MISSING" || !targetAddress.startsWith("0x")) continue;
+            if (tokenNetwork !== "bep20" && tokenNetwork !== "bsc" && tokenNetwork !== "erc20" && tokenNetwork !== "ethereum") continue;
 
-            // Firewall: Restrict token assets strictly to EVM BSC mapping criteria
-            if (tokenNetwork !== "bep20" && tokenNetwork !== "bsc") {
-                logToPanel(`   🔹 [SKIP] ${symbolLabel} (${tokenNetwork.toUpperCase()} asset bypassed on PancakeSwap router)`);
-                continue;
+            let frictionOverheadGasUsdt = 1.50; 
+            if (symbolLabel.toUpperCase().includes("CROSS") || symbolLabel.toUpperCase().includes("BRIDGE") || tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
+                frictionOverheadGasUsdt = 7.00; 
+            } else if (symbolLabel.toUpperCase() === "VENUSFLUX") {
+                frictionOverheadGasUsdt = 2.00; 
             }
 
             try {
-                // Call the pure view simulation route on your Flask server
                 let response = await fetch("/prodbot/swap/simulateuniswap", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -101,7 +164,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         router: PANCAKE_ROUTER,
                         tokenIn: BASE_TOKEN_IN,
                         tokenOut: targetAddress,
-                        amountIn: simulatedAmountInWei,
+                        amountIn: balanceInputStr, 
                         amountOutMin: 0
                     })
                 });
@@ -109,46 +172,104 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 let resData = await response.json();
 
                 if (resData.status === "ok") {
-                    let expectedOutput = resData.expected_output_wei || "0";
-                    let slippageCost = resData.slippage_cost_pct || "0.0";
+                    let expectedOutputWei = resData.expected_output_wei || "0";
+                    let slippagePct = parseFloat(resData.slippage_cost_pct || "0.0");
 
-                    // If getAmountsOut returned 0, no pool pair exists or liquidity is dead
-                    if (expectedOutput === "0" || expectedOutput === 0) {
-                        logToPanel(`   ❌ [NOT SWAPPABLE] ${symbolLabel} (${targetAddress.slice(0, 8)}...): Liquidity validation check returned 0 or dead pair routing paths.`);
-                    } else {
-                        logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
+                    if (expectedOutputWei === "0" || expectedOutputWei === 0) continue;
+
+                    let poolEfficiencyFactor = (100.0 - slippagePct) / 100.0;
+                    let grossReturnUsdt = principalUnitsForMath * (1.0 + (momentum24h / 100.0)) * poolEfficiencyFactor;
+                    let absoluteNetProfitUsdt = grossReturnUsdt - principalUnitsForMath - frictionOverheadGasUsdt;
+                    let calculatedNetProfitPct = (absoluteNetProfitUsdt / principalUnitsForMath) * 100.0;
+
+                    logToPanel(`   🔹 ${symbolLabel} -> Gross: $${grossReturnUsdt.toFixed(2)} | Friction: $${frictionOverheadGasUsdt.toFixed(2)} | Net: +$${absoluteNetProfitUsdt.toFixed(2)} (${calculatedNetProfitPct.toFixed(2)}%)`);
+
+                    if (absoluteNetProfitUsdt > highestCalculatedNetYield) {
+                        highestCalculatedNetYield = absoluteNetProfitUsdt;
+                        chosenCandidate = {
+                            symbol: symbolLabel,
+                            address: targetAddress,
+                            network: tokenNetwork,
+                            netPctGrowth: calculatedNetProfitPct,
+                            slippage: slippagePct,
+                            friction: frictionOverheadGasUsdt
+                        };
                     }
-                } else {
-                    logToPanel(`   ❌ [BACKEND REJECTION] ${symbolLabel}: ${resData.message}`);
                 }
-            } catch (err) {
-                logToPanel(`   ❌ [ROUTE TIMEOUT] Failed calling simulation path for ${symbolLabel}: ${err.message}`);
-            }
-
-            // Short 150ms structural delay between checks to avoid spamming the local RPC node
-            await blockDelay(150);
+            } catch (err) {}
         }
 
-        logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
-        setStatus("WAITING");
-        await blockDelay(3000);
-    }
+        // ==================================================================
+        // 🚨 LIVE ROUTER FORWARDER SELECTION GATEWAY
+        // ==================================================================
+        if (chosenCandidate && highestCalculatedNetYield > 0 && chosenCandidate.netPctGrowth >= userProfitTarget) {
+            logToPanel(`\n🔥 [PROFIT ENGINE SUCCESS - DISPATCHING WALLET PAYLOAD] 🔥`);
+            logToPanel(`🏅 Target Asset: ${chosenCandidate.symbol} (${chosenCandidate.address})`);
+            logToPanel(`🛡️ Overhead Spent: $${chosenCandidate.friction.toFixed(2)} (Slippage: ${chosenCandidate.slippage}%)`);
+            logToPanel(`💰 Expected Net Yield: +$${highestCalculatedNetYield.toFixed(4)} USDT (${chosenCandidate.netPctGrowth.toFixed(2)}%)`);
+            
+            let transactionOutcome = null;
 
-    logToPanel(`\n=== 📊 [FINISHED] Pre-flight structural scan operations complete. ==`);
-    return "STOP_ERROR";
+            if (chosenCandidate.symbol.toUpperCase().includes("CROSS") || chosenCandidate.symbol.toUpperCase().includes("BRIDGE")) {
+                logToPanel("⚡ [BRIDGE SIGNAL] Invoking Chainlink CCIP infrastructure router payload...");
+                const ARBITRUM_CHAIN_SELECTOR = "4949039107694359620"; 
+                if (typeof window.runcrossChainSwap === "function") {
+                    transactionOutcome = await window.runcrossChainSwap(
+                        window.USER_ADDR, balanceInputStr, BASE_TOKEN_IN, 
+                        "0x34B03Cb9086d7D758AC55af71584F81A598759FE", ARBITRUM_CHAIN_SELECTOR, window.USER_ADDR
+                    );
+                }
+            } else if (chosenCandidate.network === "erc20" || chosenCandidate.network === "ethereum") {
+                logToPanel("⚡ [ETH ROUTE SIGNAL] Invoking Ethereum mainnet router payload...");
+                if (typeof window.runethSwapUniswap === "function") {
+                    transactionOutcome = await window.runethSwapUniswap(
+                        window.USER_ADDR, balanceInputStr, BASE_TOKEN_IN, chosenCandidate.address, PANCAKE_ROUTER
+                    );
+                }
+            } else {
+                logToPanel("⚡ [BSC ROUTE SIGNAL] Invoking PancakeSwap production router payload...");
+                if (typeof window.runbscSwapUniswap === "function") {
+                    transactionOutcome = await window.runbscSwapUniswap(
+                        window.USER_ADDR, balanceInputStr, BASE_TOKEN_IN, chosenCandidate.address, PANCAKE_ROUTER
+                    );
+                }
+            }
+
+            if (transactionOutcome && transactionOutcome.status === "ok") {
+                logToPanel("🚀 [BROADCAST SUCCESS] Transaction written to blockchain indices. Initializing state verification monitor...");
+                await window.monitorOnChainSettlement(currentContractWei);
+            } else {
+                logToPanel(`❌ [ROUTING REJECTION] Live execution pipeline rejected payload: ${transactionOutcome ? transactionOutcome.message : "User denied signature or RPC failure."}`);
+                logToPanel("💤 Safety protocol engaged. Carrying current principal forward.");
+            }
+
+        } else {
+            logToPanel(`\n💤 [CYCLE PASSED] No tokens cleared your net profit target threshold of ${userProfitTarget}%.`);
+            logToPanel(`🔒 Principal safe inside contract ledger. Drawing skipping line to keep chart scales intact...`);
+            
+            if (window.balanceChart && typeof window.balanceChart.update === "function") {
+                let currentFloatUsd = usdValBox ? parseFloat(usdValBox.value) || 0 : 0;
+                window.balanceChart.data.labels.push(`Cycle ${i} (Skip)`);
+window.balanceChart.data.datasets[0].data.push(currentFloatUsd);
+window.balanceChart.data.datasets[1].data.push(currentFloatUsd - (parseFloat(window.InitialBaseCapital) || 0));
+window.balanceChart.update();
+}
+}
+logToPanel(✅ Compounding Cycle ${i}/${totalCycles} analysis finalized.);
+setStatus("WAITING");
+await blockDelay(4000);
+}
+logToPanel(\n=== 📊 [FINISHED] Running live execution sequence finalized completely. ===);
+window.isBotRunning = false;
+setStatus("STOPPED");
+return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
-
-// Master controller dashboard trigger logic mapping
 async function startSimulation(totalCycles) {
-    if (window.isBotRunning) return;
-    window.isBotRunning = true;
-
-    logToPanel(`🚀 [LAUNCHING] Read-only background asset validation sequence engaged...`);
-    await simulateCycle(1, 10, 0, 0);
-
-    window.isBotRunning = false;
-    setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Run parameters finalized.");
+let targetRunCycles = parseInt(totalCycles) || 10;
+if (window.isBotRunning) return;
+window.isBotRunning = true;
+logToPanel(🚀 [LAUNCHING ON-CHAIN ORCHESTRATION] Initializing live multi-router swap loop for ${targetRunCycles} ticks...);
+await simulateCycle(1, targetRunCycles, 0, 0);
 }
 window.startSimulation = startSimulation;
