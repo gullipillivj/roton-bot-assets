@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (PURE READ-ONLY SLIPPAGE ROUTE CHECKER)");
+logToPanel("simulate_prod.txt loaded (LIVE PRE-TRADE SLIPPAGE SIMULATION MODE)");
 
 // Global log dashboard adapter
 function logToPanel(msg) {
@@ -27,55 +27,54 @@ window.setStatus = setStatus;
 function stopBot() {
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[BOT STOPPED] Scans halted.");
+    logToPanel("[BOT STOPPED] Asset scan matrix paused by user.");
 }
 window.stopBot = stopBot;
 
 // ==================================================================
-// 🔍 SAFE ZERO-GAS LOOP MATRIX: CALLING THE BACKEND SIMULATE ROUTE ONLY
+// 🔍 ZERO-GAS BROWNIE SIMULATOR CORE (CALLS CALCULATE_ON_CHAIN_SLIPPAGE)
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`🚀 [ROUTING TEST] Querying backend view route for liquidity verification...`);
+    logToPanel(`🚀 [ROUTING DIAGNOSTIC] Accessing read-only backend slippage route...`);
 
     const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
     const BASE_TOKEN_IN = "0x55d398326f99059fF775485246999027B3197955"; // USDT Base Contract
 
     for (let i = 1; i <= totalCycles; i++) {
         if (window.isBotRunning === false) {
-            logToPanel("🛑 Loop stopped.");
+            logToPanel("🛑 Loop halted by request.");
             break;
         }
 
-        logToPanel(`\n--- [START] Cycle ${i}/${totalCycles} ---`);
+        logToPanel(`\n--- [START] Simulation Cycle ${i}/${totalCycles} ---`);
         setStatus(`RUNNING ${i}/${totalCycles}`);
 
-        // Read mock balance to use for calculating potential size-impact slippage
+        // Read layout balance field to model standard price impact calculations
         let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "10";
         if (!balanceInputStr || balanceInputStr === "0") balanceInputStr = "10";
         
-        // Formulate mock 18-decimal base amount (10 USDT -> 10000000000000000000 Wei)
+        // Pad out simulated amount to standard 18 decimal places (e.g. 10 -> 10000000000000000000 Wei)
         let simulatedAmountInWei = balanceInputStr.includes("0000") ? balanceInputStr : balanceInputStr + "000000000000000000";
 
-        // Fetch tokens processed from your coins.txt server pipeline mirror
         let marketData = [];
         try {
             if (typeof window.getTradeCandidates === "function") {
                 marketData = await window.getTradeCandidates();
             } else {
-                logToPanel("⚠️ window.getTradeCandidates function is missing.");
+                logToPanel("⚠️ window.getTradeCandidates registry access function is missing.");
                 continue;
             }
         } catch (fErr) {
-            logToPanel(`❌ Data Array Interrupted: ${fErr.message}`);
+            logToPanel(`❌ Local Array Ingestion Error: ${fErr.message}`);
             continue;
         }
 
         if (!Array.isArray(marketData) || marketData.length === 0) {
-            logToPanel("❌ Ingestion tracking list is completely empty.");
+            logToPanel("❌ Filtered token list data is completely empty.");
             continue;
         }
 
-        logToPanel(`🎯 Sending ${marketData.length} tokens to backend calculate_on_chain_slippage view route...`);
+        logToPanel(`🎯 Dispatching ${marketData.length} tokens to read-only validator endpoint...`);
 
         for (let index = 0; index < marketData.length; index++) {
             let candidate = marketData[index];
@@ -87,9 +86,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 continue;
             }
 
-            // Exclude alternative chain profiles from checking the Pancake Router instance 
+            // Firewall: Restrict token assets strictly to EVM BSC mapping criteria
             if (tokenNetwork !== "bep20" && tokenNetwork !== "bsc") {
-                logToPanel(`   🔹 [SKIP CHAIN] ${symbolLabel} is mapped to ${tokenNetwork.toUpperCase()}. Bypassing.`);
+                logToPanel(`   🔹 [SKIP] ${symbolLabel} (${tokenNetwork.toUpperCase()} asset bypassed on PancakeSwap router)`);
                 continue;
             }
 
@@ -115,7 +114,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
                     // If getAmountsOut returned 0, no pool pair exists or liquidity is dead
                     if (expectedOutput === "0" || expectedOutput === 0) {
-                        logToPanel(`   ❌ [NOT SWAPPABLE] ${symbolLabel} (${targetAddress.slice(0, 8)}...): Liquidity check returned zero or failed routing paths.`);
+                        logToPanel(`   ❌ [NOT SWAPPABLE] ${symbolLabel} (${targetAddress.slice(0, 8)}...): Liquidity validation check returned 0 or dead pair routing paths.`);
                     } else {
                         logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
                     }
@@ -123,33 +122,33 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     logToPanel(`   ❌ [BACKEND REJECTION] ${symbolLabel}: ${resData.message}`);
                 }
             } catch (err) {
-                logToPanel(`   ❌ [ROUTE ERROR] Failed calling endpoint for ${symbolLabel}: ${err.message}`);
+                logToPanel(`   ❌ [ROUTE TIMEOUT] Failed calling simulation path for ${symbolLabel}: ${err.message}`);
             }
 
-            // Small 150ms delay to keep the backend processing smoothly
+            // Short 150ms structural delay between checks to avoid spamming the local RPC node
             await blockDelay(150);
         }
 
-        logToPanel(`✅ Cycle ${i}/${totalCycles} checks complete.`);
+        logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
         setStatus("WAITING");
-        await blockDelay(2500);
+        await blockDelay(3000);
     }
 
-    logToPanel(`\n=== 📊 [FINISHED] Scan sequence complete. No contracts were approved and no wallet signature fields were exposed. ===`);
+    logToPanel(`\n=== 📊 [FINISHED] Pre-flight structural scan operations complete. ==`);
     return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
 
-// Master controller trigger mapping
+// Master controller dashboard trigger logic mapping
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
 
-    logToPanel(`🚀 [LAUNCHING] Direct read-only scanner initialized...`);
+    logToPanel(`🚀 [LAUNCHING] Read-only background asset validation sequence engaged...`);
     await simulateCycle(1, 10, 0, 0);
 
     window.isBotRunning = false;
     setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Sequence complete.");
+    logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
 window.startSimulation = startSimulation;
