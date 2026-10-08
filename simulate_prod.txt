@@ -53,7 +53,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "10";
         if (!balanceInputStr || balanceInputStr === "0") balanceInputStr = "10";
         
-        // NATIVE CORE CORRECTION: Scaler padding logic removed. The raw dashboard string is forwarded directly.
+        // NATIVE CORE CORRECTION: Scaler padding logic completely bypassed. The raw 18-digit Wei balance string is forwarded directly.
         let simulatedAmountInWei = balanceInputStr;
 
         logToPanel(`💰 Pure Transaction Principal Weight: ${simulatedAmountInWei} Wei`);
@@ -220,8 +220,18 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                             }
 
                             if (!transactionConfirmed) {
-                                logToPanel("   ⚠️ [POLLING LIMIT] 30 inspection steps passed without contract confirmation. Moving forward.");
+                                logToPanel("   ⚠️ [POLLING EXCEEDED] No contract state balance alterations caught inside the execution window.");
                             }
+
+                            // ⏱️ FORCE CRITICAL 2-MINUTE COOLING LOCK WITH LOG PANEL FEEDBACK COUNTDOWN
+                            logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 120s pause to protect account state parameters...");
+                            for (let countdown = 120; countdown > 0; countdown -= 5) {
+                                if (window.isBotRunning === false) break;
+                                setStatus(`COOLING (${countdown}s)`);
+                                logToPanel(`   ⏳ Network Sync Cooling: ${countdown} seconds remaining before next cycle...`);
+                                await blockDelay(5000);
+                            }
+                            
                         } else {
                             logToPanel(`   ❌ [ROUTING REJECTION] Execution router dropped payload: ${txResult ? txResult.message : "User cancelled signature or RPC fault."}`);
                         }
