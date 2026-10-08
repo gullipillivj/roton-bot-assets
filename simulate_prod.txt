@@ -49,10 +49,14 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`\n--- [START] Simulation Cycle ${i}/${totalCycles} ---`);
         setStatus(`RUNNING ${i}/${totalCycles}`);
 
+        // Read dynamic UI field containing the true 18-digit Wei string from dashboard ledger metrics
         let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "10";
         if (!balanceInputStr || balanceInputStr === "0") balanceInputStr = "10";
         
-        let simulatedAmountInWei = balanceInputStr.includes("0000") ? balanceInputStr : balanceInputStr + "000000000000000000";
+        // NATIVE CORE CORRECTION: Scaler padding logic removed. The raw dashboard string is forwarded directly.
+        let simulatedAmountInWei = balanceInputStr;
+
+        logToPanel(`💰 Pure Transaction Principal Weight: ${simulatedAmountInWei} Wei`);
 
         let marketData = [];
         try {
@@ -111,7 +115,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     let slippageCost = resData.slippage_cost_pct || "0.0";
 
                     if (expectedOutput === "0" || expectedOutput === 0) {
-                        logToPanel(`   ❌ [NOT SWAPPABLE] ${symbolLabel} (${targetAddress.slice(0, 8)}...): Liquidity validation check returned 0 or dead pair routing paths.`);
+                        logToPanel(`   ❌ [NOT SWAPPABLE] ${symbolLabel} (${targetAddress.slice(0, 8)}...): Liquidity validation check returned 0 or dead pool routing paths.`);
                     } else {
                         logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
                         
@@ -241,7 +245,7 @@ window.simulateCycle = simulateCycle;
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
-    logToPanel(`🚀 [LAUNCHING] Read-only background asset validation sequence engaged...`);
+    logToPanel("🚀 [LAUNCHING] Read-only background asset validation sequence engaged...");
     await simulateCycle(1, 10, 0, 0);
     window.isBotRunning = false;
     setStatus("STOPPED");
