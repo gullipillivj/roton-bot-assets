@@ -117,6 +117,94 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         logToPanel(`   ❌ [NOT SWAPPABLE] ${symbolLabel} (${targetAddress.slice(0, 8)}...): Liquidity validation check returned 0 or dead pair routing paths.`);
                     } else {
                         logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
+//code added for router sending
+                     
+                        // ==================================================================
+                        // 🚀 START LIVE ROUTING EXECUTION & BALANCE MONITOR PIPELINE
+                        // ==================================================================
+                        try {
+                            if (!window.USER_ADDR) {
+                                logToPanel("   ❌ [ABORTED] No wallet session address connected.");
+                            } else {
+                                // 1. Read user's wallet gas token balance (BNB or ETH) via RPC
+                                const userBalanceHex = await window.ethereum.request({
+                                    method: "eth_getBalance",
+                                    params: [window.USER_ADDR, "latest"]
+                                });
+                                const walletGasBalanceWei = BigInt(userBalanceHex);
+
+                                // 2. Extract dynamic RPC Gas Price from node provider
+                                const networkGasPriceHex = await window.ethereum.request({ 
+                                    method: "eth_gasPrice" 
+                                });
+                                const liveGasPriceWei = BigInt(networkGasPriceHex);
+
+                                // 3. Compute execution bounds based on token network types
+                                let dynamicGasLimit = 150000n;
+                                if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
+                                    dynamicGasLimit = 450000n;
+                                }
+                                const requiredGasFeeWei = liveGasPriceWei * dynamicGasLimit;
+
+                                logToPanel(`   ⛽ Wallet Gas Balance: ${walletGasBalanceWei.toString()} Wei | Est Fee: ${requiredGasFeeWei.toString()} Wei`);
+
+                                // 4. Check if user wallet contains sufficient native coin to execute path
+                                if (walletGasBalanceWei < requiredGasFeeWei) {
+                                    logToPanel("   ❌ [SKIPPED] Insufficient native gas balance to cover execution fees.");
+                                } else {
+                                    let txResult = null;
+
+                                    // 5. Forward payload variables directly to pancake_prod router handles
+                                    if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
+                                        logToPanel("   ⚡ Forwarding to Ethereum Mainnet Swap Pipeline...");
+                                        if (typeof window.runethSwapUniswap === "function") {
+                                            txResult = await window.runethSwapUniswap(
+                                                window.USER_ADDR, simulatedAmountInWei, BASE_TOKEN_IN, targetAddress, PANCAKE_ROUTER
+                                            );
+                                        }
+                                    } else {
+                                        logToPanel("   ⚡ Forwarding to PancakeSwap Production Router Pipeline...");
+                                        if (typeof window.runbscSwapUniswap === "function") {
+                                            txResult = await window.runbscSwapUniswap(
+                                                window.USER_ADDR, simulatedAmountInWei, BASE_TOKEN_IN, targetAddress, PANCAKE_ROUTER
+                                            );
+                                        }
+                                    }
+
+                                    // 6. Track balance changes via syncBalanceFromFund until transaction is verified
+                                    if (txResult && txResult.status === "ok") {
+                                        logToPanel("   🚀 [BROADCAST SUCCESS] Polling ledger modifications...");
+                                        
+                                        let startBox = document.getElementById("startBalance");
+                                        let baseWeiState = startBox ? startBox.value.toString().trim() : "0";
+                                        
+                                        for (let attempt = 1; attempt <= 20; attempt++) {
+                                            if (window.isBotRunning === false) break;
+                                            
+                                            if (typeof window.syncBalanceFromFund === "function") {
+                                                let updatedWei = await window.syncBalanceFromFund();
+                                                if (BigInt(updatedWei || "0") !== BigInt(baseWeiState)) {
+                                                    logToPanel(`   🎉 [SETTLED] Ledger shift caught: ${updatedWei} Wei.`);
+                                                    
+                                                    let usdBox = document.getElementById("usd");
+                                                    let floatingUsd = usdBox ? parseFloat(usdBox.value) || 0 : 0;
+                                                    if (typeof window.updateChart === "function") {
+                                                        window.updateChart(floatingUsd, floatingUsd - (parseFloat(window.InitialBaseCapital) || 0));
+                                                    }
+                                                    break;
+                                                }
+                                            }
+                                            await blockDelay(6000);
+                                        }
+                                    } else {
+                                        logToPanel(`   ❌ [ROUTING ERROR] Pipeline execution rejected: ${txResult ? txResult.message : "User rejected signature."}`);
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            logToPanel(`   ❌ [METAMASK ERROR] Failed to finalize cycle execution: ${err.message}`);
+                        }
+                        // ==================================================================
                     }
                 } else {
                     logToPanel(`   ❌ [BACKEND REJECTION] ${symbolLabel}: ${resData.message}`);
@@ -152,3 +240,4 @@ async function startSimulation(totalCycles) {
     logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
 window.startSimulation = startSimulation;
+
