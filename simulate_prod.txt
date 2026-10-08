@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (LIVE ASSET EXECUTION PIPELINE - CORE)");
+logToPanel("simulate_prod.txt loaded (NATIVE WEI BALANCES & GAS OPTIMIZATION PIPELINE ACTIVE)");
 
 // ==================================================================
 // 📊 GLOBAL LOGGING UTILITIES & SYSTEM STATUS CONTROL MATRIX
@@ -32,6 +32,7 @@ function stopBot() {
     logToPanel("[BOT STOPPED] Live transaction orchestration engine paused by user.");
 }
 window.stopBot = stopBot;
+
 // ==================================================================
 // 🔄 ON-CHAIN STATE SETTLING MONITOR MATRIX
 // ==================================================================
@@ -42,7 +43,6 @@ async function monitorOnChainSettlement(previousWeiBalance, maxRetries = 20) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         if (window.isBotRunning === false) return previousWeiBalance;
         
-        // Invoke the backend contract lookup array synced inside main_prod.txt
         if (typeof window.syncBalanceFromFund === "function") {
             let currentRawWei = await window.syncBalanceFromFund();
             let currentWeiBig = BigInt(currentRawWei || "0");
@@ -50,11 +50,9 @@ async function monitorOnChainSettlement(previousWeiBalance, maxRetries = 20) {
             if (currentWeiBig !== BigInt(previousWeiBalance)) {
                 logToPanel(`🎉 [SETTLEMENT CONFIRMED] Ledger shift detected: ${previousWeiBalance} -> ${currentRawWei} Wei.`);
                 
-                // Read fresh normalized layout input balances updated by syncBalanceFromFund
                 let usdValBox = document.getElementById("usd");
                 let liveUsdValue = usdValBox ? parseFloat(usdValBox.value) || 0 : 0;
                 
-                // Plot the newly grown balance parameters directly onto your line graph canvas
                 if (typeof window.updateChart === "function") {
                     window.updateChart(liveUsdValue, liveUsdValue - (parseFloat(window.InitialBaseCapital) || 0));
                 }
@@ -63,15 +61,16 @@ async function monitorOnChainSettlement(previousWeiBalance, maxRetries = 20) {
         }
         
         logToPanel(`   🔹 Check [${attempt}/${maxRetries}]: Block state unchanged. Waiting 6s...`);
-        await blockDelay(6000); // Wait for block propagation limits
+        await blockDelay(6000); 
     }
     
     logToPanel("⚠️ [MONITOR TIMEOUT] Settlement window exceeded. Proceeding with fallback sequence.");
     return previousWeiBalance;
 }
 window.monitorOnChainSettlement = monitorOnChainSettlement;
+
 // ==================================================================
-// 🚀 LIVE COMPOUNDING MATRIX & CROSS-ROUTER TRANSIT Core
+// 🚀 NATIVE WEI GAS AUDITOR & COMPOUNDING PIPELINE
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     logToPanel("🚀 [LIVE ORCHESTRATOR ACTIVE] Processing multi-router swaps...");
@@ -90,39 +89,38 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     let currentContractWei = startBox ? startBox.value.toString().trim() : "0";
     let investBox = document.getElementById("investBalance");
     let balanceInputStr = investBox ? investBox.value.toString().trim() : "0";
-    let userProfitTarget = parseFloat(document.getElementById("profitTarget") ? document.getElementById("profitTarget").value : "1.0") || 1.0;
     let usdValBox = document.getElementById("usd");
     
     if (!window.InitialBaseCapital) {
         window.InitialBaseCapital = usdValBox ? parseFloat(usdValBox.value) || 100.0 : 100.0;
     }
 
-  // ====== FIX: REPLACE THIS SEGMENT IN YOUR SIMULATE_PROD LIVE FILE (File 2) ======
-for (let i = 1; i <= totalCycles; i++) {
-    if (window.isBotRunning === false) {
-        logToPanel("🛑 Loop stopped by user request.");
-        break;
+    // NATIVE GAS EXTRACTION: Fetch the user's active RPC Gas Price directly from provider
+    let liveGasPriceWei = 0n;
+    try {
+        const hexGasPrice = await window.ethereum.request({ method: "eth_gasPrice" });
+        liveGasPriceWei = BigInt(hexGasPrice);
+        logToPanel(`⛽ [GAS MATRICES] Dynamic Network Gas Price extracted: ${liveGasPriceWei.toString()} Wei`);
+    } catch (gasErr) {
+        liveGasPriceWei = 3000000000n; // Fallback to a standard 3 Gwei default parameter if RPC blocks lookups
+        logToPanel(`⚠️ Could not query gasPrice via window.ethereum, applying fallback default.`);
     }
 
-    logToPanel(`\n--- [START] Compounding Cycle ${i}/${totalCycles} ---`);
-    setStatus(`RUNNING ${i}/${totalCycles}`);
-    
-    if (investBox) balanceInputStr = investBox.value.toString().trim();
-    if (startBox) currentContractWei = startBox.value.toString().trim();
-    
-    // Core Correction: Standardize both the math parser AND the network payload string
-    let principalUnitsForMath = parseFloat(balanceInputStr);
-    if (principalUnitsForMath > 1000000) {
-        // Input is in Wei format from main_prod sync mapping
-        principalUnitsForMath = principalUnitsForMath / 1e18;
-    } else {
-        // Input is in standard human format, convert balanceInputStr to Wei for API payload safety
-        balanceInputStr = balanceInputStr + "000000000000000000";
-    }
-    
-    logToPanel(`💰 Operational Capital Principal: ${principalUnitsForMath.toFixed(4)} USDT`);
-    logToPanel(`📡 Outgoing Payload Weight: ${balanceInputStr} Wei`);
-// =============================================================================
+    for (let i = 1; i <= totalCycles; i++) {
+        if (window.isBotRunning === false) {
+            logToPanel("🛑 Loop stopped by user request.");
+            break;
+        }
+
+        logToPanel(`\n--- [START] Pure Wei Execution Cycle ${i}/${totalCycles} ---`);
+        setStatus(`RUNNING ${i}/${totalCycles}`);
+        
+        if (investBox) balanceInputStr = investBox.value.toString().trim();
+        if (startBox) currentContractWei = startBox.value.toString().trim();
+        
+        // Native Verification Vector: Enforce strict Wei structures on allocation inputs
+        let amountInWeiBig = BigInt(balanceInputStr === "0" || balanceInputStr === "" ? "10000000000000000000" : balanceInputStr);
+        logToPanel(`💰 Operational Capital Principal Weight: ${amountInWeiBig.toString()} Wei`);
 
         let marketData = [];
         try {
@@ -144,8 +142,8 @@ for (let i = 1; i <= totalCycles; i++) {
             continue;
         }
 
-        let chosenCandidate = null;
-        let highestCalculatedNetYield = -999999;
+        let cheapestGasCandidate = null;
+        let lowestCalculatedGasWei = 0n;
 
         logToPanel(`🎯 Auditing ${marketData.length} swappable targets via read-only backend simulation...`);
 
@@ -154,16 +152,16 @@ for (let i = 1; i <= totalCycles; i++) {
             let symbolLabel = candidate.symbol || "UNKNOWN";
             let targetAddress = candidate.address || "MISSING";
             let tokenNetwork = (candidate.tokentype || "bep20").toLowerCase();
-            let momentum24h = parseFloat(candidate.change_24h_percent || candidate["%profit"] || "0.0");
 
             if (targetAddress === "MISSING" || !targetAddress.startsWith("0x")) continue;
             if (tokenNetwork !== "bep20" && tokenNetwork !== "bsc" && tokenNetwork !== "erc20" && tokenNetwork !== "ethereum") continue;
 
-            let frictionOverheadGasUsdt = 1.50; 
+            // Establish standard synthetic base limit parameter defaults based on asset target properties
+            let gasLimitUnits = 150000n; 
             if (symbolLabel.toUpperCase().includes("CROSS") || symbolLabel.toUpperCase().includes("BRIDGE") || tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
-                frictionOverheadGasUsdt = 7.00; 
+                gasLimitUnits = 450000n; 
             } else if (symbolLabel.toUpperCase() === "VENUSFLUX") {
-                frictionOverheadGasUsdt = 2.00; 
+                gasLimitUnits = 200000n; 
             }
 
             try {
@@ -174,7 +172,7 @@ for (let i = 1; i <= totalCycles; i++) {
                         router: PANCAKE_ROUTER,
                         tokenIn: BASE_TOKEN_IN,
                         tokenOut: targetAddress,
-                        amountIn: balanceInputStr, 
+                        amountIn: amountInWeiBig.toString(), 
                         amountOutMin: 0
                     })
                 });
@@ -182,27 +180,25 @@ for (let i = 1; i <= totalCycles; i++) {
                 let resData = await response.json();
 
                 if (resData.status === "ok") {
-                    let expectedOutputWei = resData.expected_output_wei || "0";
-                    let slippagePct = parseFloat(resData.slippage_cost_pct || "0.0");
+                    let expectedOutputWeiStr = resData.expected_output_wei || "0";
+                    let expectedOutputWeiBig = BigInt(expectedOutputWeiStr);
 
-                    if (expectedOutputWei === "0" || expectedOutputWei === 0) continue;
+                    if (expectedOutputWeiBig === 0n) continue;
 
-                    let poolEfficiencyFactor = (100.0 - slippagePct) / 100.0;
-                    let grossReturnUsdt = principalUnitsForMath * (1.0 + (momentum24h / 100.0)) * poolEfficiencyFactor;
-                    let absoluteNetProfitUsdt = grossReturnUsdt - principalUnitsForMath - frictionOverheadGasUsdt;
-                    let calculatedNetProfitPct = (absoluteNetProfitUsdt / principalUnitsForMath) * 100.0;
+                    // Compute precise native gas allocation metrics without floating numbers
+                    let transactionGasCostWei = liveGasPriceWei * gasLimitUnits;
 
-                    logToPanel(`   🔹 ${symbolLabel} -> Gross: $${grossReturnUsdt.toFixed(2)} | Friction: $${frictionOverheadGasUsdt.toFixed(2)} | Net: +$${absoluteNetProfitUsdt.toFixed(2)} (${calculatedNetProfitPct.toFixed(2)}%)`);
+                    logToPanel(`   🔹 ${symbolLabel} -> Path Estimate Gas: ${transactionGasCostWei.toString()} Wei | Out: ${expectedOutputWeiBig.toString()} Wei`);
 
-                    if (absoluteNetProfitUsdt > highestCalculatedNetYield) {
-                        highestCalculatedNetYield = absoluteNetProfitUsdt;
-                        chosenCandidate = {
+                    // Select candidate with the lowest gas fees
+                    if (cheapestGasCandidate === null || transactionGasCostWei < lowestCalculatedGasWei) {
+                        lowestCalculatedGasWei = transactionGasCostWei;
+                        cheapestGasCandidate = {
                             symbol: symbolLabel,
                             address: targetAddress,
                             network: tokenNetwork,
-                            netPctGrowth: calculatedNetProfitPct,
-                            slippage: slippagePct,
-                            friction: frictionOverheadGasUsdt
+                            amountOutWei: expectedOutputWeiBig.toString(),
+                            gasCost: transactionGasCostWei
                         };
                     }
                 }
@@ -210,56 +206,53 @@ for (let i = 1; i <= totalCycles; i++) {
         }
 
         // ==================================================================
-        // 🚨 LIVE ROUTER FORWARDER SELECTION GATEWAY
+        // 🚨 CHEAPEST PATH LIVE FORWARDER ROUTING MECHANISM
         // ==================================================================
-        if (chosenCandidate && highestCalculatedNetYield > 0 && chosenCandidate.netPctGrowth >= userProfitTarget) {
-            logToPanel(`\n🔥 [PROFIT ENGINE SUCCESS - DISPATCHING WALLET PAYLOAD] 🔥`);
-            logToPanel(`🏅 Target Asset: ${chosenCandidate.symbol} (${chosenCandidate.address})`);
-            logToPanel(`🛡️ Overhead Spent: $${chosenCandidate.friction.toFixed(2)} (Slippage: ${chosenCandidate.slippage}%)`);
-            logToPanel(`💰 Expected Net Yield: +$${highestCalculatedNetYield.toFixed(4)} USDT (${chosenCandidate.netPctGrowth.toFixed(2)}%)`);
+        if (cheapestGasCandidate) {
+            logToPanel(`\n🔥 [GAS OPTIMIZER CHAMPION FOUND - DISPATCHING PAYLOAD] 🔥`);
+            logToPanel(`🏅 Selected Asset: ${cheapestGasCandidate.symbol} (${cheapestGasCandidate.address})`);
+            logToPanel(`⛽ Calculated Optimal Gas Cost: ${cheapestGasCandidate.gasCost.toString()} Wei`);
             
             let transactionOutcome = null;
 
-            if (chosenCandidate.symbol.toUpperCase().includes("CROSS") || chosenCandidate.symbol.toUpperCase().includes("BRIDGE")) {
-                logToPanel("⚡ [BRIDGE SIGNAL] Invoking Chainlink CCIP infrastructure router payload...");
-                const ARBITRUM_CHAIN_SELECTOR = "4949039107694359620"; 
-                if (typeof window.runcrossChainSwap === "function") {
-                    transactionOutcome = await window.runcrossChainSwap(
-                        window.USER_ADDR, balanceInputStr, BASE_TOKEN_IN, 
-                        "0x34B03Cb9086d7D758AC55af71584F81A598759FE", ARBITRUM_CHAIN_SELECTOR, window.USER_ADDR
-                    );
-                }
-            } else if (chosenCandidate.network === "erc20" || chosenCandidate.network === "ethereum") {
-                logToPanel("⚡ [ETH ROUTE SIGNAL] Invoking Ethereum mainnet router payload...");
-                if (typeof window.runethSwapUniswap === "function") {
-                    transactionOutcome = await window.runethSwapUniswap(
-                        window.USER_ADDR, balanceInputStr, BASE_TOKEN_IN, chosenCandidate.address, PANCAKE_ROUTER
-                    );
-                }
-            } else {
-                logToPanel("⚡ [BSC ROUTE SIGNAL] Invoking PancakeSwap production router payload...");
-                if (typeof window.runbscSwapUniswap === "function") {
-                    transactionOutcome = await window.runbscSwapUniswap(
-                        window.USER_ADDR, balanceInputStr, BASE_TOKEN_IN, chosenCandidate.address, PANCAKE_ROUTER
-                    );
-                }
-            }
-
-            if (transactionOutcome && transactionOutcome.status === "ok") {
-                logToPanel("🚀 [BROADCAST SUCCESS] Transaction written to blockchain indices. Initializing state verification monitor...");
-                await window.monitorOnChainSettlement(currentContractWei);
-            } else {
-                logToPanel(`❌ [ROUTING REJECTION] Live execution pipeline rejected payload: ${transactionOutcome ? transactionOutcome.message : "User denied signature or RPC failure."}`);
-                logToPanel("💤 Safety protocol engaged. Carrying current principal forward.");
-            }
-
-        } else {
-            logToPanel(`\n💤 [CYCLE PASSED] No tokens cleared your net profit target threshold of ${userProfitTarget}%.`);
-            logToPanel(`🔒 Principal safe inside contract ledger. Drawing skipping line to keep chart scales intact...`);
-            
-            if (window.balanceChart && typeof window.balanceChart.update === "function") {
-                let currentFloatUsd = usdValBox ? parseFloat(usdValBox.value) || 0 : 0;
-                window.balanceChart.data.labels.push(`Cycle ${i} (Skip)`);
+// Direct execution selection vector keyed directly by native network classifications
+if (cheapestGasCandidate.network === "erc20" || cheapestGasCandidate.network === "ethereum") {
+logToPanel("⚡ [ETH ROUTE DISPATCH] Triggering live execution on ERC20 infrastructure...");
+if (typeof window.runethSwapUniswap === "function") {
+transactionOutcome = await window.runethSwapUniswap(
+window.USER_ADDR,
+amountInWeiBig.toString(),
+BASE_TOKEN_IN,
+cheapestGasCandidate.address,
+PANCAKE_ROUTER
+);
+}
+} else {
+logToPanel("⚡ [BSC ROUTE DISPATCH] Triggering live execution on BEP20 infrastructure...");
+if (typeof window.runbscSwapUniswap === "function") {
+transactionOutcome = await window.runbscSwapUniswap(
+window.USER_ADDR,
+amountInWeiBig.toString(),
+BASE_TOKEN_IN,
+cheapestGasCandidate.address,
+PANCAKE_ROUTER
+);
+}
+}
+if (transactionOutcome && transactionOutcome.status === "ok") {
+logToPanel("🚀 [BROADCAST SUCCESS] Transaction written to blockchain indices. Initializing state verification monitor...");
+// Keep checking syncBalanceFromFund until changes are verified
+await window.monitorOnChainSettlement(currentContractWei);
+} else {
+logToPanel(❌ [ROUTING REJECTION] Live execution pipeline rejected payload: ${transactionOutcome ? transactionOutcome.message : "User denied signature or RPC failure."});
+logToPanel("💤 Safety protocol engaged. Carrying current principal forward.");
+}
+} else {
+logToPanel(\n💤 [CYCLE PASSED] No tokens cleared swappable verification parameters.);
+logToPanel(🔒 Principal safe inside contract ledger. Drawing skipping line to keep chart scales intact...);
+if (window.balanceChart && typeof window.balanceChart.update === "function") {
+let currentFloatUsd = usdValBox ? parseFloat(usdValBox.value) || 0 : 0;
+window.balanceChart.data.labels.push(Cycle ${i} (Skip));
 window.balanceChart.data.datasets[0].data.push(currentFloatUsd);
 window.balanceChart.data.datasets[1].data.push(currentFloatUsd - (parseFloat(window.InitialBaseCapital) || 0));
 window.balanceChart.update();
@@ -279,7 +272,7 @@ async function startSimulation(totalCycles) {
 let targetRunCycles = parseInt(totalCycles) || 10;
 if (window.isBotRunning) return;
 window.isBotRunning = true;
-logToPanel(🚀 [LAUNCHING ON-CHAIN ORCHESTRATION] Initializing live multi-router swap loop for ${targetRunCycles} ticks...);
+logToPanel(🚀 [LAUNCHING ON-CHAIN ORCHESTRATION] Initializing live gas-optimized loop for ${targetRunCycles} ticks...);
 await simulateCycle(1, targetRunCycles, 0, 0);
 }
 window.startSimulation = startSimulation;
