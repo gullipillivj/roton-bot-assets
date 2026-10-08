@@ -97,22 +97,32 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         window.InitialBaseCapital = usdValBox ? parseFloat(usdValBox.value) || 100.0 : 100.0;
     }
 
-    for (let i = 1; i <= totalCycles; i++) {
-        if (window.isBotRunning === false) {
-            logToPanel("🛑 Loop stopped by user request.");
-            break;
-        }
+  // ====== FIX: REPLACE THIS SEGMENT IN YOUR SIMULATE_PROD LIVE FILE (File 2) ======
+for (let i = 1; i <= totalCycles; i++) {
+    if (window.isBotRunning === false) {
+        logToPanel("🛑 Loop stopped by user request.");
+        break;
+    }
 
-        logToPanel(`\n--- [START] Compounding Cycle ${i}/${totalCycles} ---`);
-        setStatus(`RUNNING ${i}/${totalCycles}`);
-        
-        if (investBox) balanceInputStr = investBox.value.toString().trim();
-        if (startBox) currentContractWei = startBox.value.toString().trim();
-        
-        let principalUnitsForMath = parseFloat(balanceInputStr);
-        if (principalUnitsForMath > 1000000) principalUnitsForMath = principalUnitsForMath / 1e18; // Wei normalization step
-        
-        logToPanel(`💰 Operational Capital Principal: ${principalUnitsForMath.toFixed(4)} USDT`);
+    logToPanel(`\n--- [START] Compounding Cycle ${i}/${totalCycles} ---`);
+    setStatus(`RUNNING ${i}/${totalCycles}`);
+    
+    if (investBox) balanceInputStr = investBox.value.toString().trim();
+    if (startBox) currentContractWei = startBox.value.toString().trim();
+    
+    // Core Correction: Standardize both the math parser AND the network payload string
+    let principalUnitsForMath = parseFloat(balanceInputStr);
+    if (principalUnitsForMath > 1000000) {
+        // Input is in Wei format from main_prod sync mapping
+        principalUnitsForMath = principalUnitsForMath / 1e18;
+    } else {
+        // Input is in standard human format, convert balanceInputStr to Wei for API payload safety
+        balanceInputStr = balanceInputStr + "000000000000000000";
+    }
+    
+    logToPanel(`💰 Operational Capital Principal: ${principalUnitsForMath.toFixed(4)} USDT`);
+    logToPanel(`📡 Outgoing Payload Weight: ${balanceInputStr} Wei`);
+// =============================================================================
 
         let marketData = [];
         try {
