@@ -158,7 +158,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         let standardGasLimit = currentAsset.network === "erc20" || currentAsset.network === "ethereum" ? 450000n : 150000n;
                         let computedGasFeeWei = liveGasPriceWei * standardGasLimit;
 
-                        if (currentAsset.slippage >= 99.0) continue; 
+                        // Verify network gas token eligibility constraints 
                         if (walletGasBalanceWei < computedGasFeeWei) continue;
 
                         if (currentAsset.expectedOutWei > highestExpectedOutput) {
@@ -168,7 +168,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     }
 
                     if (!targetSelection) {
-                        logToPanel("   ⚠️ [SKIPPED] All assets bypassed due to high slippage risk or gas restrictions.");
+                        logToPanel("   ⚠️ [SKIPPED] All assets bypassed due to wallet gas restrictions.");
                     } else {
                         logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol} (${targetSelection.address})`);
                         
