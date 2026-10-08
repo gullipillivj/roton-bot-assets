@@ -35,54 +35,12 @@ function stopBot() {
 window.stopBot = stopBot;
 
 // ==================================================================
-// 🔍 CLEAN SINGLE-FUNCTION INVENTORY SCANNER (NO SWAPPING STAGES)
-// ==================================================================// ==================================================================
 // 🔄 AUTOMATED SWEEP ORCHESTRATION CYCLE LOOP - SECTION 1 OF 2
-// ==================================================================
-logToPanel("simulate_prod.txt loaded (INTERNAL 10-CYCLE SCANNER MODE)");
-
-// Global log dashboard adapter adapter
-function logToPanel(msg) {
-    const panel = document.getElementById("logPanel");
-    if (panel) {
-        panel.innerText += "\n" + msg;
-        panel.scrollTop = panel.scrollHeight;
-    } else {
-        console.log(msg);
-    }
-}
-window.logToPanel = logToPanel;
-
-// Thread state delays helper
-const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// UI Status label updater
-function setStatus(msg) {
-    const statusLabel = document.querySelector(".status-label");
-    if (statusLabel) {
-        statusLabel.textContent = msg;
-    } else {
-        logToPanel(`[STATUS] ${msg}`);
-    }
-}
-window.setStatus = setStatus;
-
-// Emergency Halt Button Hook
-function stopBot() {
-    window.isBotRunning = false;
-    setStatus("STOPPED");
-    logToPanel("[BOT STOPPED] Tracking execution cycles halted by user.");
-}
-window.stopBot = stopBot;
-
-// ==================================================================
-// 🔍 REPAIRED ENGINE: INTERNAL 10-CYCLE LOGVIEW SCAN MATRIX
 // ==================================================================
 // ==================================================================
 // 🔍 SELF-CONTAINED DYNAMIC LOOP SCANNER
 // ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    // FIXED: Using the totalCycles parameter dynamically to determine the loop count
     logToPanel(`🚀 [SCAN STARTED] Running exactly ${totalCycles} cycles inside the loop.`);
 
     for (let i = 1; i <= totalCycles; i++) {
@@ -140,31 +98,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     }
 
     logToPanel(`\n=== 📊 [FINISHED] Completed all ${totalCycles} requested data scan cycles successfully. ===`);
-    
-    // Return STOP_ERROR to break any external calling files from dropping into legacy code blocks
     return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
 
 // ==================================================================
-// 🛑 DEACTIVATE ALL TRANSACTION Referencing MODULES
-// ==================================================================
-window.handleTwoStepTxPipeline = async function() { return false; };
-window.executeVerifiedSwapPipeline = async function() { return false; };
-window.executeDirectOnChainSwap = async function() { return false; };
-
-
-
-
-
-// ==================================================================
-// 🚀 CONTROLLER AND INTERFACE CONTROLLER GATEWAY
-// ==================================================================
-a// ==================================================================
 // 🚀 MASTER SIMULATION CONTROLLER AND INTERFACE GATEWAY - SECTION 2 OF 2
-// ==================================================================
-// ==================================================================
-// 🚀 MASTER SIMULATION TRIGGER AND INTERFACE GATEWAY - SECTION 2 OF 2
 // ==================================================================
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
@@ -172,7 +111,7 @@ async function startSimulation(totalCycles) {
 
     logToPanel(`🚀 [LAUNCHING] Passing execution context directly to simulateCycle...`);
 
-    // FIXED: Invokes simulateCycle exactly once. The loop runs inside it.
+    // Invokes simulateCycle exactly once. The loop runs inside it.
     await simulateCycle(1, 10, 0, 0);
 
     window.isBotRunning = false;
@@ -191,4 +130,3 @@ window.updateTokenRecord = async function() { return true; };
 window.getCurrentTokenState = async function() { 
     return { token: "0x55d398326f99059fF775485246999027B3197955", network: "bep20" }; 
 };
-
