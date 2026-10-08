@@ -1,4 +1,4 @@
-logToPanel("pancake_prod.txt loaded successfully.");
+logToPanel("pancake_prod.txt loaded successfully. Dual-Popup execution matrix active.");
 
 // ==================================================================
 // 📊 GLOBAL LOGGING UTILITY
@@ -21,20 +21,20 @@ async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderCo
         const paddedAmount = BigInt(amountWei).toString(16).padStart(64, "0");
         const compiledData = approveMethodId + paddedSpender + paddedAmount;
 
-        logToPanel(`📢 [WALLET PROMPT] Authorizing Token Spend Allowance for: ${tokenIn}`);
+        logToPanel(`📢 [POPUP 1/2 - APPROVAL] Authorizing Token Spend Allowance for: ${tokenIn}`);
         
         const approveTxHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{
                 from: userAddr,
-                to: tokenIn, 
+                to: tokenIn, // Sent directly to the ERC20 token contract
                 data: compiledData,
                 value: "0x0"
             }]
         });
         
-        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 5s for block confirmation...`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 6s for block propagation...`);
+        await new Promise(resolve => setTimeout(resolve, 6000));
         return true;
     } catch (err) {
         logToPanel(`❌ User rejected token allocation balance approval: ${err.message || err}`);
@@ -42,30 +42,16 @@ async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderCo
     }
 }
 
-// 🌟 STAGE 3: LINEAR SIMULATION PASS-THROUGH PIPELINE
-async function runsimulateSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
-    const res = await fetch("/prodbot/swap/simulateuniswap", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            router: targetRouter,
-            tokenIn: fromToken,
-            tokenOut: toToken,
-            amountIn: amountWei,
-            amountOutMin: "0"
-        })
-    });
-    return await res.json();
-}
-window.runsimulateSwapUniswap = runsimulateSwapUniswap;
-
-// 🌟 STAGE 4: LINEAR LIVE BSC SWAP PASS-THROUGH PIPELINE
+// 🌟 STAGE 4: FIXED LIVE BSC SWAP PIPELINE (PROMPTS POPUP 2)
 async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
-        // 🌟 FIXED: Updated target pointer address to map your live V12 contract instance coordinates
-        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
+        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; // Synchronized global variable parameter address
+        
+        // Step 1: Prompt the wallet for the ERC20 Token Contract Approval popup
         await requestTokenSpendApproval(userAddr, amountWei, fromToken, V12_ADDR);
 
+        // Step 2: Fetch the compiled execution calldata parameters from the Python server
+        logToPanel(`⏳ Compiling swap payload data from backend route...`);
         const res = await fetch("/prodbot/swap/bscuniswap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -77,19 +63,41 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
                 amountOutMin: "0"
             })
         });
-        return await res.json();
+        
+        const backendPayload = await res.json();
+        if (!backendPayload || backendPayload.status !== "ok") {
+            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        }
+
+        // Step 3: Prompt the wallet for POPUP 2/2 (The On-Chain Swap Contract Execution Call)
+        logToPanel(`📢 [POPUP 2/2 - SWAP] Confirming execution parameters with the V12 Trading Engine...`);
+        const swapTxHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: userAddr,
+                to: backendPayload.swap_packet.to_contract, // V12 Smart Contract address
+                data: backendPayload.swap_packet.compiled_data, // executeERC20SwapUniswap payload
+                value: "0x0"
+            }]
+        });
+
+        logToPanel(`🎉 Trade Dispatched to Network! Swap Hash: ${swapTxHash}`);
+        return { status: "ok", tx_hash: swapTxHash };
     } catch (e) {
+        logToPanel(`❌ BSC Swap Pipeline Interrupted: ${e.message || e}`);
         return { status: "error", message: e.toString() };
     }
 }
 window.runbscSwapUniswap = runbscSwapUniswap;
 
-// 🌟 STAGE 4: LINEAR LIVE ETH SWAP PASS-THROUGH PIPELINE
+// 🌟 STAGE 4: FIXED LIVE ETH SWAP PIPELINE (PROMPTS POPUP 2)
 async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
         const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
+        
         await requestTokenSpendApproval(userAddr, amountWei, fromToken, V12_ADDR);
 
+        logToPanel(`⏳ Compiling swap payload data from backend route...`);
         const res = await fetch("/prodbot/swap/ethuniswap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -101,69 +109,28 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
                 amountOutMin: "0"
             })
         });
-        return await res.json();
+        
+        const backendPayload = await res.json();
+        if (!backendPayload || backendPayload.status !== "ok") {
+            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        }
+
+        logToPanel(`📢 [POPUP 2/2 - SWAP] Confirming execution parameters with the V12 Trading Engine...`);
+        const swapTxHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: userAddr,
+                to: backendPayload.to_contract, 
+                data: backendPayload.compiled_data,
+                value: "0x0"
+            }]
+        });
+
+        logToPanel(`🎉 Trade Dispatched to Network! Swap Hash: ${swapTxHash}`);
+        return { status: "ok", tx_hash: swapTxHash };
     } catch (e) {
+        logToPanel(`❌ ETH Swap Pipeline Interrupted: ${e.message || e}`);
         return { status: "error", message: e.toString() };
     }
 }
 window.runethSwapUniswap = runethSwapUniswap;
-
-// 🌟 STAGE 4: LINEAR LIVE CROSS-CHAIN BRIDGE PASS-THROUGH PIPELINE
-async function runcrossChainSwap(userAddr, amountWei, fromToken, ccipRouter, destinationChainSelector, recipient) {
-    try {
-        const ENGINE_ADDRESS = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
-        logToPanel(`⏳ Initiating cross-chain pipeline request mapping...`);
-        
-        const res = await fetch("/prodbot/swap/crosschain", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                ccipRouter: ccipRouter,
-                tokenIn: fromToken,
-                destinationChainSelector: destinationChainSelector,
-                amountIn: amountWei,
-                recipient: recipient
-            })
-        });
-        
-        const payload = await res.json();
-        if (!payload || payload.status !== "ok") {
-            throw new Error(payload.message || "Failed to compile cross-chain transaction payloads.");
-        }
-
-        logToPanel(`📢 [WALLET PROMPT] Authorizing token spending allowance parameters...`);
-        const approveTxHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: userAddr,
-                to: payload.approval_packet.to_contract,
-                data: payload.approval_packet.compiled_data,
-                value: "0x0"
-            }]
-        });
-        
-        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 12s for block confirmation...`);
-        await new Promise(resolve => setTimeout(resolve, 12000));
-
-        logToPanel(`📢 [WALLET PROMPT] Confirming cross-chain bridge processing via Chainlink CCIP...`);
-        const hexFeeValue = "0x" + BigInt(payload.swap_packet.value_wei).toString(16);
-        
-        const bridgeTxHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: userAddr,
-                to: payload.swap_packet.to_contract,
-                data: payload.swap_packet.compiled_data,
-                value: hexFeeValue 
-            }]
-        });
-        
-        logToPanel(`🎉 Cross-Chain Bridge Transaction Dispatched! Hash: ${bridgeTxHash}`);
-        return { status: "ok", tx_hash: bridgeTxHash };
-
-    } catch (e) {
-        logToPanel(`❌ Cross-Chain Action Interrupted: ${e.message || e}`);
-        return { status: "error", message: e.toString() };
-    }
-}
-window.runcrossChainSwap = runcrossChainSwap;
