@@ -34,22 +34,22 @@ window.stopBot = stopBot;
 // ==================================================================
 // 🔄 DYNAMIC COMPOUNDING ENGINE: PER-CYCLE NET-PROFIT MAXIMIZER
 // ==================================================================
+// ==================================================================
+// 🔄 DYNAMIC COMPOUNDING ENGINE: DIRECT CONSOLE INJECTION
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`🚀 [COMPOUNDING CORE ENGAGED] Scanning up to ${totalCycles} cycles sequentially...`);
+    logToPanel("🚀 [COMPOUNDING ENGAGED] Console bypass core active.");
 
     const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
     const BASE_TOKEN_IN = "0x55d398326f99059fF775485246999027B3197955"; // USDT Base
 
-    // Read initial capital configuration from layout screen input box on startup
     let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "100";
     let activePrincipal = parseFloat(balanceInputStr) || 100.0;
-    
     let userProfitTarget = parseFloat(document.getElementById("profitTarget") ? document.getElementById("profitTarget").value : "1.0") || 1.0;
 
-    // Outer orchestration loop processing cycles dynamically step-by-step
     for (let i = 1; i <= totalCycles; i++) {
         if (window.isBotRunning === false) {
-            logToPanel("🛑 Compounding execution loop halted by user.");
+            logToPanel("🛑 Execution loop safely stopped by user.");
             break;
         }
 
@@ -57,34 +57,32 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         setStatus(`RUNNING ${i}/${totalCycles}`);
         logToPanel(`💰 Starting Cycle Principal: ${activePrincipal.toFixed(4)} USDT`);
 
-        // Convert current compounded floating principal into a secure 18-decimal Wei string layout
+        // Safely construct 18-decimal integer string for backend tracking
         let simulatedAmountInWei = BigInt(Math.floor(activePrincipal * 10000)) * BigInt(10**14);
 
-        // 1. Fetch fresh data array vectors straight out of your coins.txt registry function PER CYCLE
         let marketData = [];
         try {
             if (typeof window.getTradeCandidates === "function") {
                 marketData = await window.getTradeCandidates();
             } else {
-                logToPanel("⚠️ window.getTradeCandidates function is missing from current scope layout.");
+                logToPanel("⚠️ window.getTradeCandidates registry access function is missing.");
                 continue;
             }
         } catch (fErr) {
-            logToPanel(`❌ Dynamic Data Array Retrieval Interrupted: ${fErr.message}`);
+            logToPanel(`❌ Data Array Retrieval Interrupted: ${fErr.message}`);
             continue;
         }
 
         if (!Array.isArray(marketData) || marketData.length === 0) {
-            logToPanel("❌ Ingestion tracking market data array is completely empty for this cycle.");
+            logToPanel("❌ Mapped candidate asset tracking matrix is completely empty.");
             continue;
         }
 
         let selectedWinner = null;
         let highestNetProfitAbsolute = -999999;
 
-        logToPanel(`🎯 Evaluating liquidity depth profiles for ${marketData.length} active candidates...`);
+        logToPanel(`🎯 Auditing ${marketData.length} active candidates for optimal net yield metrics...`);
 
-        // 2. Inner scanner loop auditing tokens against live backend simulation metrics
         for (let index = 0; index < marketData.length; index++) {
             let candidate = marketData[index];
             let symbolLabel = candidate.symbol || "UNKNOWN";
@@ -95,13 +93,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             if (targetAddress === "MISSING" || !targetAddress.startsWith("0x")) continue;
             if (tokenNetwork !== "bep20" && tokenNetwork !== "bsc") continue;
 
-            // Model network transaction friction parameters based on the asset routing type
-            // Cross-chain actions include Chainlink CCIP oracle fees; standard BEP20 swaps carry base router gas costs only
-            let frictionOverheadGasUsdt = 1.50; // Standard baseline BEP20 swap gas cost
+            // Apply specific variable transaction friction models
+            let frictionOverheadGasUsdt = 1.50; 
             if (symbolLabel.toUpperCase().includes("CROSS") || symbolLabel.toUpperCase().includes("BRIDGE")) {
-                frictionOverheadGasUsdt = 7.00; // Multi-chain validation fee allocation
+                frictionOverheadGasUsdt = 7.00; 
             } else if (symbolLabel.toUpperCase() === "VENUSFLUX") {
-                frictionOverheadGasUsdt = 2.00; // Highly optimized liquidity pair overhead cost
+                frictionOverheadGasUsdt = 2.00; 
             }
 
             try {
@@ -125,19 +122,13 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
                     if (expectedOutputWei === "0" || expectedOutputWei === 0) continue;
 
-                    // Deduct liquidity pool price impact costs from gross value
                     let poolEfficiencyFactor = (100.0 - slippagePct) / 100.0;
-                    
-                    // Model gross balance returns using 24h market momentum velocity adjustments
                     let grossReturnUsdt = activePrincipal * (1.0 + (momentum24h / 100.0)) * poolEfficiencyFactor;
-                    
-                    // Deduct the initial principal and the specific operational asset fee block
                     let absoluteNetProfitUsdt = grossReturnUsdt - activePrincipal - frictionOverheadGasUsdt;
                     let calculatedNetProfitPct = (absoluteNetProfitUsdt / activePrincipal) * 100.0;
 
                     logToPanel(`   🔹 ${symbolLabel} -> Gross: $${grossReturnUsdt.toFixed(2)} | Friction: $${frictionOverheadGasUsdt.toFixed(2)} | Net: +$${absoluteNetProfitUsdt.toFixed(2)} (${calculatedNetProfitPct.toFixed(2)}%)`);
 
-                    // CRITICAL LOGIC SELECTOR: Track the token yielding the highest absolute net balance growth
                     if (absoluteNetProfitUsdt > highestNetProfitAbsolute) {
                         highestNetProfitAbsolute = absoluteNetProfitUsdt;
                         selectedWinner = {
@@ -150,33 +141,34 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         };
                     }
                 }
-            } catch (err) {
-                // Background exception tracking bypassed silently to preserve loop runtime stability
-            }
+            } catch (err) {}
 
             await blockDelay(150);
         }
 
         // ==================================================================
-        // 🚀 DYNAMIC CAPITAL RE-INJECTION & COMPOUNDING CHECK
+        // 🚀 CRITICAL COMPOUNDING RE-INJECTION DECISION
         // ==================================================================
         if (selectedWinner && selectedWinner.netUsdtGrowth > 0 && selectedWinner.netPctGrowth >= userProfitTarget) {
-            logToPanel(`\n🔥 [OPTIMIZATION SUCCESSFUL - WINNER SELECTED] 🔥`);
-            logToPanel(`🏅 Token Asset: ${selectedWinner.symbol}`);
-            logToPanel(`🛡️ Overhead Spent: $${selectedWinner.friction.toFixed(2)} (Slippage: ${selectedWinner.slippage}%)`);
+            logToPanel(`\n🔥 [WINNER ISOLATED] 🔥`);
+            logToPanel(`🏅 Selected Token: ${selectedWinner.symbol}`);
+            logToPanel(`🛡️ Overhead Friction: $${selectedWinner.friction.toFixed(2)} (Slippage: ${selectedWinner.slippage}%)`);
             logToPanel(`📈 Realized Net Balance Growth: +$${selectedWinner.netUsdtGrowth.toFixed(4)} USDT`);
             
-            // 🟢 DYNAMIC RE-INJECTION: Add the net earnings back into your principal for the next cycle loop
             activePrincipal = activePrincipal + selectedWinner.netUsdtGrowth;
-            logToPanel(`🌱 Principal grew to: ${activePrincipal.toFixed(4)} USDT`);
+            logToPanel(`🌱 Compounded Balance Principal grew to: ${activePrincipal.toFixed(4)} USDT`);
             
-            // Optional: Update your screen text input box live so you can watch your balance build up visually
             const inputField = document.getElementById("investBalance");
             if (inputField) inputField.value = activePrincipal.toFixed(2);
             
+            // Live profit value counter display text update
+            const totalProfitGained = activePrincipal - (parseFloat(balanceInputStr) || 100.0);
+            const profitTextDisplay = document.getElementById("liveProfitValue");
+            if (profitTextDisplay) profitTextDisplay.textContent = `${totalProfitGained.toFixed(2)} USDT`;
+            
         } else {
-            logToPanel(`\n💤 [CYCLE PASSED] No candidates provided a healthy net-yield profile above ${userProfitTarget}%.`);
-            logToPanel(`🔒 Principal safe. Re-injecting unmodified balance of ${activePrincipal.toFixed(4)} USDT into next cycle verification checks.`);
+            logToPanel(`\n💤 [CYCLE PASSED] No tokens cleared the net profit threshold target of ${userProfitTarget}%.`);
+            logToPanel(`🔒 Balance secure. Re-injecting unaltered capital allocation window directly.`);
         }
 
         logToPanel(`✅ Compounding Cycle ${i}/${totalCycles} analysis finalized.`);
@@ -184,17 +176,18 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         await blockDelay(4000);
     }
 
-    logToPanel(`\n=== 📊 [FINISHED] Completed all requested data compounding scan cycles successfully. Final Balance: ${activePrincipal.toFixed(4)} USDT ===`);
-    return "STOP_ERROR";
+    logToPanel(`\n=== 📊 [SIMULATION COMPLETED SUCCESSFULLY] ===`);
+    window.isBotRunning = false;
+    setStatus("STOPPED");
 }
 window.simulateCycle = simulateCycle;
 
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
-
-    logToPanel(`🚀 [LAUNCHING] Compounding loop master controller initialization active...`);
+    logToPanel(`🚀 [LAUNCHING] Optimization loop master controller active via manual runtime trigger...`);
     await simulateCycle(1, 10, 0, 0);
+}
+window.startSimulation = startSimulation;
 
-    window.isBotRunning = false;
-    setStatus("STOPPED");
+console.log("✅ Engine patched successfully inside browser memory context. Click 'Start Trading' now!");
