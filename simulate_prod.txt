@@ -72,24 +72,34 @@ window.stopBot = stopBot;
 // ==================================================================
 // 🔄 DYNAMIC COMPOUNDING ENGINE: PRECISION DECIMALS BALANCER
 // ==================================================================
+// ==================================================================
+// 🔄 DYNAMIC COMPOUNDING ENGINE: PRECISION DECIMALS BALANCER
+// ==================================================================
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
-    logToPanel(`🚀 [COMPOUNDING ENGINE ACTIVE] Scanning cycles sequentially...`);
+    logToPanel("🚀 [COMPOUNDING ENGINE ENGAGED] Starting sequential analysis pipeline...");
 
     const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
-    const BASE_TOKEN_IN = "0x55d398326f99059fF775485246999027B3197955"; // USDT Base
+    const BASE_TOKEN_IN = "0x55d398326f99059fF775485246999027B3197955"; // USDT Base Contract
 
     // Read initial capital configuration from layout screen input box on startup
     let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "100";
     let rawInputNumber = parseFloat(balanceInputStr) || 100.0;
     
-    // 🟢 FIXED: If balance is pulled as raw Wei (> 1,000,000), normalize it back to standard units
-    let activePrincipal = rawInputNumber > 1000000 ? rawInputNumber / 10**18 : rawInputNumber;
+    // 🟢 SAFE NORMALIZATION: Force an arbitrary baseline simulation principal layout ($100) if raw user wallet units are tiny 
+    let activePrincipal = rawInputNumber;
+    if (rawInputNumber > 1000000) {
+        activePrincipal = 100.0; // Override flat $1 Quintillion or fractional $1.00 Wei lines for simulation scaling
+        logToPanel(`ℹ️ Normalizing raw ledger coordinates to mock starting principal: $${activePrincipal.toFixed(2)} USDT`);
+    } else {
+        logToPanel(`ℹ️ Active principal tracking set to layout input configuration value: $${activePrincipal.toFixed(2)} USDT`);
+    }
     
     let userProfitTarget = parseFloat(document.getElementById("profitTarget") ? document.getElementById("profitTarget").value : "1.0") || 1.0;
+    let initialStartingBasis = activePrincipal;
 
     for (let i = 1; i <= totalCycles; i++) {
         if (window.isBotRunning === false) {
-            logToPanel("🛑 Compounding execution loop halted by user.");
+            logToPanel("🛑 Compounding execution loop safely stopped by user.");
             break;
         }
 
@@ -97,7 +107,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         setStatus(`RUNNING ${i}/${totalCycles}`);
         logToPanel(`💰 Starting Cycle Principal: ${activePrincipal.toFixed(4)} USDT`);
 
-        // Convert current compounded floating principal securely into an 18-decimal string layout
+        // Convert current compounded floating principal securely into an 18-decimal string layout matching backend requirements
         let simulatedAmountInWei = BigInt(Math.floor(activePrincipal * 10000)) * BigInt(10**14);
 
         let marketData = [];
@@ -106,7 +116,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 marketData = await window.getTradeCandidates();
             } else {
                 logToPanel("⚠️ window.getTradeCandidates function is missing from current layout visibility.");
-                continue;
+                window.isBotRunning = false;
+                setStatus("STOPPED");
+                return;
             }
         } catch (fErr) {
             logToPanel(`❌ Dynamic Data Array Retrieval Interrupted: ${fErr.message}`);
@@ -189,7 +201,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 }
             } catch (err) {}
 
-            await blockDelay(150);
+            await blockDelay(100);
         }
 
         // ==================================================================
@@ -201,7 +213,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             logToPanel(`🛡️ Overhead Spent: $${selectedWinner.friction.toFixed(2)} (Slippage: ${selectedWinner.slippage}%)`);
             logToPanel(`📈 Realized Net Balance Growth: +$${selectedWinner.netUsdtGrowth.toFixed(4)} USDT`);
             
-            // DYNAMIC RE-INJECTION: Update principal for subsequent iterations
+            // DYNAMIC RE-INJECTION: Add the net earnings back into your principal for the next cycle loop
             activePrincipal = activePrincipal + selectedWinner.netUsdtGrowth;
             logToPanel(`🌱 Principal grew to: ${activePrincipal.toFixed(4)} USDT`);
             
@@ -209,26 +221,43 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             const inputField = document.getElementById("investBalance");
             if (inputField) inputField.value = activePrincipal.toFixed(2);
             
-            const totalProfitGained = activePrincipal - (rawInputNumber > 1000000 ? rawInputNumber / 10**18 : rawInputNumber);
+            const totalProfitGained = activePrincipal - initialStartingBasis;
             const profitTextDisplay = document.getElementById("liveProfitValue");
             if (profitTextDisplay) profitTextDisplay.textContent = `${totalProfitGained.toFixed(2)} USDT`;
+            
+            // Live Chart visual canvas link data update routine
+            if (window.balanceChart && typeof window.balanceChart.update === "function") {
+                window.balanceChart.data.labels.push(`Cycle ${i}`);
+                window.balanceChart.data.datasets[0].data.push(activePrincipal);
+                window.balanceChart.data.datasets[1].data.push(totalProfitGained);
+                window.balanceChart.update();
+            }
             
         } else {
             logToPanel(`\n💤 [CYCLE PASSED] No candidates provided a healthy net-yield profile above ${userProfitTarget}%.`);
             logToPanel(`🔒 Principal safe. Re-injecting unmodified balance of ${activePrincipal.toFixed(4)} USDT into next cycle check.`);
+            
+            if (window.balanceChart && typeof window.balanceChart.update === "function") {
+                window.balanceChart.data.labels.push(`Cycle ${i} (Skip)`);
+                window.balanceChart.data.datasets[0].data.push(activePrincipal);
+                window.balanceChart.data.datasets[1].data.push(activePrincipal - initialStartingBasis);
+                window.balanceChart.update();
+            }
         }
 
         logToPanel(`✅ Compounding Cycle ${i}/${totalCycles} analysis finalized.`);
         setStatus("WAITING");
-        await blockDelay(4000);
+        await blockDelay(3000);
     }
 
     logToPanel(`\n=== 📊 [FINISHED] Completed all dynamic data compounding cycles successfully. Final Balance: ${activePrincipal.toFixed(4)} USDT ===`);
     window.isBotRunning = false;
     setStatus("STOPPED");
-    return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
+
+
+
 
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
