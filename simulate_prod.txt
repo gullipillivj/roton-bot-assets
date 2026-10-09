@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (DYNAMIC MULTI-ASSET TRADING MODE)");
+logToPanel("simulate_prod.txt loaded (LIVE WALLET RESOLUTION MODE)");
 
 // Global log dashboard adapter
 function logToPanel(msg) {
@@ -31,10 +31,26 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
+// 🟢 NEW: Direct provider account hook replaces fragile URL strings entirely
+async function getLiveWalletAddress() {
+    if (window.ethereum) {
+        try {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts && accounts.length > 0) {
+                return accounts[0].toLowerCase().trim();
+            }
+        } catch (err) {
+            console.error("Error reading accounts from window.ethereum:", err);
+        }
+    }
+    // Fallback to legacy context state variable if window.ethereum isn't loaded yet
+    return window.USER_ADDR ? window.USER_ADDR.toLowerCase().trim() : null;
+}
+
 // Helper to dynamically locate which token currently holds a balance inside the contract vault
 async function getActiveLedgerAsset(userAddress) {
     try {
-        logToPanel(`🔎 Fetching live on-chain ledger arrays from tracking endpoint...`);
+        logToPanel(`🔎 Querying ledger data for address: ${userAddress}...`);
         const res = await fetch("/prodbot/ledger/balances", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -45,7 +61,6 @@ async function getActiveLedgerAsset(userAddress) {
         if (ledgerData && ledgerData.status === "ok" && Array.isArray(ledgerData.tokens)) {
             for (let i = 0; i < ledgerData.tokens.length; i++) {
                 const currentBalWei = BigInt(ledgerData.balances[i] || "0");
-                // Return the first asset found that holds a positive balance weight
                 if (currentBalWei > 0n) {
                     logToPanel(`🎯 Active Capital Found: ${ledgerData.tokens[i]} | Balance: ${currentBalWei.toString()} Wei`);
                     return {
@@ -54,7 +69,6 @@ async function getActiveLedgerAsset(userAddress) {
                     };
                 }
             }
-            // Fallback to the first token if all balances are zero
             if (ledgerData.tokens.length > 0) {
                 return { address: ledgerData.tokens[0].toLowerCase().trim(), balanceWei: "0" };
             }
@@ -62,7 +76,6 @@ async function getActiveLedgerAsset(userAddress) {
     } catch (err) {
         logToPanel(`⚠️ Failed checking multi-asset ledger array: ${err.message}`);
     }
-    // Universal fallback: USDT Base Contract coordinates
     return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
 }
 // ==================================================================
@@ -80,16 +93,16 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`\n--- [START] Simulation Cycle ${i}/${totalCycles} ---`);
         setStatus(`RUNNING ${i}/${totalCycles}`);
 
-        if (!window.USER_ADDR) {
-            logToPanel("❌ [ABORTED] No wallet address connected to user session.");
+        // 🟢 Dynamically resolve active wallet context at the beginning of each cycle run
+        const currentActiveWallet = await getLiveWalletAddress();
+        if (!currentActiveWallet) {
+            logToPanel("❌ [ABORTED] No wallet session address connected. Connect wallet first.");
             break;
         }
 
-        // DYNAMIC LOOKUP: Replaces the old hardcoded USDT definition path entirely
-        const activeAsset = await getActiveLedgerAsset(window.USER_ADDR);
+        const activeAsset = await getActiveLedgerAsset(currentActiveWallet);
         const DYNAMIC_TOKEN_IN = activeAsset.address;
         
-        // Read raw UI input or use the full balance returned straight from the contract ledger values
         let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
         if (balanceInputStr === "0" || !balanceInputStr) {
             balanceInputStr = activeAsset.balanceWei !== "0" ? activeAsset.balanceWei : "10";
@@ -112,7 +125,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             continue;
         }
 
-        // 🟢 CUSTOM TOKEN INJECTION MATRIX
         const customTokens = [
             { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
             { symbol: "RR-ETH", address: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", tokentype: "erc20" },
@@ -140,7 +152,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 continue;
             }
 
-            // Guard check: Avoid simulating a trade from a token to itself
             if (targetAddress.toLowerCase().trim() === DYNAMIC_TOKEN_IN) {
                 continue;
             }
@@ -164,14 +175,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 });
 
                 let resData = await response.json();
-
                 if (resData.status === "ok") {
                     let expectedOutput = resData.expected_output_wei || "0";
                     let slippageCost = resData.slippage_cost_pct || "0.0";
 
-                    if (expectedOutput === "0" || expectedOutput === 0) {
-                        // Suppress logs for dead pools to keep interface output clean
-                    } else {
+                    if (expectedOutput !== "0" && expectedOutput !== 0) {
                         logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
                         
                         cycleCandidatesArray.push({
@@ -184,9 +192,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     }
                 }
             } catch (err) {
-                // Fail silently to keep loop ticking smoothly
+                // Fail silently
             }
-
             await blockDelay(100);
         }
         // ==================================================================
@@ -198,7 +205,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             logToPanel("   💤 No executable candidates cleared parameter validation mappings for this loop.");
         } else {
             try {
-                const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [window.USER_ADDR, "latest"] });
+                const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
                 const walletGasBalanceWei = BigInt(userBalanceHex);
                 const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice" });
                 const liveGasPriceWei = BigInt(networkGasPriceHex);
@@ -227,12 +234,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
                         logToPanel("   ⚡ Forwarding payload parameters to ERC20 mainnet pipeline...");
                         txResult = await window.runethSwapUniswap(
-                            window.USER_ADDR, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
                         );
                     } else {
                         logToPanel("   ⚡ Forwarding payload parameters to BEP20 production pipeline...");
                         txResult = await window.runbscSwapUniswap(
-                            window.USER_ADDR, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
                         );
                     }
                     if (txResult && txResult.status === "ok") {
