@@ -31,7 +31,7 @@ function stopBot() {
 }
 window.stopBot = stopBot;
 
-// 🟢 NEW: Direct provider account hook replaces fragile URL strings entirely
+// Direct provider account hook replaces fragile URL strings entirely
 async function getLiveWalletAddress() {
     if (window.ethereum) {
         try {
@@ -43,10 +43,8 @@ async function getLiveWalletAddress() {
             console.error("Error reading accounts from window.ethereum:", err);
         }
     }
-    // Fallback to legacy context state variable if window.ethereum isn't loaded yet
     return window.USER_ADDR ? window.USER_ADDR.toLowerCase().trim() : null;
 }
-
 // Helper to dynamically locate which token currently holds a balance inside the contract vault
 async function getActiveLedgerAsset(userAddress) {
     try {
@@ -78,9 +76,25 @@ async function getActiveLedgerAsset(userAddress) {
     }
     return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
 }
-// ==================================================================
-// 🔍 ZERO-GAS SIMULATOR WITH DYNAMIC BASE TOKEN ROUTING MAPPINGS
-// ==================================================================
+
+// Global tokens array configuration grid
+function getStaticLiquidityMesh() {
+    return [
+        // --- Your 4 Custom Bridges ---
+        { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
+        { symbol: "RR-ETH", address: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", tokentype: "erc20" },
+        { symbol: "WRR-ETH", address: "0xf3414e85dEa5cf3Fab62F5A967F98Fd032d5BE2A", tokentype: "erc20" },
+        { symbol: "WRR-WBNB", address: "0xBf9d926BBF7b9408D1182c45fCf64f7f27909837", tokentype: "bep20" },
+
+        // --- Cross-Chain Fallback Highway Anchors ---
+        { symbol: "USDT-BSC", address: "0x55d398326f99059fF775485246999027B3197955", tokentype: "bep20" },
+        { symbol: "USDC-BSC", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", tokentype: "bep20" },
+        { symbol: "WBNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", tokentype: "bep20" },
+        { symbol: "USDT-ETH", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", tokentype: "erc20" },
+        { symbol: "USDC-ETH", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0ce3606eb48", tokentype: "erc20" },
+        { symbol: "WETH", address: "0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2", tokentype: "erc20" }
+    ];
+}
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
     const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 
@@ -93,10 +107,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`\n--- [START] Simulation Cycle ${i}/${totalCycles} ---`);
         setStatus(`RUNNING ${i}/${totalCycles}`);
 
-        // 🟢 Dynamically resolve active wallet context at the beginning of each cycle run
         const currentActiveWallet = await getLiveWalletAddress();
         if (!currentActiveWallet) {
-            logToPanel("❌ [ABORTED] No wallet session address connected. Connect wallet first.");
+            logToPanel("❌ [ABORTED] No wallet session address connected.");
             break;
         }
 
@@ -117,7 +130,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             if (typeof window.getTradeCandidates === "function") {
                 marketData = await window.getTradeCandidates();
             } else {
-                logToPanel("⚠️ window.getTradeCandidates registry access function is missing.");
+                logToPanel("⚠️ window.getTradeCandidates function is missing.");
                 continue;
             }
         } catch (fErr) {
@@ -125,36 +138,23 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             continue;
         }
 
-        const customTokens = [
-            { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
-            { symbol: "RR-ETH", address: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", tokentype: "erc20" },
-            { symbol: "WRR-ETH", address: "0xf3414e85dEa5cf3Fab62F5A967F98Fd032d5BE2A", tokentype: "erc20" },
-            { symbol: "WRR-WBNB", address: "0xBf9d926BBF7b9408D1182c45fCf64f7f27909837", tokentype: "bep20" }
-        ];
-
-        marketData = marketData.concat(customTokens);
-
+        marketData = marketData.concat(getStaticLiquidityMesh());
         if (!Array.isArray(marketData) || marketData.length === 0) {
             logToPanel("❌ Filtered token list data is completely empty.");
             continue;
         }
 
         logToPanel(`🎯 Dispatching ${marketData.length} tokens to validator endpoint...`);
-
         let cycleCandidatesArray = [];
+
         for (let index = 0; index < marketData.length; index++) {
             let candidate = marketData[index];
             let symbolLabel = candidate.symbol || "UNKNOWN";
             let targetAddress = candidate.address || "MISSING";
             let tokenNetwork = (candidate.tokentype || "bep20").toLowerCase();
 
-            if (targetAddress === "MISSING" || !targetAddress.startsWith("0x")) {
-                continue;
-            }
-
-            if (targetAddress.toLowerCase().trim() === DYNAMIC_TOKEN_IN) {
-                continue;
-            }
+            if (targetAddress === "MISSING" || !targetAddress.startsWith("0x")) continue;
+            if (targetAddress.toLowerCase().trim() === DYNAMIC_TOKEN_IN) continue;
 
             let activeRouterForSimulation = PANCAKE_ROUTER;
             if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
@@ -191,18 +191,14 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         });
                     }
                 }
-            } catch (err) {
-                // Fail silently
-            }
+            } catch (err) {}
             await blockDelay(100);
         }
-        // ==================================================================
-        // ⚖️ POST-CYCLE EVALUATION MATRIX: CHOOSE AND RUN EXACTLY ONE SWAP
-        // ==================================================================
+
         logToPanel(`\n📊 [CYCLE AUDIT] Evaluating ${cycleCandidatesArray.length} swappable pool candidates...`);
 
         if (cycleCandidatesArray.length === 0) {
-            logToPanel("   💤 No executable candidates cleared parameter validation mappings for this loop.");
+            logToPanel("   💤 No executable candidates cleared parameter validation mappings.");
         } else {
             try {
                 const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
@@ -227,23 +223,21 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 }
 
                 if (!targetSelection) {
-                    logToPanel("   ⚠️ [SKIPPED] All assets bypassed due to wallet gas restrictions.");
+                    logToPanel("   ⚠️ [SKIPPED] All assets bypassed due to gas restrictions.");
                 } else {
-                    logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol} (${targetSelection.address})`);
+                    logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol}`);
                     let txResult = null;
                     if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
-                        logToPanel("   ⚡ Forwarding payload parameters to ERC20 mainnet pipeline...");
                         txResult = await window.runethSwapUniswap(
                             currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
                         );
                     } else {
-                        logToPanel("   ⚡ Forwarding payload parameters to BEP20 production pipeline...");
                         txResult = await window.runbscSwapUniswap(
                             currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
                         );
                     }
                     if (txResult && txResult.status === "ok") {
-                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Token approval and route execution initialized. Awaiting confirmation loop...");
+                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Waiting for confirmation loop...");
                         let startBox = document.getElementById("startBalance");
                         let baseWeiState = startBox ? startBox.value.toString().trim() : "0";
                         let transactionConfirmed = false;
@@ -259,13 +253,10 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                             }
                             await blockDelay(6000);
                         }
-                        if (!transactionConfirmed) {
-                            logToPanel("   ⚠️ [POLLING COMPLETE] Ledger validation cycle complete.");
-                        }
                         logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
                         await blockDelay(15000);
                     } else {
-                        logToPanel(`   ❌ [ROUTING REJECTION] Router dropped payload: ${txResult ? txResult.message : "RPC signature fault."}`);
+                        logToPanel(`   ❌ [ROUTING REJECTION] Router dropped payload.`);
                     }
                 }
             } catch (walletErr) {
