@@ -52,17 +52,19 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
 
         // Step 2: Fetch the compiled execution calldata parameters from the Python server
         logToPanel(`⏳ Compiling swap payload data from backend route...`);
-        const res = await fetch("/prodbot/swap/bscuniswap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: targetRouter,
-                tokenIn: fromToken,
-                tokenOut: toToken,
-                amountIn: amountWei,
-                amountOutMin: "0"
-            })
-        });
+        // Replace the backend payload assembly phase inside your runbscSwapUniswap function:
+const res = await fetch("/prodbot/swap/bscuniswap", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+        router: targetRouter,
+        tokenIn: fromToken,
+        tokenOut: toToken,
+        amountIn: BigInt(amountWei).toString(), // Ensure pure numeric string execution vectors
+        amountOutMin: "0"
+    })
+});
+
         
         const backendPayload = await res.json();
         if (!backendPayload || backendPayload.status !== "ok") {
