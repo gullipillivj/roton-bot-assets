@@ -53,7 +53,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "10";
         if (!balanceInputStr || balanceInputStr === "0") balanceInputStr = "10";
         
-        // NATIVE CORE CORRECTION: Scaler padding logic completely bypassed. The raw 18-digit Wei balance string is forwarded directly.
         let simulatedAmountInWei = balanceInputStr;
 
         logToPanel(`💰 Pure Transaction Principal Weight: ${simulatedAmountInWei} Wei`);
@@ -71,12 +70,23 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             continue;
         }
 
+        // 🟢 CUSTOM TOKEN INJECTION MATRIX: Merging your specified custom assets explicitly
+        const customTokens = [
+            { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
+            { symbol: "RR-ETH", address: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", tokentype: "erc20" },
+            { symbol: "WRR-ETH", address: "0xf3414e85dEa5cf3Fab62F5A967F98Fd032d5BE2A", tokentype: "erc20" },
+            { symbol: "WRR-WBNB", address: "0xBf9d926BBF7b9408D1182c45fCf64f7f27909837", tokentype: "bep20" }
+        ];
+
+        // Combine system assets with your custom trading matrix tokens seamlessly
+        marketData = marketData.concat(customTokens);
+
         if (!Array.isArray(marketData) || marketData.length === 0) {
             logToPanel("❌ Filtered token list data is completely empty.");
             continue;
         }
 
-        logToPanel(`🎯 Dispatching ${marketData.length} tokens to read-only validator endpoint...`);
+        logToPanel(`🎯 Dispatching ${marketData.length} tokens (${customTokens.length} custom injected) to validator endpoint...`);
 
         // Dedicated array matrix to cache evaluation metrics safely away from loop collisions
         let cycleCandidatesArray = [];
@@ -90,9 +100,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 continue;
             }
 
-            if (tokenNetwork !== "bep20" && tokenNetwork !== "bsc") {
-                logToPanel(`   🔹 [SKIP] ${symbolLabel} (${tokenNetwork.toUpperCase()} asset bypassed on PancakeSwap router)`);
-                continue;
+            // Route dynamically through PancakeSwap parameters or Ethereum router constraints based on definition metrics
+            let activeRouterForSimulation = PANCAKE_ROUTER;
+            if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
+                // If your backend simulation uses a distinct ETH mainnet router, swap out this string constraint
+                activeRouterForSimulation = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; 
             }
 
             try {
@@ -100,7 +112,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                        router: PANCAKE_ROUTER,
+                        router: activeRouterForSimulation,
                         tokenIn: BASE_TOKEN_IN,
                         tokenOut: targetAddress,
                         amountIn: simulatedAmountInWei,
@@ -190,7 +202,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         }
 
                         if (txResult && txResult.status === "ok") {
-                            logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Token approval and route execution initialized. Locking loop for ledger checks...");
+                            logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Token approval and route execution initialized. Locking loop for ledger checks... ");
                             
                             let startBox = document.getElementById("startBalance");
                             let baseWeiState = startBox ? startBox.value.toString().trim() : "0";
