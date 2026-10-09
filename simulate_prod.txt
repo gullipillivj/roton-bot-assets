@@ -77,22 +77,25 @@ async function getActiveLedgerAsset(userAddress) {
     return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
 }
 
-// Global tokens array configuration grid
-function getStaticLiquidityMesh() {
+// 🛡️ EMERGENCY EXIT PILLARS ONLY (Guaranteed liquidity paths for exotic tokens)
+function getUniversalPillarsMesh() {
     return [
-        // --- Your 4 Custom Bridges ---
+        { symbol: "WBNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", tokentype: "bep20" },
+        { symbol: "USDT-BSC", address: "0x55d398326f99059fF775485246999027B3197955", tokentype: "bep20" },
+        { symbol: "USDC-BSC", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", tokentype: "bep20" },
+        { symbol: "WETH", address: "0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2", tokentype: "erc20" },
+        { symbol: "USDT-ETH", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", tokentype: "erc20" },
+        { symbol: "USDC-ETH", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0ce3606eb48", tokentype: "erc20" }
+    ];
+}
+
+// 🌉 CUSTOM LIQUIDITY BRIDGES (Only utilized when starting from deep liquidity)
+function getCustomBridgesMesh() {
+    return [
         { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
         { symbol: "RR-ETH", address: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", tokentype: "erc20" },
         { symbol: "WRR-ETH", address: "0xf3414e85dEa5cf3Fab62F5A967F98Fd032d5BE2A", tokentype: "erc20" },
-        { symbol: "WRR-WBNB", address: "0xBf9d926BBF7b9408D1182c45fCf64f7f27909837", tokentype: "bep20" },
-
-        // --- Cross-Chain Fallback Highway Anchors ---
-        { symbol: "USDT-BSC", address: "0x55d398326f99059fF775485246999027B3197955", tokentype: "bep20" },
-        { symbol: "USDC-BSC", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", tokentype: "bep20" },
-        { symbol: "WBNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", tokentype: "bep20" },
-        { symbol: "USDT-ETH", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", tokentype: "erc20" },
-        { symbol: "USDC-ETH", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0ce3606eb48", tokentype: "erc20" },
-        { symbol: "WETH", address: "0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2", tokentype: "erc20" }
+        { symbol: "WRR-WBNB", address: "0xBf9d926BBF7b9408D1182c45fCf64f7f27909837", tokentype: "bep20" }
     ];
 }
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
@@ -114,7 +117,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         const activeAsset = await getActiveLedgerAsset(currentActiveWallet);
-        const DYNAMIC_TOKEN_IN = activeAsset.address;
+        const DYNAMIC_TOKEN_IN = activeAsset.address.toLowerCase().trim();
         
         let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
         if (balanceInputStr === "0" || !balanceInputStr) {
@@ -125,20 +128,32 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         logToPanel(`📥 Current Routing Base Asset: ${DYNAMIC_TOKEN_IN}`);
         logToPanel(`💰 Pure Transaction Principal Weight: ${simulatedAmountInWei} Wei`);
 
+        const universalPillars = getUniversalPillarsMesh();
+        const customBridges = getCustomBridgesMesh();
+
+        const holdingPillarToken = universalPillars.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
+        const holdingBridgeToken = customBridges.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
+
         let marketData = [];
-        try {
-            if (typeof window.getTradeCandidates === "function") {
-                marketData = await window.getTradeCandidates();
-            } else {
-                logToPanel("⚠️ window.getTradeCandidates function is missing.");
+        if (!holdingPillarToken && !holdingBridgeToken) {
+            // 🚨 ISOLATION ACTUATED: Force exotics straight into heavy liquidity highways
+            logToPanel("⚠️ [EXOTIC ISOLATION ACTUATED] Capital locked in exotic token. Testing paths exclusively to WBNB/WETH/USDT/USDC.");
+            marketData = universalPillars;
+        } else {
+            try {
+                if (typeof window.getTradeCandidates === "function") {
+                    marketData = await window.getTradeCandidates();
+                } else {
+                    logToPanel("⚠️ window.getTradeCandidates function is missing.");
+                    continue;
+                }
+            } catch (fErr) {
+                logToPanel(`❌ Local Array Ingestion Error: ${fErr.message}`);
                 continue;
             }
-        } catch (fErr) {
-            logToPanel(`❌ Local Array Ingestion Error: ${fErr.message}`);
-            continue;
+            marketData = marketData.concat(customBridges).concat(universalPillars);
         }
 
-        marketData = marketData.concat(getStaticLiquidityMesh());
         if (!Array.isArray(marketData) || marketData.length === 0) {
             logToPanel("❌ Filtered token list data is completely empty.");
             continue;
@@ -237,22 +252,28 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         );
                     }
                     if (txResult && txResult.status === "ok") {
-                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Waiting for confirmation loop...");
-                        let startBox = document.getElementById("startBalance");
-                        let baseWeiState = startBox ? startBox.value.toString().trim() : "0";
+                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Awaiting confirmation loop...");
+                        
                         let transactionConfirmed = false;
                         for (let checkNum = 1; checkNum <= 15; checkNum++) {
                             if (window.isBotRunning === false) break;
-                            if (typeof window.syncBalanceFromFund === "function") {
-                                let currentWeiVal = await window.syncBalanceFromFund();
-                                if (BigInt(currentWeiVal || "0") !== BigInt(baseWeiState)) {
-                                    logToPanel("   🎉 [SETTLEMENT CONFIRMED] Block updated successfully!");
-                                    transactionConfirmed = true;
-                                    break;
-                                }
+                            
+                            let verifiedState = await getActiveLedgerAsset(currentActiveWallet);
+                            if (verifiedState.address.toLowerCase().trim() !== DYNAMIC_TOKEN_IN) {
+                                logToPanel("   🎉 [SETTLEMENT CONFIRMED] Asset state changed successfully!");
+                                transactionConfirmed = true;
+                                break;
                             }
                             await blockDelay(6000);
                         }
+
+                        if (!transactionConfirmed) {
+                            logToPanel(`❌ [REVERT DETECTED] On-chain state failed to update. Halting execution loop to save gas.`);
+                            window.isBotRunning = false;
+                            setStatus("STOPPED");
+                            break;
+                        }
+
                         logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
                         await blockDelay(15000);
                     } else {
@@ -281,4 +302,3 @@ async function startSimulation(totalCycles) {
     setStatus("STOPPED");
     logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
-window.startSimulation = startSimulation;
