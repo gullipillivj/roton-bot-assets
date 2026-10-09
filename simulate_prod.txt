@@ -1,39 +1,3 @@
-logToPanel("simulate_prod.txt loaded (LIVE PRE-TRADE SLIPPAGE SIMULATION MODE)");
-
-// Global log dashboard adapter
-function logToPanel(msg) {
-    const panel = document.getElementById("logPanel");
-    if (panel) {
-        panel.innerText += "\n" + msg;
-        panel.scrollTop = panel.scrollHeight;
-    } else {
-        console.log(msg);
-    }
-}
-window.logToPanel = logToPanel;
-
-const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-function setStatus(msg) {
-    const statusLabel = document.querySelector(".status-label");
-    if (statusLabel) {
-        statusLabel.textContent = msg;
-    } else {
-        logToPanel(`[STATUS] ${msg}`);
-    }
-}
-window.setStatus = setStatus;
-
-function stopBot() {
-    window.isBotRunning = false;
-    setStatus("STOPPED");
-    logToPanel("[BOT STOPPED] Asset scan matrix paused by user.");
-}
-window.stopBot = stopBot;
-
-// ==================================================================
-// 🔍 ZERO-GAS BROWNIE SIMULATOR CORE WITH POST-CYCLE BATCH MATCHING
-// ==================================================================
 logToPanel("simulate_prod.txt loaded (DYNAMIC MULTI-ASSET TRADING MODE)");
 
 // Global log dashboard adapter
@@ -101,7 +65,6 @@ async function getActiveLedgerAsset(userAddress) {
     // Universal fallback: USDT Base Contract coordinates
     return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
 }
-
 // ==================================================================
 // 🔍 ZERO-GAS SIMULATOR WITH DYNAMIC BASE TOKEN ROUTING MAPPINGS
 // ==================================================================
@@ -193,7 +156,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         router: activeRouterForSimulation,
-                        tokenIn: DYNAMIC_TOKEN_IN, // Natively passes the current variant base asset coordinate
+                        tokenIn: DYNAMIC_TOKEN_IN,
                         tokenOut: targetAddress,
                         amountIn: simulatedAmountInWei,
                         amountOutMin: 0
@@ -226,7 +189,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
             await blockDelay(100);
         }
-
         // ==================================================================
         // ⚖️ POST-CYCLE EVALUATION MATRIX: CHOOSE AND RUN EXACTLY ONE SWAP
         // ==================================================================
@@ -258,69 +220,60 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 }
 
                 if (!targetSelection) {
-logToPanel("   ⚠️ [SKIPPED] All assets bypassed due to wallet gas restrictions.");
-} else {
-logToPanel(\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol} (${targetSelection.address}));
-let txResult = null;
-if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
-logToPanel("   ⚡ Forwarding payload parameters to ERC20 mainnet pipeline...");
-txResult = await window.runethSwapUniswap(
-window.USER_ADDR, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
-);
-} else {
-logToPanel("   ⚡ Forwarding payload parameters to BEP20 production pipeline...");
-txResult = await window.runbscSwapUniswap(
-window.USER_ADDR, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
-);
-}
-if (txResult && txResult.status === "ok") {
-logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Token approval and route execution initialized. Awaiting confirmation loop...");
-let startBox = document.getElementById("startBalance");
-let baseWeiState = startBox ? startBox.value.toString().trim() : "0";
-let transactionConfirmed = false;
-for (let checkNum = 1; checkNum <= 15; checkNum++) {
-if (window.isBotRunning === false) break;
-if (typeof window.syncBalanceFromFund === "function") {
-let currentWeiVal = await window.syncBalanceFromFund();
-if (BigInt(currentWeiVal || "0") !== BigInt(baseWeiState)) {
-logToPanel(   🎉 [SETTLEMENT CONFIRMED] Block updated successfully!);
-transactionConfirmed = true;
-break;
-}
-}
-await blockDelay(6000);
-}
-if (!transactionConfirmed) {
-logToPanel("   ⚠️ [POLLING COMPLETE] Ledger validation cycle complete.");
-}
-logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
-await blockDelay(15000);
-} else {
-logToPanel(   ❌ [ROUTING REJECTION] Router dropped payload: ${txResult ? txResult.message : "RPC signature fault."});
-}
-}
-} catch (walletErr) {
-logToPanel(   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message});
-}
-}
-logToPanel(✅ Cycle ${i}/${totalCycles} analysis finalized.);
-setStatus("WAITING");
-await blockDelay(4000);
-}
-logToPanel(\n=== 📊 [FINISHED] Scan operations complete. ==);
-return "STOP_ERROR";
+                    logToPanel("   ⚠️ [SKIPPED] All assets bypassed due to wallet gas restrictions.");
+                } else {
+                    logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol} (${targetSelection.address})`);
+                    let txResult = null;
+                    if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
+                        logToPanel("   ⚡ Forwarding payload parameters to ERC20 mainnet pipeline...");
+                        txResult = await window.runethSwapUniswap(
+                            window.USER_ADDR, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                        );
+                    } else {
+                        logToPanel("   ⚡ Forwarding payload parameters to BEP20 production pipeline...");
+                        txResult = await window.runbscSwapUniswap(
+                            window.USER_ADDR, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                        );
+                    }
+                    if (txResult && txResult.status === "ok") {
+                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Token approval and route execution initialized. Awaiting confirmation loop...");
+                        let startBox = document.getElementById("startBalance");
+                        let baseWeiState = startBox ? startBox.value.toString().trim() : "0";
+                        let transactionConfirmed = false;
+                        for (let checkNum = 1; checkNum <= 15; checkNum++) {
+                            if (window.isBotRunning === false) break;
+                            if (typeof window.syncBalanceFromFund === "function") {
+                                let currentWeiVal = await window.syncBalanceFromFund();
+                                if (BigInt(currentWeiVal || "0") !== BigInt(baseWeiState)) {
+                                    logToPanel("   🎉 [SETTLEMENT CONFIRMED] Block updated successfully!");
+                                    transactionConfirmed = true;
+                                    break;
+                                }
+                            }
+                            await blockDelay(6000);
+                        }
+                        if (!transactionConfirmed) {
+                            logToPanel("   ⚠️ [POLLING COMPLETE] Ledger validation cycle complete.");
+                        }
+                        logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
+                        await blockDelay(15000);
+                    } else {
+                        logToPanel(`   ❌ [ROUTING REJECTION] Router dropped payload: ${txResult ? txResult.message : "RPC signature fault."}`);
+                    }
+                }
+            } catch (walletErr) {
+                logToPanel(`   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message}`);
+            }
+        }
+        logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
+        setStatus("WAITING");
+        await blockDelay(4000);
+    }
+    logToPanel("\n=== 📊 [FINISHED] Scan operations complete. ==");
+    return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
-async function startSimulation(totalCycles) {
-if (window.isBotRunning) return;
-window.isBotRunning = true;
-logToPanel("🚀 [LAUNCHING] Dynamic background validation sequence engaged...");
-await simulateCycle(1, 10, 0, 0);
-window.isBotRunning = false;
-setStatus("STOPPED");
-logToPanel("[BOT FINISHED] Run parameters finalized.");
-}
-window.startSimulation = startSimulation;
+
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
