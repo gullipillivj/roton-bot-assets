@@ -120,8 +120,8 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
             method: "eth_sendTransaction",
             params: [{
                 from: userAddr,
-                to: backendPayload.to_contract, 
-                data: backendPayload.compiled_data,
+                to: backendPayload.swap_packet.to_contract, // 🟢 FIXED: Now correctly targets the aligned nested swap packet property
+                data: backendPayload.swap_packet.compiled_data, // 🟢 FIXED: Now correctly targets the aligned nested swap packet property
                 value: "0x0"
             }]
         });
