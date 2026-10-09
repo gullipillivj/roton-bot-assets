@@ -77,7 +77,7 @@ async function getActiveLedgerAsset(userAddress) {
     return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
 }
 
-// 🛡️ EMERGENCY EXIT PILLARS ONLY (Guaranteed liquidity paths for exotic tokens)
+// 🛡️ STRONG NETWORK PILLARS ONLY (Universal Liquidity Highways)
 function getUniversalPillarsMesh() {
     return [
         { symbol: "WBNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", tokentype: "bep20" },
@@ -89,7 +89,7 @@ function getUniversalPillarsMesh() {
     ];
 }
 
-// 🌉 CUSTOM LIQUIDITY BRIDGES (Only utilized when starting from deep liquidity)
+// 🌉 CUSTOM BRIDGES MATRIX (Only used when expanding outward from high liquidity)
 function getCustomBridgesMesh() {
     return [
         { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
@@ -131,15 +131,17 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         const universalPillars = getUniversalPillarsMesh();
         const customBridges = getCustomBridgesMesh();
 
+        // 🛡️ Pre-Simulation Shield: Check target matrix alignment before testing paths
         const holdingPillarToken = universalPillars.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
         const holdingBridgeToken = customBridges.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
 
         let marketData = [];
         if (!holdingPillarToken && !holdingBridgeToken) {
-            // 🚨 ISOLATION ACTUATED: Force exotics straight into heavy liquidity highways
-            logToPanel("⚠️ [EXOTIC ISOLATION ACTUATED] Capital locked in exotic token. Testing paths exclusively to WBNB/WETH/USDT/USDC.");
+            // 🚨 EXOTIC DETECTED: Immediately intercept loop and restrict to strong pillar exit paths only
+            logToPanel("⚠️ [EXOTIC RETREAT INTERVENTION] Token held is outside safety matrix. Bypassing scan list to force exit routes straight into heavy pillars (WBNB/USDT/USDC/WETH).");
             marketData = universalPillars;
         } else {
+            // Safe baseline: We hold a core anchor asset. Ingest full scanner candidate paths.
             try {
                 if (typeof window.getTradeCandidates === "function") {
                     marketData = await window.getTradeCandidates();
@@ -294,11 +296,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 window.simulateCycle = simulateCycle;
 
 async function startSimulation(totalCycles) {
-    if (window.isBotRunning) return;
-    window.isBotRunning = true;
-    logToPanel("🚀 [LAUNCHING] Read-only background asset validation sequence engaged...");
-    await simulateCycle(1, 10, 0, 0);
-    window.isBotRunning = false;
-    setStatus("STOPPED");
-    logToPanel("[BOT FINISHED] Run parameters finalized.");
+if (window.isBotRunning) return;
+window.isBotRunning = true;
+logToPanel("🚀 [LAUNCHING] Read-only background asset validation sequence engaged...");
+await simulateCycle(1, 10, 0, 0);
+window.isBotRunning = false;
+setStatus("STOPPED");
+logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
+window.startSimulation = startSimulation;
