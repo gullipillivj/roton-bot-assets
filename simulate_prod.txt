@@ -1,6 +1,6 @@
 logToPanel("simulate_prod.txt loaded (LIVE WALLET RESOLUTION MODE)");
 
-// 🟢 NEW: Persistent historical tracking context mapping state
+// Persistent tracking state container for backward mapping matrix
 if (typeof window.LAST_SOURCE_TOKEN === "undefined") {
     window.LAST_SOURCE_TOKEN = null;
 }
@@ -35,7 +35,6 @@ function stopBot() {
     logToPanel("[BOT STOPPED] Asset scan matrix paused by user.");
 }
 window.stopBot = stopBot;
-
 // Direct provider account hook replaces fragile URL strings entirely
 async function getLiveWalletAddress() {
     if (window.ethereum) {
@@ -50,6 +49,7 @@ async function getLiveWalletAddress() {
     }
     return window.USER_ADDR ? window.USER_ADDR.toLowerCase().trim() : null;
 }
+
 // Helper to dynamically locate which token currently holds a balance inside the contract vault
 async function getActiveLedgerAsset(userAddress) {
     try {
@@ -82,7 +82,7 @@ async function getActiveLedgerAsset(userAddress) {
     return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
 }
 
-// 🛡️ STRONG NETWORK PILLARS ONLY (Universal Liquidity Highways)
+// STRONG NETWORK PILLARS ONLY (Universal Liquidity Highways)
 function getUniversalPillarsMesh() {
     return [
         { symbol: "WBNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", tokentype: "bep20" },
@@ -94,7 +94,7 @@ function getUniversalPillarsMesh() {
     ];
 }
 
-// 🌉 CUSTOM BRIDGES MATRIX (Only used when expanding outward from high liquidity)
+// CUSTOM BRIDGES MATRIX (Only used when expanding outward from high liquidity)
 function getCustomBridgesMesh() {
     return [
         { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
@@ -141,20 +141,17 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
         let marketData = [];
         if (!holdingPillarToken && !holdingBridgeToken) {
-            // 🚨 NON-STRONG PILLAR LOCKED: Actuate Backward Swap Recovery Vector
             let targetRecoveryAddress = window.LAST_SOURCE_TOKEN;
             let targetRecoverySymbol = "ORIGIN_ASSET";
             
-            // Fallback strategy if initial bot launch happens while already holding the exotic asset
             if (!targetRecoveryAddress || targetRecoveryAddress.toLowerCase().trim() === DYNAMIC_TOKEN_IN) {
-                targetRecoveryAddress = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // Native WBNB Highway Coordinates
+                targetRecoveryAddress = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; 
                 targetRecoverySymbol = "WBNB (FALLBACK)";
             }
             
             logToPanel(`⚠️ [BACKWARD ROUTING ESCAPE] Exotic token trap detected. Forcing return path to original asset: ${targetRecoverySymbol} (${targetRecoveryAddress})`);
             marketData = [{ symbol: targetRecoverySymbol, address: targetRecoveryAddress, tokentype: "bep20" }];
         } else {
-            // Safe Core Position: Clear path forward to ingest candidate vectors
             try {
                 if (typeof window.getTradeCandidates === "function") {
                     marketData = await window.getTradeCandidates();
@@ -211,7 +208,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
                     if (expectedOutput !== "0" && expectedOutput !== 0) {
                         logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
-                        
                         cycleCandidatesArray.push({
                             symbol: symbolLabel,
                             address: targetAddress,
@@ -224,7 +220,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             } catch (err) {}
             await blockDelay(100);
         }
-
         logToPanel(`\n📊 [CYCLE AUDIT] Evaluating ${cycleCandidatesArray.length} swappable pool candidates...`);
 
         if (cycleCandidatesArray.length === 0) {
@@ -256,8 +251,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     logToPanel("   ⚠️ [SKIPPED] All assets bypassed due to gas restrictions.");
                 } else {
                     logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol}`);
-                    
-                    // 🟢 RECORD HISTORY BEFORE CALL: Store origin asset matrix to enable clean backtracking if required next loop
                     window.LAST_SOURCE_TOKEN = DYNAMIC_TOKEN_IN;
 
                     let txResult = null;
@@ -272,11 +265,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     }
                     if (txResult && txResult.status === "ok") {
                         logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Awaiting confirmation loop...");
-                        
                         let transactionConfirmed = false;
                         for (let checkNum = 1; checkNum <= 15; checkNum++) {
                             if (window.isBotRunning === false) break;
-                            
                             let verifiedState = await getActiveLedgerAsset(currentActiveWallet);
                             if (verifiedState.address.toLowerCase().trim() !== DYNAMIC_TOKEN_IN) {
                                 logToPanel("   🎉 [SETTLEMENT CONFIRMED] Asset state changed successfully!");
@@ -296,28 +287,29 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
                         await blockDelay(15000);
                     } else {
-logToPanel(   ❌ [ROUTING REJECTION] Router dropped payload.);
-}
-}
-} catch (walletErr) {
-logToPanel(   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message});
-}
-}
-logToPanel(✅ Cycle ${i}/${totalCycles} analysis finalized.);
-setStatus("WAITING");
-await blockDelay(4000);
-}
-logToPanel("\n=== 📊 [FINISHED] Scan operations complete. ==");
-return "STOP_ERROR";
+                        logToPanel("   ❌ [ROUTING REJECTION] Router dropped payload.");
+                    }
+                }
+            } catch (walletErr) {
+                logToPanel(`   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message}`);
+            }
+        }
+        logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
+        setStatus("WAITING");
+        await blockDelay(4000);
+    }
+    logToPanel("\n=== 📊 [FINISHED] Scan operations complete. ==");
+    return "STOP_ERROR";
 }
 window.simulateCycle = simulateCycle;
+
 async function startSimulation(totalCycles) {
-if (window.isBotRunning) return;
-window.isBotRunning = true;
-logToPanel("🚀 [LAUNCHING] Read-only background asset validation sequence engaged...");
-await simulateCycle(1, 10, 0, 0);
-window.isBotRunning = false;
-setStatus("STOPPED");
-logToPanel("[BOT FINISHED] Run parameters finalized.");
+    if (window.isBotRunning) return;
+    window.isBotRunning = true;
+    logToPanel("🚀 [LAUNCHING] Read-only background asset validation sequence engaged...");
+    await simulateCycle(1, 10, 0, 0);
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
 window.startSimulation = startSimulation;
