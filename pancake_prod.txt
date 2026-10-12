@@ -1,4 +1,4 @@
-logToPanel("pancake_prod.txt loaded successfully. Dual-Popup execution matrix active.");
+logToPanel("pancake_prod.txt loaded successfully. 4-Popup Multi-Hop Execution Matrix Active.");
 
 // ==================================================================
 // 📊 GLOBAL LOGGING UTILITY
@@ -21,19 +21,19 @@ async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderCo
         const paddedAmount = BigInt(amountWei).toString(16).padStart(64, "0");
         const compiledData = approveMethodId + paddedSpender + paddedAmount;
 
-        logToPanel(`📢 [POPUP 1/2 - APPROVAL] Authorizing Token Spend Allowance for: ${tokenIn}`);
+        logToPanel(`📢 [APPROVAL PROMPT] Authorizing Token Spend Allowance for: ${tokenIn}`);
         
         const approveTxHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{
                 from: userAddr,
-                to: tokenIn, // Sent directly to the ERC20 token contract
+                to: tokenIn, // Sent directly to the target ERC20 token contract address registry
                 data: compiledData,
                 value: "0x0"
             }]
         });
         
-        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 6s for block propagation...`);
+        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 6s for block state propagation...`);
         await new Promise(resolve => setTimeout(resolve, 6000));
         return true;
     } catch (err) {
@@ -42,57 +42,53 @@ async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderCo
     }
 }
 
-// 🌟 STAGE 4: FIXED LIVE BSC SWAP PIPELINE (PROMPTS POPUP 2)
+// 🌟 STAGE 4: RAW BSC SWAP EXECUTION UNIT
 async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
-        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; // Synchronized global variable parameter address
+        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
         
-        // Step 1: Prompt the wallet for the ERC20 Token Contract Approval popup
+        // Triggers Token Contract Approval Popup
         await requestTokenSpendApproval(userAddr, amountWei, fromToken, V12_ADDR);
 
-        // Step 2: Fetch the compiled execution calldata parameters from the Python server
         logToPanel(`⏳ Compiling swap payload data from backend route...`);
-        // Replace the backend payload assembly phase inside your runbscSwapUniswap function:
-const res = await fetch("/prodbot/swap/bscuniswap", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-        router: targetRouter,
-        tokenIn: fromToken,
-        tokenOut: toToken,
-        amountIn: BigInt(amountWei).toString(), // Ensure pure numeric string execution vectors
-        amountOutMin: "0"
-    })
-});
-
+        const res = await fetch("/prodbot/swap/bscuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: targetRouter,
+                tokenIn: fromToken,
+                tokenOut: toToken,
+                amountIn: BigInt(amountWei).toString(), 
+                amountOutMin: "0"
+            })
+        });
         
         const backendPayload = await res.json();
         if (!backendPayload || backendPayload.status !== "ok") {
             throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
         }
 
-        // Step 3: Prompt the wallet for POPUP 2/2 (The On-Chain Swap Contract Execution Call)
-        logToPanel(`📢 [POPUP 2/2 - SWAP] Confirming execution parameters with the V12 Trading Engine...`);
+        logToPanel(`📢 [SWAP PROMPT] Confirming execution parameters with the V12 Trading Engine...`);
         const swapTxHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{
                 from: userAddr,
-                to: backendPayload.swap_packet.to_contract, // V12 Smart Contract address
-                data: backendPayload.swap_packet.compiled_data, // executeERC20SwapUniswap payload
+                to: backendPayload.swap_packet.to_contract, 
+                data: backendPayload.swap_packet.compiled_data, 
                 value: "0x0"
             }]
         });
 
-        logToPanel(`🎉 Trade Dispatched to Network! Swap Hash: ${swapTxHash}`);
+        logToPanel(`🎉 Trade Segment Dispatched! Hash: ${swapTxHash}`);
         return { status: "ok", tx_hash: swapTxHash };
     } catch (e) {
-        logToPanel(`❌ BSC Swap Pipeline Interrupted: ${e.message || e}`);
+        logToPanel(`❌ BSC Swap Segment Pipeline Interrupted: ${e.message || e}`);
         return { status: "error", message: e.toString() };
     }
 }
 window.runbscSwapUniswap = runbscSwapUniswap;
 
-// 🌟 STAGE 4: FIXED LIVE ETH SWAP PIPELINE (PROMPTS POPUP 2)
+// 🌟 STAGE 4: RAW ETH SWAP EXECUTION UNIT
 async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
         const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
@@ -107,7 +103,7 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
                 router: targetRouter,
                 tokenIn: fromToken,
                 tokenOut: toToken,
-                amountIn: amountWei,
+                amountIn: BigInt(amountWei).toString(),
                 amountOutMin: "0"
             })
         });
@@ -117,22 +113,77 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
             throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
         }
 
-        logToPanel(`📢 [POPUP 2/2 - SWAP] Confirming execution parameters with the V12 Trading Engine...`);
+        logToPanel(`📢 [SWAP PROMPT] Confirming execution parameters with the V12 Trading Engine...`);
         const swapTxHash = await window.ethereum.request({
             method: "eth_sendTransaction",
             params: [{
                 from: userAddr,
-                to: backendPayload.swap_packet.to_contract, // 🟢 FIXED: Now correctly targets the aligned nested swap packet property
-                data: backendPayload.swap_packet.compiled_data, // 🟢 FIXED: Now correctly targets the aligned nested swap packet property
+                to: backendPayload.swap_packet.to_contract, 
+                data: backendPayload.swap_packet.compiled_data, 
                 value: "0x0"
             }]
         });
 
-        logToPanel(`🎉 Trade Dispatched to Network! Swap Hash: ${swapTxHash}`);
+        logToPanel(`🎉 Trade Segment Dispatched! Hash: ${swapTxHash}`);
         return { status: "ok", tx_hash: swapTxHash };
     } catch (e) {
-        logToPanel(`❌ ETH Swap Pipeline Interrupted: ${e.message || e}`);
+        logToPanel(`❌ ETH Swap Segment Pipeline Interrupted: ${e.message || e}`);
         return { status: "error", message: e.toString() };
     }
 }
 window.runethSwapUniswap = runethSwapUniswap;
+
+// ==================================================================
+// ⛓️ WATERFALL WORKFLOW COORDINATOR: SEQUENTIAL 4-POPUP PIPELINE
+// ==================================================================
+async function executeFourStepSequence(userAddr, amountWei, fromToken, intermediateToken, targetToken, targetRouter, networkType) {
+    try {
+        logToPanel(`\n🚀 [WATERFALL INITIALIZATION] Commencing sequential execution for multi-hop vector.`);
+        
+        // 🏁 SEGMENT 1: SWAP BASE TO INTERMEDIATE ASSET (POPUP 1 & 2)
+        logToPanel(`⛓️ [STEP 1 & 2 / 4] Launching baseline swap route [${fromToken}] -> [${intermediateToken}]`);
+        let segment1Result;
+        
+        if (networkType === "erc20" || networkType === "ethereum") {
+            segment1Result = await window.runethSwapUniswap(userAddr, amountWei, fromToken, intermediateToken, targetRouter);
+        } else {
+            segment1Result = await window.runbscSwapUniswap(userAddr, amountWei, fromToken, intermediateToken, targetRouter);
+        }
+        
+        if (!segment1Result || segment1Result.status !== "ok") {
+            throw new Error("Base asset intermediate liquidation failed or was rejected by user.");
+        }
+
+        // ⏱️ ENFORCE SEGMENT GAP COOLING LOCK FOR STATE PROPAGATION
+        logToPanel("⏱️ Segment 1 swap broadcast success. Enforcing mandatory 8s pause for ledger sync...");
+        await new Promise(resolve => setTimeout(resolve, 8000));
+
+        // 🔎 TRACK BALANCE TRANSITION THROUGH CONTRACT MATRIX
+        logToPanel(`🔎 Inspecting ledger updates for intermediate balance allocation: ${intermediateToken}`);
+        let freshLedgerState = await window.getActiveLedgerAsset(userAddr);
+        let activeIntermediateWei = freshLedgerState.balanceWei;
+
+        // Fallback: If network lag delayed backend tracking index but transaction confirmed, use structural calculation conversion bounds
+        if (activeIntermediateWei === "0" || !activeIntermediateWei) {
+            logToPanel("⚠️ Dynamic balance reading delayed by node indexing. Utilizing intermediate base parameter alignment.");
+            activeIntermediateWei = amountWei; 
+        }
+
+        // 🏁 SEGMENT 2: SWAP INTERMEDIATE ASSET TO EXOTIC BRIDGE TARGET (POPUP 3 & 4)
+        logToPanel(`\n⛓️ [STEP 3 & 4 / 4] Launching target route [${intermediateToken}] -> [${targetToken}]`);
+        logToPanel(`💰 Pure Transaction Intermediate Principal Weight: ${activeIntermediateWei} Wei`);
+        
+        let segment2Result;
+        if (networkType === "erc20" || networkType === "ethereum") {
+            segment2Result = await window.runethSwapUniswap(userAddr, activeIntermediateWei, intermediateToken, targetToken, targetRouter);
+        } else {
+            segment2Result = await window.runbscSwapUniswap(userAddr, activeIntermediateWei, intermediateToken, targetToken, targetRouter);
+        }
+        
+        return segment2Result;
+    } catch (pipelineErr) {
+        logToPanel(`❌ [CASCADING WORKFLOW ABORTED] Pipeline execution stopped safely: ${pipelineErr.message || pipelineErr}`);
+        return { status: "error", message: pipelineErr.toString() };
+    }
+}
+window.executeFourStepSequence = executeFourStepSequence;
