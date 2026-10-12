@@ -224,3 +224,156 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             } catch (err) {}
             await blockDelay(100);
         }
+        logToPanel(`\n📊 [CYCLE AUDIT] Evaluating ${cycleCandidatesArray.length} cleared pool configurations...`);
+
+        if (cycleCandidatesArray.length === 0) {
+            logToPanel("   💤 No executable candidates cleared liquidity pairing validation.");
+        } else {
+            try {
+                const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
+                const walletGasBalanceWei = BigInt(userBalanceHex || "0");
+                const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice" });
+                const liveGasPriceWei = BigInt(networkGasPriceHex || "0");
+
+                let targetSelection = null;
+                let highestExpectedOutput = 0n;
+
+                for (let c = 0; c < cycleCandidatesArray.length; c++) {
+                    let currentAsset = cycleCandidatesArray[c];
+                    let standardGasLimit = currentAsset.network === "erc20" || currentAsset.network === "ethereum" ? 450000n : 150000n;
+
+                    if (currentAsset.isMultiHop) {
+                        standardGasLimit = standardGasLimit * 2n;
+                    }
+
+                    let computedGasFeeWei = liveGasPriceWei * standardGasLimit;
+
+                    if (walletGasBalanceWei < computedGasFeeWei) continue;
+
+                    if (currentAsset.expectedOutWei > highestExpectedOutput) {
+                        highestExpectedOutput = currentAsset.expectedOutWei;
+                        targetSelection = currentAsset;
+                    }
+                }
+
+                if (!targetSelection) {
+                    logToPanel("   ⚠️ [SKIPPED] Bypassed due to gas restrictions.");
+                } else {
+                    logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol}`);
+                    window.LAST_SOURCE_TOKEN = DYNAMIC_TOKEN_IN;
+
+                    let txResult = null;
+
+                    if (targetSelection.isMultiHop) {
+                        logToPanel(`🗺️ Multi-Hop Vector Handshake: ${DYNAMIC_TOKEN_IN} -> ${targetSelection.anchorToken} -> ${targetSelection.address}`);
+                        
+                        try {
+                            logToPanel(`⛓️ [STEP 1 & 2 / 4] Launching baseline swap route [${DYNAMIC_TOKEN_IN}] -> [${targetSelection.anchorToken}]`);
+                            let segment1Result;
+                            if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
+                                segment1Result = await window.runethSwapUniswap(currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.anchorToken, PANCAKE_ROUTER);
+                            } else {
+                                segment1Result = await window.runbscSwapUniswap(currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.anchorToken, PANCAKE_ROUTER);
+                            }
+                            
+                            if (segment1Result && segment1Result.status === "ok") {
+                                logToPanel("⏱️ Segment 1 swap broadcast success. Enforcing mandatory 8s pause for block propagation...");
+                                await blockDelay(8000);
+
+                                // 🟢 CRUCIAL FIX: Call the global synchronization matrix to fetch the updated on-chain parameters before checking values
+                                logToPanel("📊 [REGISTRY INTERCEPT] Invoking window.syncBalanceFromFund() to update the system investment targets...");
+                                if (typeof window.syncBalanceFromFund === "function") {
+                                    await window.syncBalanceFromFund();
+                                }
+
+                                // Read the newly generated investment amount unit value directly out of the form text parameters
+                                let updatedBalanceInput = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
+                                
+                                if (updatedBalanceInput === "0" || updatedBalanceInput === simulatedAmountInWei || !updatedBalanceInput) {
+                                    logToPanel("⚠️ Frontend UI update is still sync indexing. Performing a direct ledger fallback check array lookup...");
+                                    let individualCheck = await fetch("/prodbot/balance", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ user: currentActiveWallet, token: targetSelection.anchorToken })
+                                    });
+                                    updatedBalanceInput = await individualCheck.text();
+                                }
+
+                                logToPanel(`🎯 Fresh Synchronized Principal Balance Registered: ${updatedBalanceInput.trim()} Wei`);
+                                logToPanel(`\n⛓️ [STEP 3 & 4 / 4] Launching target route [${targetSelection.anchorToken}] -> [${targetSelection.address}]`);
+                                
+                                if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
+                                    txResult = await window.runethSwapUniswap(currentActiveWallet, updatedBalanceInput.trim(), targetSelection.anchorToken, targetSelection.address, PANCAKE_ROUTER);
+                                } else {
+                                    txResult = await window.runbscSwapUniswap(currentActiveWallet, updatedBalanceInput.trim(), targetSelection.anchorToken, targetSelection.address, PANCAKE_ROUTER);
+                                }
+                            } else {
+                                throw new Error("Intermediate initialization chunk rejected or failed.");
+                            }
+                        } catch (innerErr) {
+                            txResult = { status: "error", message: innerErr.message };
+                        }
+                    } else {
+                        logToPanel(`🗺️ Direct Vector Handshake: ${DYNAMIC_TOKEN_IN} -> ${targetSelection.address}`);
+                        if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
+                            txResult = await window.runethSwapUniswap(
+                                currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            );
+                        } else {
+                            txResult = await window.runbscSwapUniswap(
+                                currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            );
+                        }
+                    }
+
+                    if (txResult && txResult.status === "ok") {
+                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Awaiting confirmation loop...");
+                        let transactionConfirmed = false;
+                        for (let checkNum = 1; checkNum <= 15; checkNum++) {
+                            if (window.isBotRunning === false) break;
+                            let verifiedState = await getActiveLedgerAsset(currentActiveWallet);
+                            if (verifiedState.address.toLowerCase().trim() !== DYNAMIC_TOKEN_IN) {
+                                logToPanel("   🎉 [SETTLEMENT CONFIRMED] Asset state changed successfully!");
+                                transactionConfirmed = true;
+                                break;
+                            }
+                            await blockDelay(6000);
+                        }
+
+                        if (!transactionConfirmed) {
+                            logToPanel(`❌ [REVERT DETECTED] On-chain state failed to update. Halting execution loop.`);
+                            window.isBotRunning = false;
+                            setStatus("STOPPED");
+                            break;
+                        }
+
+                        logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
+                        await blockDelay(15000);
+                    } else {
+                        logToPanel("   ❌ [ROUTING REJECTION] Router dropped payload or user cancelled.");
+                    }
+                }
+            } catch (walletErr) {
+                logToPanel(`   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message}`);
+                alert(`dApp Routing Configuration Failure:\n${walletErr.message}`);
+            }
+        }
+        logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
+        setStatus("WAITING");
+        await blockDelay(4000);
+    }
+    logToPanel("\n=== 📊 [FINISHED] Scan operations complete. ==");
+    return "STOP_ERROR";
+}
+window.simulateCycle = simulateCycle;
+
+async function startSimulation(totalCycles) {
+    if (window.isBotRunning) return;
+    window.isBotRunning = true;
+    logToPanel("🚀 [LAUNCHING] Background multi-hop asset router matrix engaged...");
+    await simulateCycle(1, totalCycles || 10, 0, 0);
+    window.isBotRunning = false;
+    setStatus("STOPPED");
+    logToPanel("[BOT FINISHED] Run parameters finalized.");
+}
+window.startSimulation = startSimulation;
