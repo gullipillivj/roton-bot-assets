@@ -1,4 +1,4 @@
-logToPanel("simulate_prod.txt loaded (MULTI-HOP WORKFLOW SYSTEM ENGAGED)");
+logToPanel("simulate_prod.txt loaded (CUSTOM TOKEN ROSTER EXPANDED)");
 
 if (typeof window.LAST_SOURCE_TOKEN === "undefined") {
     window.LAST_SOURCE_TOKEN = null;
@@ -93,11 +93,14 @@ function getUniversalPillarsMesh() {
     ];
 }
 
-// CUSTOM BRIDGES MATRIX (Only used when expanding outward from high liquidity)
+// EXPANDED CUSTOM BRIDGES MATRIX: All custom tokens integrated successfully
 function getCustomBridgesMesh() {
     return [
         { symbol: "CROSSCHAINBRIDGE", address: "0x92868A5255C628dA08F550a858A802f5351C5223", tokentype: "bep20" },
         { symbol: "RR-BNB", address: "0xba67186fd454D0256a0D3744783538bE08C58feD", tokentype: "bep20" },
+        { symbol: "RR-ETH", address: "0x8A0cAC8E7F6305cE6EeB585005919290F78808f9", tokentype: "erc20" },
+        { symbol: "RRINT BNB", address: "0x6bd04252408361E1806994e04994ceB511a262B0", tokentype: "bep20" },
+        { symbol: "WRR-ETH", address: "0xf3414e85dEa5cf3Fab62F5A967F98Fd032d5BE2A", tokentype: "erc20" },
         { symbol: "WRR-WBNB", address: "0xBf9d926BBF7b9408D1182c45fCf64f7f27909837", tokentype: "bep20" }
     ];
 }
@@ -176,7 +179,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             let computedPath = [DYNAMIC_TOKEN_IN, targetAddress.toLowerCase().trim()];
             let isMultiHopEnforced = false;
 
-            if (symbolLabel.includes("CROSSCHAINBRIDGE") || targetAddress.toLowerCase().trim() === "0x92868a5255c628da08f550a858a802f5351c5223") {
+            // Trigger multi-hop intermediate routing logic for all custom bridge tokens
+            const matchesCustomBridge = customBridges.some(b => b.address.toLowerCase().trim() === targetAddress.toLowerCase().trim());
+            if (matchesCustomBridge) {
                 if (DYNAMIC_TOKEN_IN !== nativeLiquidityAnchor.toLowerCase().trim()) {
                     computedPath = [DYNAMIC_TOKEN_IN, nativeLiquidityAnchor.toLowerCase().trim(), targetAddress.toLowerCase().trim()];
                     isMultiHopEnforced = true;
@@ -263,15 +268,36 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
                     if (targetSelection.isMultiHop) {
                         logToPanel(`🗺️ Multi-Hop Vector Handshake: ${DYNAMIC_TOKEN_IN} -> ${targetSelection.anchorToken} -> ${targetSelection.address}`);
-                        txResult = await window.executeFourStepSequence(
-                            currentActiveWallet,
-                            simulatedAmountInWei,
-                            DYNAMIC_TOKEN_IN,
-                            targetSelection.anchorToken,
-                            targetSelection.address,
-                            PANCAKE_ROUTER,
-                            targetSelection.network
-                        );
+                        
+                        try {
+                            logToPanel(`⛓️ [STEP 1 & 2 / 4] Launching baseline swap route [${DYNAMIC_TOKEN_IN}] -> [${targetSelection.anchorToken}]`);
+                            let segment1Result;
+                            if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
+                                segment1Result = await window.runethSwapUniswap(currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.anchorToken, PANCAKE_ROUTER);
+                            } else {
+                                segment1Result = await window.runbscSwapUniswap(currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.anchorToken, PANCAKE_ROUTER);
+                            }
+                            
+                            if (segment1Result && segment1Result.status === "ok") {
+                                logToPanel("⏱️ Segment 1 swap broadcast success. Enforcing mandatory 8s pause for ledger sync...");
+                                await blockDelay(8000);
+
+                                logToPanel(`🔎 Inspecting ledger updates for intermediate balance allocation: ${targetSelection.anchorToken}`);
+                                let freshLedgerState = await getActiveLedgerAsset(currentActiveWallet);
+                                let activeIntermediateWei = freshLedgerState.balanceWei !== "0" ? freshLedgerState.balanceWei : simulatedAmountInWei;
+
+                                logToPanel(`\n⛓️ [STEP 3 & 4 / 4] Launching target route [${targetSelection.anchorToken}] -> [${targetSelection.address}]`);
+                                if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
+                                    txResult = await window.runethSwapUniswap(currentActiveWallet, activeIntermediateWei, targetSelection.anchorToken, targetSelection.address, PANCAKE_ROUTER);
+                                } else {
+                                    txResult = await window.runbscSwapUniswap(currentActiveWallet, activeIntermediateWei, targetSelection.anchorToken, targetSelection.address, PANCAKE_ROUTER);
+                                }
+                            } else {
+                                throw new Error("Intermediate initialization chunk rejected or failed.");
+                            }
+                        } catch (innerErr) {
+                            txResult = { status: "error", message: innerErr.message };
+                        }
                     } else {
                         logToPanel(`🗺️ Direct Vector Handshake: ${DYNAMIC_TOKEN_IN} -> ${targetSelection.address}`);
                         if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
