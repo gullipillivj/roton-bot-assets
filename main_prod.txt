@@ -220,10 +220,18 @@ async function syncBalanceFromFund() {
         if (investBox) investBox.value = finalWeiString;
         
         // 🟢 PHASE 4: Fetch live market data to compute actual floating valuation changes
-        if (usdBox) {
-            try {
-                const marketRes = await fetch(`${baseApiUrl}/prodbot/market-analysis`);
-                const marketData = await marketRes.json();
+       // Locate this intercept inside your syncBalanceFromFund structure:
+if (usdBox) {
+    try {
+        const marketRes = await fetch(`${baseApiUrl}/prodbot/market-analysis`, {
+            headers: {
+                "ngrok-skip-browser-warning": "true" // 🟢 FIXED: Bypasses the proxy warning page
+            }
+        });
+        const marketData = await marketRes.json();
+        
+        // ... remainder of your balance parsing mechanics remains unchanged ...
+
                 const activeTickerList = [
                     ...(marketData.data?.short_term || marketData.short_term || []),
                     ...(marketData.data?.mid_term || marketData.mid_term || []),
