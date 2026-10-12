@@ -134,7 +134,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         const holdingPillarToken = universalPillars.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
         const holdingBridgeToken = customBridges.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
 
-        let marketData = [];
+        let marketData =;
         if (!holdingPillarToken && !holdingBridgeToken) {
             let targetRecoveryAddress = window.LAST_SOURCE_TOKEN || "0x55d398326f99059fF775485246999027B3197955"; 
             logToPanel(`⚠️ [BACKWARD ESCAPE ROUTE] Exotic token trap. Routing return path to fallback highway.`);
@@ -149,7 +149,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         logToPanel(`🎯 Auditing ${marketData.length} available paths against dynamic multi-hop router matrix...`);
-        let cycleCandidatesArray = [];
+        let cycleCandidatesArray =;
 
         for (let index = 0; index < marketData.length; index++) {
             let candidate = marketData[index];
@@ -161,17 +161,16 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             if (targetAddress.toLowerCase().trim() === DYNAMIC_TOKEN_IN) continue;
 
             let activeRouterForSimulation = PANCAKE_ROUTER;
-            let nativeLiquidityAnchor = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; // Default WBNB
+            let nativeLiquidityAnchor = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; 
 
             if (tokenNetwork === "erc20" || tokenNetwork === "ethereum") {
                 activeRouterForSimulation = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; 
-                nativeLiquidityAnchor = "0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2"; // Default WETH
+                nativeLiquidityAnchor = "0xC02aaA39b223FE8D0A0e5C4F27ead9083C756Cc2"; 
             }
 
             let computedPath = [DYNAMIC_TOKEN_IN, targetAddress.toLowerCase().trim()];
             let isMultiHopEnforced = false;
 
-            // Direct pairing liquidity pre-check. If it hits an exotic asset like CROSSCHAINBRIDGE, inject liquidity anchor hop
             if (symbolLabel.includes("CROSSCHAINBRIDGE") || targetAddress.toLowerCase().trim() === "0x92868a5255c628da08f550a858a802f5351c5223") {
                 if (DYNAMIC_TOKEN_IN !== nativeLiquidityAnchor.toLowerCase().trim()) {
                     computedPath = [DYNAMIC_TOKEN_IN, nativeLiquidityAnchor.toLowerCase().trim(), targetAddress.toLowerCase().trim()];
@@ -180,7 +179,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             }
 
             try {
-                // Query server simulation module passing the exact calculated path parameters
                 let response = await fetch("/prodbot/swap/simulateuniswap", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -224,7 +222,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             try {
                 const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
                 const walletGasBalanceWei = BigInt(userBalanceHex || "0");
-                const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice", params: [] });
+                const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice", params: });
                 const liveGasPriceWei = BigInt(networkGasPriceHex || "0");
 
                 let targetSelection = null;
@@ -235,7 +233,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                     let standardGasLimit = currentAsset.network === "erc20" || currentAsset.network === "ethereum" ? 450000n : 150000n;
                     let computedGasFeeWei = liveGasPriceWei * standardGasLimit;
 
-                    if (walletGasBalanceWei < computedGasFeeFeeWei) continue;
+                    if (walletGasBalanceWei < computedGasFeeWei) continue;
 
                     if (currentAsset.expectedOutWei > highestExpectedOutput) {
                         highestExpectedOutput = currentAsset.expectedOutWei;
@@ -252,13 +250,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 
                     let txResult = null;
                     if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
-                        // Pass resolved multi-hop array into the transaction generation script pipeline
                         txResult = await window.runethSwapUniswap(
-                            currentActiveWallet, simulatedAmountInWei, targetSelection.routingPath[0], targetSelection.routingPath[targetSelection.routingPath.length - 1], PANCAKE_ROUTER, targetSelection.routingPath
+                            currentActiveWallet, simulatedAmountInWei, targetSelection.routingPath, targetSelection.routingPath[targetSelection.routingPath.length - 1], PANCAKE_ROUTER, targetSelection.routingPath
                         );
                     } else {
                         txResult = await window.runbscSwapUniswap(
-                            currentActiveWallet, simulatedAmountInWei, targetSelection.routingPath[0], targetSelection.routingPath[targetSelection.routingPath.length - 1], PANCAKE_ROUTER, targetSelection.routingPath
+                            currentActiveWallet, simulatedAmountInWei, targetSelection.routingPath, targetSelection.routingPath[targetSelection.routingPath.length - 1], PANCAKE_ROUTER, targetSelection.routingPath
                         );
                     }
                     
