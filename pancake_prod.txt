@@ -18,6 +18,26 @@ async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderCo
 
         const approveMethodId = "0x095ea7b3";
         const paddedSpender = cleanSpender.replace("0x", "").padStart(64, "0");
+logToPanel("pancake_prod.txt loaded successfully. Case-Insensitive Router Matrix Active.");
+
+function logToPanel(msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.innerText += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
+  }
+}
+window.logToPanel = logToPanel;
+async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderContract) {
+    try {
+        const cleanUser = userAddr.toLowerCase().trim();
+        const cleanToken = tokenIn.toLowerCase().trim();
+        const cleanSpender = spenderContract.toLowerCase().trim();
+
+        const approveMethodId = "0x095ea7b3";
+        const paddedSpender = cleanSpender.replace("0x", "").padStart(64, "0");
         const paddedAmount = BigInt(amountWei).toString(16).padStart(64, "0");
         const compiledData = approveMethodId + paddedSpender + paddedAmount;
 
