@@ -134,7 +134,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         const holdingPillarToken = universalPillars.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
         const holdingBridgeToken = customBridges.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
 
-        let marketData =;
+        let marketData = [];
         if (!holdingPillarToken && !holdingBridgeToken) {
             let targetRecoveryAddress = window.LAST_SOURCE_TOKEN || "0x55d398326f99059fF775485246999027B3197955"; 
             logToPanel(`⚠️ [BACKWARD ESCAPE ROUTE] Exotic token trap. Routing return path to fallback highway.`);
@@ -149,7 +149,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         }
 
         logToPanel(`🎯 Auditing ${marketData.length} available paths against dynamic multi-hop router matrix...`);
-        let cycleCandidatesArray =;
+        let cycleCandidatesArray = [];
 
         for (let index = 0; index < marketData.length; index++) {
             let candidate = marketData[index];
@@ -222,7 +222,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             try {
                 const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
                 const walletGasBalanceWei = BigInt(userBalanceHex || "0");
-                const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice", params: });
+                const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice" });
                 const liveGasPriceWei = BigInt(networkGasPriceHex || "0");
 
                 let targetSelection = null;
@@ -300,11 +300,12 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
 }
 window.simulateCycle = simulateCycle;
 
+// FIXED INTEGRATION HOOK: Renamed from runOrchestrationLoop to match main_prod.txt button bindings perfectly
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
     window.isBotRunning = true;
-    logToPanel("🚀 [LAUNCHING] Read-only background asset validation sequence engaged...");
-    await simulateCycle(1, 10, 0, 0);
+    logToPanel("🚀 [LAUNCHING] Background multi-hop asset router matrix engaged...");
+    await simulateCycle(1, totalCycles || 10, 0, 0);
     window.isBotRunning = false;
     setStatus("STOPPED");
     logToPanel("[BOT FINISHED] Run parameters finalized.");
