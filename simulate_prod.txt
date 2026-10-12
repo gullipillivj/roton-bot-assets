@@ -271,84 +271,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                             logToPanel(`⛓️ [STEP 1 & 2 / 4] Launching baseline swap route [${DYNAMIC_TOKEN_IN}] -> [${targetSelection.anchorToken}]`);
                             let segment1Result;
                             if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
-                                segment1Result = await window.runethSwapUniswap(currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.anchorToken, PANCAKE_ROUTER);
-                            } else {
-                                segment1Result = await window.runbscSwapUniswap(currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.anchorToken, PANCAKE_ROUTER);
-                            }
-                            
-                            if (segment1Result && segment1Result.status === "ok") {
-                                logToPanel("⏱️ Segment 1 swap broadcast success. Enforcing mandatory 8s pause for block propagation...");
-                                await blockDelay(8000);
-
-                                logToPanel("📊 [REGISTRY INTERCEPT] Invoking window.syncBalanceFromFund() to update the system investment targets...");
-                                if (typeof window.syncBalanceFromFund === "function") {
-                                    await window.syncBalanceFromFund();
-                                }
-
-                                let updatedBalanceInput = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
-                                
-                                if (updatedBalanceInput === "0" || updatedBalanceInput === simulatedAmountInWei || !updatedBalanceInput) {
-                                    logToPanel("⚠️ Frontend UI update is still sync indexing. Performing a direct ledger fallback check array lookup...");
-                                    let individualCheck = await fetch("/prodbot/balance", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({ user: currentActiveWallet, token: targetSelection.anchorToken })
-                                    });
-                                    updatedBalanceInput = await individualCheck.text();
-                                }
-
-                                logToPanel(`🎯 Fresh Synchronized Principal Balance Registered: ${updatedBalanceInput.trim()} Wei`);
-                                logToPanel(`\n⛓️ [STEP 3 & 4 / 4] Launching target route [${targetSelection.anchorToken}] -> [${targetSelection.address}]`);
-                                
-                                if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
-                                    txResult = await window.runethSwapUniswap(currentActiveWallet, updatedBalanceInput.trim(), targetSelection.anchorToken, targetSelection.address, PANCAKE_ROUTER);
-                                } else {
-                                    txResult = await window.runbscSwapUniswap(currentActiveWallet, updatedBalanceInput.trim(), targetSelection.anchorToken, targetSelection.address, PANCAKE_ROUTER);
-                                }
-                            } else {
-                                throw new Error("Intermediate initialization chunk rejected or failed.");
-                            }
-                        } catch (innerErr) {
-                            txResult = { status: "error", message: innerErr.message };
-                        }
-                    } else {
-                        logToPanel(`🗺️ Direct Vector Handshake: ${DYNAMIC_TOKEN_IN} -> ${targetSelection.address}`);
-                        if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
-                            txResult = await window.runethSwapUniswap(
-                                currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
-                            );
-                        } else {
-                            txResult = await window.runbscSwapUniswap(
-                                currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
-                            );
-                        }
-                    }
-
-                    if (txResult && txResult.status === "ok") {
-                        logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Awaiting confirmation loop...");
-                        let transactionConfirmed = false;
-                        for (let checkNum = 1; checkNum <= 15; checkNum++) {
-                            if (window.isBotRunning === false) break;
-                            let verifiedState = await getActiveLedgerAsset(currentActiveWallet);
-                            if (verifiedState.address.toLowerCase().trim() !== DYNAMIC_TOKEN_IN) {
-                                logToPanel("   🎉 [SETTLEMENT CONFIRMED] Asset state changed successfully!");
-                                transactionConfirmed = true;
-                                break;
-                            }
-                            await blockDelay(6000);
-                        }
-
-                        if (!transactionConfirmed) {
-                            logToPanel(`❌ [REVERT DETECTED] On-chain state failed to update. Halting execution loop.`);
-                            window.isBotRunning = false;
-                            setStatus("STOPPED");
-                            break;
-                        }
-
-                        logToPanel("\n⏱️ [SAFETY COOLING LOCK] Enforcing a mandatory 15s pause...");
-                        await blockDelay(15000);
-                    } else {
-                        logToPanel("   ❌ [ROUTING REJECTION] Router dropped payload or user cancelled.");
+);
                     }
                 }
             } catch (walletErr) {
@@ -375,3 +298,102 @@ async function startSimulation(totalCycles) {
     logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
 window.startSimulation = startSimulation;
+logToPanel("simulate_prod.txt loaded (THREAD ISOLATION SYSTEM REPAIRED)");
+
+// Initialize atomic execution locks
+if (typeof window.LAST_SOURCE_TOKEN === "undefined") { window.LAST_SOURCE_TOKEN = null; }
+if (typeof window.CURRENT_WORKER_ID === "undefined") { window.CURRENT_WORKER_ID = 0; }
+
+function logToPanel(msg) {
+    const panel = document.getElementById("logPanel");
+    if (panel) {
+        panel.innerText += "\n" + msg;
+        panel.scrollTop = panel.scrollHeight;
+    } else {
+        console.log(msg);
+    }
+}
+window.logToPanel = logToPanel;
+
+const blockDelay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function setStatus(msg) {
+    const statusLabel = document.querySelector(".status-label");
+    if (statusLabel) { statusLabel.textContent = msg; } 
+    else { logToPanel(`[STATUS] ${msg}`); }
+}
+window.setStatus = setStatus;
+
+function stopBot() {
+    window.isBotRunning = false;
+    window.CURRENT_WORKER_ID++; // Forces active thread comparisons to fail immediately
+    setStatus("STOPPED");
+    logToPanel("[BOT STOPPED] Active orchestration loops forcefully decommissioned.");
+}
+window.stopBot = stopBot;
+async function getLiveWalletAddress() {
+    if (window.ethereum) {
+        try {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts && accounts.length > 0) {
+                return accounts[0].toLowerCase().trim();
+            }
+        } catch (err) {
+            console.error("Error reading accounts from window.ethereum:", err);
+        }
+    }
+    return window.USER_ADDR ? window.USER_ADDR.toLowerCase().trim() : null;
+}
+
+async function getActiveLedgerAsset(userAddress) {
+    try {
+        logToPanel(`🔎 Querying ledger data for address: ${userAddress}...`);
+        const res = await fetch("/prodbot/ledger/balances", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user: userAddress })
+        });
+        const ledgerData = await res.json();
+
+        if (ledgerData && ledgerData.status === "ok" && Array.isArray(ledgerData.tokens)) {
+            for (let i = 0; i < ledgerData.tokens.length; i++) {
+                const currentBalWei = BigInt(ledgerData.balances[i] || "0");
+                if (currentBalWei > 0n) {
+                    logToPanel(`🎯 Active Capital Found: ${ledgerData.tokens[i]} | Balance: ${currentBalWei.toString()} Wei`);
+                    return {
+                        address: ledgerData.tokens[i].toLowerCase().trim(),
+                        balanceWei: currentBalWei.toString()
+                    };
+                }
+            }
+            if (ledgerData.tokens.length > 0) {
+                return { address: ledgerData.tokens[0].toLowerCase().trim(), balanceWei: "0" };
+            }
+        }
+    } catch (err) {
+        logToPanel(`⚠️ Failed checking multi-asset ledger array: ${err.message}`);
+    }
+    return { address: "0x55d398326f99059ff775485246999027b3197955", balanceWei: "0" };
+}
+
+function getUniversalPillarsMesh() {
+    return [
+        { symbol: "WBNB", address: "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c", tokentype: "bep20" },
+        { symbol: "USDT-BSC", address: "0x55d398326f99059ff775485246999027b3197955", tokentype: "bep20" },
+        { symbol: "USDC-BSC", address: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", tokentype: "bep20" },
+        { symbol: "WETH", address: "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", tokentype: "erc20" },
+        { symbol: "USDT-ETH", address: "0xdac17f958d2ee523a2206206994597c13d831ec7", tokentype: "erc20" },
+        { symbol: "USDC-ETH", address: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", tokentype: "erc20" }
+    ];
+}
+
+function getCustomBridgesMesh() {
+    return [
+        { symbol: "CROSSCHAINBRIDGE", address: "0x92868a5255c628da08f550a858a802f5351c5223", tokentype: "bep20" },
+        { symbol: "RR-BNB", address: "0xba67186fd454d0256a0d3744783538be08c58fed", tokentype: "bep20" },
+        { symbol: "RR-ETH", address: "0x8a0cac8e7f6305ce6eeb585005919290f78808f9", tokentype: "erc20" },
+        { symbol: "RRINT BNB", address: "0x6bd04252408361e1806994e04994ceb511a262b0", tokentype: "bep20" },
+        { symbol: "WRR-ETH", address: "0xf3414e85dea5cf3fab62f5a967f98fd032d5be2a", tokentype: "erc20" },
+        { symbol: "WRR-WBNB", address: "0xbf9d926bbf7b9408d1182c45fcf64f7f27909837", tokentype: "bep20" }
+    ];
+}
