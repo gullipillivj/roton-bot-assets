@@ -653,19 +653,30 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, d
 }
 window.simulateCycle = simulateCycle;
 
-async function startSimulation(totalCycles) {
-    window.CURRENT_WORKER_ID++; // Forcefully invalidate and kill any lingering intervals/loops
+// 🟢 Ensure your assets/simulate_prod.txt matches this structure:
+window.isBotRunning = false;
+
+async function startSimulation(intervalSeconds) {
+    if (window.isBotRunning) {
+        logToPanel("⚠️ Simulation is already active.");
+        return;
+    }
     window.isBotRunning = true;
-    
-    let activeThreadId = window.CURRENT_WORKER_ID;
-    logToPanel(`🚀 [LAUNCHING] Thread [ID: ${activeThreadId}] engaged. Cleared zombie loops.`);
-    
-    await simulateCycle(1, totalCycles || 10, 0, 0, activeThreadId);
-    
-    if (window.CURRENT_WORKER_ID === activeThreadId) {
-        window.isBotRunning = false;
-        setStatus("STOPPED");
-        logToPanel("[BOT FINISHED] Run parameters finalized.");
+    logToPanel("🚀 Simulation loop started successfully.");
+
+    while (window.isBotRunning) {
+        try {
+            // Your simulation ticker code logic goes here
+            logToPanel("🔄 Fetching market data vectors...");
+            
+            // Add a brief timeout wait cycle
+            await new Promise(resolve => setTimeout(resolve, intervalSeconds * 1000));
+        } catch (err) {
+            logToPanel("❌ Error during simulation cycle: " + err.message);
+            // Break loop if critical error or let it continue
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
     }
 }
 window.startSimulation = startSimulation;
+
