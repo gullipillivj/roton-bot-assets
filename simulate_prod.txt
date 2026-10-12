@@ -142,17 +142,38 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
         const holdingBridgeToken = customBridges.some(t => t.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN);
 
         let marketData = [];
+        let isEmergencyRetreatMode = false;
+
         if (!holdingPillarToken && !holdingBridgeToken) {
-            let targetRecoveryAddress = window.LAST_SOURCE_TOKEN;
-            let targetRecoverySymbol = "ORIGIN_ASSET";
-            
-            if (!targetRecoveryAddress || targetRecoveryAddress.toLowerCase().trim() === DYNAMIC_TOKEN_IN) {
-                targetRecoveryAddress = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; 
-                targetRecoverySymbol = "WBNB (FALLBACK)";
+            logToPanel("⚠️ [EXOTIC TRAP RESOLUTION] Wallet holds an exotic token. Querying contract tuple history for extraction path...");
+            isEmergencyRetreatMode = true;
+            let historicalExtractionPillar = "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c"; 
+            let extractionSymbol = "WBNB (FALLBACK)";
+
+            try {
+                const res = await fetch("/prodbot/ledger/balances", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ user: currentActiveWallet })
+                });
+                const ledgerData = await res.json();
+                if (ledgerData && ledgerData.status === "ok" && Array.isArray(ledgerData.tokens)) {
+                    for (let t = 0; t < ledgerData.tokens.length; t++) {
+                        let tokenAddr = ledgerData.tokens[t].toLowerCase().trim();
+                        let isPillar = universalPillars.some(p => p.address.toLowerCase().trim() === tokenAddr);
+                        if (isPillar && tokenAddr !== DYNAMIC_TOKEN_IN) {
+                            historicalExtractionPillar = tokenAddr;
+                            extractionSymbol = universalPillars.find(p => p.address.toLowerCase().trim() === tokenAddr)?.symbol || "ORIGIN_PILLAR";
+                            break;
+                        }
+                    }
+                }
+            } catch (err) {
+                logToPanel(`⚠️ Extraction path ledger query error: ${err.message}`);
             }
-            
-            logToPanel(`⚠️ [BACKWARD ROUTING ESCAPE] Exotic token trap detected. Forcing return path to original asset: ${targetRecoverySymbol} (${targetRecoveryAddress})`);
-            marketData = [{ symbol: targetRecoverySymbol, address: targetRecoveryAddress, tokentype: "bep20" }];
+
+            logToPanel(`🛡️ [FIREWALL ESCAPE ROUTE] Found valid extraction path back to: ${extractionSymbol}`);
+            marketData = [{ symbol: extractionSymbol, address: historicalExtractionPillar, tokentype: "bep20" }];
         } else {
             try {
                 if (typeof window.getTradeCandidates === "function") {
@@ -168,12 +189,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
             marketData = marketData.concat(customBridges).concat(universalPillars);
         }
 
-        if (!Array.isArray(marketData) || marketData.length === 0) {
-            logToPanel("❌ Filtered token list data is completely empty.");
-            continue;
-        }
-
-        logToPanel(`🎯 Dispatching ${marketData.length} tokens to validator endpoint...`);
+        logToPanel(`🎯 Testing ${marketData.length} paths via On-Chain Simulation...`);
         let cycleCandidatesArray = [];
 
         for (let index = 0; index < marketData.length; index++) {
@@ -190,6 +206,11 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 activeRouterForSimulation = "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D"; 
             }
 
+            let directSwappable = false;
+            let simulatedExpectedOut = "0";
+            let simulatedSlippage = "0.0";
+            let finalCompiledPath = [DYNAMIC_TOKEN_IN, targetAddress.toLowerCase().trim()];
+
             try {
                 let response = await fetch("/prodbot/swap/simulateuniswap", {
                     method: "POST",
@@ -202,25 +223,70 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                         amountOutMin: 0
                     })
                 });
-
                 let resData = await response.json();
-                if (resData.status === "ok") {
-                    let expectedOutput = resData.expected_output_wei || "0";
-                    let slippageCost = resData.slippage_cost_pct || "0.0";
-
-                    if (expectedOutput !== "0" && expectedOutput !== 0) {
-                        logToPanel(`   🟩 [SWAPPABLE] ${symbolLabel} | Slippage Rate: ${slippageCost}% | Expected Out: ${expectedOutput} Wei`);
-                        cycleCandidatesArray.push({
-                            symbol: symbolLabel,
-                            address: targetAddress,
-                            network: tokenNetwork,
-                            expectedOutWei: BigInt(expectedOutput),
-                            slippage: parseFloat(slippageCost)
-                        });
-                    }
+                if (resData.status === "ok" && resData.expected_output_wei !== "0" && resData.expected_output_wei !== 0) {
+                    directSwappable = true;
+                    simulatedExpectedOut = resData.expected_output_wei;
+                    simulatedSlippage = resData.slippage_cost_pct || "0.0";
                 }
             } catch (err) {}
-            await blockDelay(100);
+
+            if (directSwappable) {
+                logToPanel(`   🟩 [DIRECT VECTOR] ${symbolLabel} is directly swappable.`);
+                cycleCandidatesArray.push({
+                    symbol: symbolLabel,
+                    address: targetAddress,
+                    network: tokenNetwork,
+                    expectedOutWei: BigInt(simulatedExpectedOut),
+                    slippage: parseFloat(simulatedSlippage),
+                    routingPath: finalCompiledPath
+                });
+                if (isEmergencyRetreatMode) break;
+                continue; 
+            }
+
+            if (isEmergencyRetreatMode) continue;
+
+            let verifiedBridgeAnchor = null;
+            for (let p = 0; p < universalPillars.length; p++) {
+                let pillar = universalPillars[p];
+                if (pillar.address.toLowerCase().trim() === DYNAMIC_TOKEN_IN) continue;
+
+                try {
+                    let pillarCheck = await fetch("/prodbot/swap/simulateuniswap", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            router: activeRouterForSimulation,
+                            tokenIn: pillar.address, 
+                            tokenOut: targetAddress,
+                            amountIn: simulatedAmountInWei,
+                            amountOutMin: 0
+                        })
+                    });
+                    let pillarData = await pillarCheck.json();
+                    if (pillarData.status === "ok" && pillarData.expected_output_wei !== "0" && pillarData.expected_output_wei !== 0) {
+                        verifiedBridgeAnchor = pillar;
+                        simulatedExpectedOut = pillarData.expected_output_wei;
+                        simulatedSlippage = pillarData.slippage_cost_pct || "0.0";
+                        break; 
+                    }
+                } catch (e) {}
+            }
+
+            if (verifiedBridgeAnchor) {
+                finalCompiledPath = [DYNAMIC_TOKEN_IN, verifiedBridgeAnchor.address.toLowerCase().trim(), targetAddress.toLowerCase().trim()];
+                logToPanel(`   🔀 [INSTANT MULTI-HOP PATH] ${symbolLabel} routed instantly via: ${verifiedBridgeAnchor.symbol}`);
+                cycleCandidatesArray.push({
+                    symbol: `${symbolLabel} (via ${verifiedBridgeAnchor.symbol})`,
+                    address: targetAddress,
+                    network: tokenNetwork,
+                    expectedOutWei: BigInt(simulatedExpectedOut), 
+                    slippage: parseFloat(simulatedSlippage),
+                    routingPath: finalCompiledPath
+                });
+            }
+            await blockDelay(50);
         }
         logToPanel(`\n📊 [CYCLE AUDIT] Evaluating ${cycleCandidatesArray.length} swappable pool candidates...`);
 
@@ -254,15 +320,15 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 } else {
                     logToPanel(`\n🔥 [OPTIMIZER SELECTION] Dispatching parameters for: ${targetSelection.symbol}`);
                     window.LAST_SOURCE_TOKEN = DYNAMIC_TOKEN_IN;
-
+                    
                     let txResult = null;
                     if (targetSelection.network === "erc20" || targetSelection.network === "ethereum") {
                         txResult = await window.runethSwapUniswap(
-                            currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            currentActiveWallet, simulatedAmountInWei, targetSelection.routingPath[0], targetSelection.routingPath[targetSelection.routingPath.length - 1], PANCAKE_ROUTER, targetSelection.routingPath
                         );
                     } else {
                         txResult = await window.runbscSwapUniswap(
-                            currentActiveWallet, simulatedAmountInWei, DYNAMIC_TOKEN_IN, targetSelection.address, PANCAKE_ROUTER
+                            currentActiveWallet, simulatedAmountInWei, targetSelection.routingPath[0], targetSelection.routingPath[targetSelection.routingPath.length - 1], PANCAKE_ROUTER, targetSelection.routingPath
                         );
                     }
                     if (txResult && txResult.status === "ok") {
@@ -294,7 +360,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct) {
                 }
             } catch (walletErr) {
                 logToPanel(`   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message}`);
-                alert(`Wallet State Logic Failure:\n${walletErr.message}`);
+                alert(`dApp Loop Logic Failure:\n${walletErr.message}`);
             }
         }
         logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
@@ -316,4 +382,3 @@ async function startSimulation(totalCycles) {
     logToPanel("[BOT FINISHED] Run parameters finalized.");
 }
 window.startSimulation = startSimulation;
-
