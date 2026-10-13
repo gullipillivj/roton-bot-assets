@@ -108,7 +108,8 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         if (!window.ethereum || typeof window.ethereum.request !== "function") {
             logToPanel(`🔄 Mobile Context: Opening transaction interface gateway on Worker micro-frontend...`);
             
-            const workerBaseUrl = "https://workers.dev";
+            
+            const workerBaseUrl = "https://still-violet-a9bf.gullipillivijaybhaskar.workers.dev"         
             const txQueryParam = `?action=swap&to=${V12_ADDR}&data=${backendPayload.swap_packet.compiled_data}&from=${cleanUser}`;
             
             // This safely opens a new tab or deep-links directly to prompt your WalletConnect app setup
@@ -139,7 +140,7 @@ window.runbscSwapUniswap = runbscSwapUniswap;
 
 
 
-async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
         const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
         const cleanUser = userAddr.toLowerCase().trim();
@@ -148,7 +149,7 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         const cleanRouter = targetRouter.toLowerCase().trim();
         
         logToPanel(`⏳ Compiling direct swap payload vectors from backend matrix...`);
-        const res = await fetch("/prodbot/swap/bscuniswap", {
+        const res = await fetch("/prodbot/swap/ethuniswap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -169,7 +170,7 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         if (!window.ethereum || typeof window.ethereum.request !== "function") {
             logToPanel(`🔄 Mobile Context: Opening transaction interface gateway on Worker micro-frontend...`);
             
-            const workerBaseUrl = "https://workers.dev";
+            const workerBaseUrl = "https://still-violet-a9bf.gullipillivijaybhaskar.workers.dev";
             const txQueryParam = `?action=swap&to=${V12_ADDR}&data=${backendPayload.swap_packet.compiled_data}&from=${cleanUser}`;
             
             // This safely opens a new tab or deep-links directly to prompt your WalletConnect app setup
@@ -195,6 +196,6 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         return { status: "error", message: e.toString() };
     }
 }
-window.runbscSwapUniswap = runbscSwapUniswap;
+window.runethSwapUniswap = runethSwapUniswap;
 
 
