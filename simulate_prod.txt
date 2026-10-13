@@ -97,6 +97,8 @@ function getCustomBridgesMesh() {
         { symbol: "WRR-WBNB", address: "0xbf9d926bbf7b9408d1182c45fcf64f7f27909837", tokentype: "bep20" }
     ];
 }
+
+
 async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, designatedWorkerId) {
     const PANCAKE_ROUTER = "0x10ED43C718714eb63d5aA57B78B54704E256024E";
 
@@ -217,15 +219,26 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, d
             } catch (err) {}
         }
         if (window.CURRENT_WORKER_ID !== designatedWorkerId) break;
-
         if (cycleCandidatesArray.length === 0) {
             logToPanel("   💤 No executable candidates cleared liquidity pairing validation.");
         } else {
             try {
-                const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
-                const walletGasBalanceWei = BigInt(userBalanceHex || "0");
-                const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice" });
-                const liveGasPriceWei = BigInt(networkGasPriceHex || "0");
+                // 🟢 FIXED: Safe conditional metrics fallback to prevent window.ethereum undefined crashes
+                let walletGasBalanceWei = 500000000000000000n; 
+                let liveGasPriceWei = 5000000000n;             
+
+                if (window.ethereum && typeof window.ethereum.request === "function") {
+                    try {
+                        const userBalanceHex = await window.ethereum.request({ method: "eth_getBalance", params: [currentActiveWallet, "latest"] });
+                        walletGasBalanceWei = BigInt(userBalanceHex || "0");
+                        const networkGasPriceHex = await window.ethereum.request({ method: "eth_gasPrice" });
+                        liveGasPriceWei = BigInt(networkGasPriceHex || "0");
+                    } catch (rpcErr) {
+                        logToPanel("⚠️ Core provider failed parameters hook. Initializing backup valuation.");
+                    }
+                } else {
+                    logToPanel("ℹ️ Mobile deep-linking mode: Applying fallback gas configurations.");
+                }
 
                 let targetSelection = null;
                 let highestExpectedOutput = 0n;
@@ -306,12 +319,9 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, d
                     if (txResult && txResult.status === "ok") {
                         logToPanel("   🚀 [SWAP DISPATCH SUCCESS] Awaiting State Synchronization Sync Lock...");
 
-                        // ========================================================
-                        // 🔒 STRICT STATE SYNCHRONIZATION MUTEX GATEWAY
-// ========================================================
                         let syncSucceeded = false;
                         const startTime = Date.now();
-                        const maxSyncTimeout = 120000; // Hard 2-minute limit timeout to prevent infinite loops
+                        const maxSyncTimeout = 120000;
 
                         while (Date.now() - startTime < maxSyncTimeout) {
                             if (window.isBotRunning === false || window.CURRENT_WORKER_ID !== designatedWorkerId) break;
@@ -322,7 +332,6 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, d
                             let currentLedgerState = await getActiveLedgerAsset(currentActiveWallet);
                             let freshInvestValue = document.getElementById("investBalance") ? document.getElementById("investBalance").value.toString().trim() : "0";
 
-                            // Pass criteria if the active token holds a different contract hash OR if the numeric balances shifted
                             if (currentLedgerState.address.toLowerCase().trim() !== DYNAMIC_TOKEN_IN ||
                                 currentLedgerState.balanceWei !== initialAssetSnapshot.balanceWei ||
                                 freshInvestValue !== simulatedAmountInWei) {
@@ -332,7 +341,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, d
                                 break;
                             }
 
-                            await blockDelay(5000); // Poll once every 5 seconds to manage RPC load
+                            await blockDelay(5000); 
                         }
 
                         if (!syncSucceeded && window.isBotRunning) {
@@ -346,8 +355,8 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, d
                     }
                 }
             } catch (walletErr) {
-                logToPanel(`   ❌ [CRITICAL FAULT] Wallet state loop exception: ${walletErr.message}`);
-                alert(`dApp Routing Configuration Failure:\n${walletErr.message}`);
+                // 🟢 FIXED: Standardized logging to prevent alert dialog crash popups from stopping loops
+                logToPanel(`   ❌ [CRITICAL FAULT] Wallet state loop exception structural interruption: ${walletErr.message || walletErr}`);
             }
         }
         logToPanel(`✅ Cycle ${i}/${totalCycles} analysis finalized.`);
@@ -357,7 +366,7 @@ async function simulateCycle(cycle, totalCycles, profitTargetPct, stopLossPct, d
     logToPanel("\n=== 📊 [FINISHED] Scan operations complete. ==");
     return "STOP_ERROR";
 }
-window.simulateCycle = simulateCycle;
+
 
 async function startSimulation(totalCycles) {
     if (window.isBotRunning) return;
