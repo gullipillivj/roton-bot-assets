@@ -39,23 +39,39 @@ function ensure18Decimals(amountInput) {
     return combined === "" ? "0" : combined;
 }
 
-// Helper to extract active WalletConnect session topic keys out of LocalStorage
-function getActiveWcTopic() {
-    try {
-        // AppKit/WalletConnect v2/v3 saves active sessions inside localStorage arrays
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            if (key && key.includes("wc@2:client:0.0.1:session")) {
-                const sessionData = JSON.parse(localStorage.getItem(key));
-                if (sessionData && sessionData.topic) {
-                    return sessionData.topic;
-                }
-            }
-        }
-    } catch (e) {
-        console.error("Failed to extract active session pairing keys:", e);
-    }
-    return null;
+// 🟢 Reown Official Support Reference Handler
+async function sendTransactionThroughProvider(provider, tx) {
+  if (!provider || typeof provider.request !== "function") {
+    throw new Error("No connected wallet transaction provider interface available.");
+  }
+
+  const accounts = await provider.request({
+    method: "eth_accounts"
+  });
+
+  if (!accounts || !accounts.length) {
+    throw new Error("Wallet is not connected or session state is locked.");
+  }
+
+  const account = accounts[0];
+  logToPanel("Waiting for wallet confirmation popup...");
+
+  const hash = await provider.request({
+    method: "eth_sendTransaction",
+    params: [{
+      from: account,
+      to: tx.to,
+      data: tx.data,
+      value: tx.value || "0x0"
+    }]
+  });
+
+  if (!/^0x[0-9a-fA-F]{64}\$/.test(hash)) {
+    throw new Error("Wallet provider did not return a valid transaction hash string.");
+  }
+
+  logToPanel("Wallet submitted transaction successfully: " + hash);
+  return hash;
 }
 
 function setupActionListeners() {
@@ -75,15 +91,13 @@ function setupActionListeners() {
       });
       const data = await res.json();
       if (data && data.status === "ok") {
-        const topic = getActiveWcTopic();
-        const txParams = JSON.stringify([{ from: window.USER_ADDR, to: "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B", data: data.withdraw_call, value: "0x0" }]);
-        
-        if (topic) {
-            window.location.href = `wc:${topic}@2?method=eth_sendTransaction&params=${encodeURIComponent(txParams)}`;
-        } else {
-            window.location.href = `wc://wc?method=eth_sendTransaction&params=${encodeURIComponent(txParams)}`;
-        }
-        logToPanel(`✅ Withdrawal Intent Dispatched via Topic Bridge.`);
+        const provider = window.walletProvider || window.ethereum;
+        const hash = await sendTransactionThroughProvider(provider, {
+            to: "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B",
+            data: data.withdraw_call,
+            value: "0x0"
+        });
+        logToPanel(`✅ Withdrawal complete: ${hash}`);
       }
     } catch (err) {
       logToPanel("❌ Withdrawal Action Interrupted: " + err.message);
@@ -94,118 +108,3 @@ function setupActionListeners() {
 window.addEventListener("DOMContentLoaded", () => {
     setupActionListeners();
 });
-// ========================================================
-// 🥞 SWAP TRANSACTION EXECUTORS (TOPIC-LINKED DEEP-LINKS)
-// ========================================================
-async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
-    try {
-        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
-        const cleanUser = userAddr.toLowerCase().trim();
-        const cleanFrom = fromToken.toLowerCase().trim();
-        const cleanTo = toToken.toLowerCase().trim();
-        const cleanRouter = targetRouter.toLowerCase().trim();
-        
-        logToPanel(`⏳ Compiling direct swap payload vectors from backend matrix...`);
-        const res = await fetch("/prodbot/swap/bscuniswap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: cleanRouter,
-                tokenIn: cleanFrom,
-                tokenOut: cleanTo,
-                amountIn: BigInt(amountWei).toString(), 
-                amountOutMin: "0"
-            })
-        });
-        
-        const backendPayload = await res.json();
-        if (!backendPayload || backendPayload.status !== "ok") {
-            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
-        }
-
-        logToPanel(`📢 [SWAP PROMPT] Locating active pipeline topic parameters...`);
-        
-        const activeTopic = getActiveWcTopic();
-        const rawTxContainer = [{
-            from: cleanUser,
-            to: V12_ADDR.toLowerCase(), 
-            data: backendPayload.swap_packet.compiled_data, 
-            value: "0x0"
-        }];
-
-        const serializedParams = encodeURIComponent(JSON.stringify(rawTxContainer));
-
-        if (activeTopic) {
-            logToPanel(`📱 Linked Connection Found. Invoking Active Channel ID: ${activeTopic.substring(0, 8)}...`);
-            // Target the active session link topic instead of creating a raw unlinked pair hook
-            window.location.href = `wc:${activeTopic}@2?method=eth_sendTransaction&params=${serializedParams}`;
-        } else {
-            logToPanel(`⚠️ Warning: No explicit session topic found in local client registry. Initializing fallback URI bridge...`);
-            window.location.href = `wc://wc?method=eth_sendTransaction&params=${serializedParams}`;
-        }
-
-        const mockTrackingHash = "0x_topic_bridge_broadcast_" + Math.random().toString(36).substring(2, 15);
-        return { status: "ok", tx_hash: mockTrackingHash };
-
-    } catch (e) {
-        logToPanel(`❌ BSC Swap Pipeline Interrupted: ${e.message || e}`);
-        return { status: "error", message: e.toString() };
-    }
-}
-window.runbscSwapUniswap = runbscSwapUniswap;
-
-async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
-    try {
-        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
-        const cleanUser = userAddr.toLowerCase().trim();
-        const cleanFrom = fromToken.toLowerCase().trim();
-        const cleanTo = toToken.toLowerCase().trim();
-        const cleanRouter = targetRouter.toLowerCase().trim();
-        
-        logToPanel(`⏳ Compiling direct ETH swap payload vectors from backend matrix...`);
-        const res = await fetch("/prodbot/swap/ethuniswap", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                router: cleanRouter,
-                tokenIn: cleanFrom,
-                tokenOut: cleanTo,
-                amountIn: BigInt(amountWei).toString(),
-                amountOutMin: "0"
-            })
-        });
-        
-        const backendPayload = await res.json();
-        if (!backendPayload || backendPayload.status !== "ok") {
-            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
-        }
-
-        logToPanel(`📢 [SWAP PROMPT] Locating active pipeline topic parameters...`);
-        
-        const activeTopic = getActiveWcTopic();
-        const rawTxContainer = [{
-            from: cleanUser,
-            to: V12_ADDR.toLowerCase(), 
-            data: backendPayload.swap_packet.compiled_data, 
-            value: "0x0"
-        }];
-
-        const serializedParams = encodeURIComponent(JSON.stringify(rawTxContainer));
-
-        if (activeTopic) {
-            logToPanel(`📱 Linked Connection Found. Invoking Active Channel ID: ${activeTopic.substring(0, 8)}...`);
-            window.location.href = `wc:${activeTopic}@2?method=eth_sendTransaction&params=${serializedParams}`;
-        } else {
-            logToPanel(`⚠️ Warning: No explicit session topic found in local client registry. Initializing fallback URI bridge...`);
-            window.location.href = `wc://wc?method=eth_sendTransaction&params=${serializedParams}`;
-        }
-
-        const mockTrackingHash = "0x_topic_bridge_broadcast_" + Math.random().toString(36).substring(2, 15);
-        return { status: "ok", tx_hash: mockTrackingHash };
-
-    } catch (e) {
-        logToPanel(`❌ ETH Swap Pipeline Interrupted: ${e.message || e}`);
-        return { status: "error", message: e.toString() };
-    }
-}
-window.runethSwapUniswap = runethSwapUniswap;
