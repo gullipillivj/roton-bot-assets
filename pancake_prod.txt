@@ -108,3 +108,94 @@ function setupActionListeners() {
 window.addEventListener("DOMContentLoaded", () => {
     setupActionListeners();
 });
+// ========================================================
+// 🥞 SWAP TRANSACTION EXECUTORS (NATIVE REOWN IMPLEMENTATION)
+// ========================================================
+async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+    try {
+        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
+        const cleanFrom = fromToken.toLowerCase().trim();
+        const cleanTo = toToken.toLowerCase().trim();
+        const cleanRouter = targetRouter.toLowerCase().trim();
+        
+        logToPanel(`⏳ Compiling direct swap payload vectors from backend matrix...`);
+        const res = await fetch("/prodbot/swap/bscuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: cleanRouter,
+                tokenIn: cleanFrom,
+                tokenOut: cleanTo,
+                amountIn: BigInt(amountWei).toString(), 
+                amountOutMin: "0"
+            })
+        });
+        
+        const backendPayload = await res.json();
+        if (!backendPayload || backendPayload.status !== "ok") {
+            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        }
+
+        logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active Reown session...`);
+        
+        // 🟢 FIXED: Target Reown's native global injected interface instance natively
+        const activeProvider = window.walletProvider || window.ethereum;
+
+        const txHash = await sendTransactionThroughProvider(activeProvider, {
+            to: V12_ADDR,
+            data: backendPayload.swap_packet.compiled_data,
+            value: "0x0"
+        });
+
+        return { status: "ok", tx_hash: txHash };
+
+    } catch (e) {
+        logToPanel(`❌ BSC Swap Pipeline Interrupted: ${e.message || e}`);
+        return { status: "error", message: e.toString() };
+    }
+}
+window.runbscSwapUniswap = runbscSwapUniswap;
+
+async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
+    try {
+        const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
+        const cleanFrom = fromToken.toLowerCase().trim();
+        const cleanTo = toToken.toLowerCase().trim();
+        const cleanRouter = targetRouter.toLowerCase().trim();
+        
+        logToPanel(`⏳ Compiling direct ETH swap payload vectors from backend matrix...`);
+        const res = await fetch("/prodbot/swap/ethuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: cleanRouter,
+                tokenIn: cleanFrom,
+                tokenOut: cleanTo,
+                amountIn: BigInt(amountWei).toString(),
+                amountOutMin: "0"
+            })
+        });
+        
+        const backendPayload = await res.json();
+        if (!backendPayload || backendPayload.status !== "ok") {
+            throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
+        }
+
+        logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active Reown session...`);
+        
+        const activeProvider = window.walletProvider || window.ethereum;
+
+        const txHash = await sendTransactionThroughProvider(activeProvider, {
+            to: V12_ADDR,
+            data: backendPayload.swap_packet.compiled_data,
+            value: "0x0"
+        });
+
+        return { status: "ok", tx_hash: txHash };
+
+    } catch (e) {
+        logToPanel(`❌ ETH Swap Pipeline Interrupted: ${e.message || e}`);
+        return { status: "error", message: e.toString() };
+    }
+}
+window.runethSwapUniswap = runethSwapUniswap;
