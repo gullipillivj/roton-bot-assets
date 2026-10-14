@@ -39,6 +39,33 @@ function ensure18Decimals(amountInput) {
     return combined === "" ? "0" : combined;
 }
 
+// 🟢 NEW: Pre-Flight Backend Pool Viability Verifier
+async function verifyLiquidityViability(router, tokenIn, tokenOut, amountIn) {
+    try {
+        logToPanel(`🔍 [PRE-FLIGHT] Verifying AMM pool pool depth and trade viability...`);
+        const response = await fetch("/prodbot/swap/simulateuniswap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                router: router,
+                tokenIn: tokenIn,
+                tokenOut: tokenOut,
+                amountIn: amountIn.toString(),
+                amountOutMin: 0
+            })
+        });
+        const resData = await response.json();
+        
+        if (resData.status === "ok" && resData.expected_output_wei && resData.expected_output_wei !== "0" && resData.expected_output_wei !== 0) {
+            logToPanel(`📈 [PRE-FLIGHT MATCH] Expected: ${resData.expected_output_wei} units | Slippage: ${resData.slippage_cost_pct || "0.0"}%`);
+            return { swappable: true, compiled_data: resData.compiled_data };
+        }
+        return { swappable: false, error: "Zero liquidity output or market simulation rejected." };
+    } catch (err) {
+        return { swappable: false, error: err.message };
+    }
+}
+
 // 🟢 Streamlined Hybrid Transaction Dispatcher (Supports Wallet Browsers + AppKit)
 async function sendTransactionThroughProvider(provider, tx) {
   if (!provider || typeof provider.request !== "function") {
@@ -47,7 +74,6 @@ async function sendTransactionThroughProvider(provider, tx) {
 
   logToPanel("Waiting for wallet approval popup...");
 
-  // Send native JSON-RPC format transaction down the active pipeline channel
   const hash = await provider.request({
     method: "eth_sendTransaction",
     params: [{
@@ -79,7 +105,6 @@ function setupActionListeners() {
       });
       const data = await res.json();
       if (data && data.status === "ok") {
-        // Prioritize native built-in browser wrappers first
         const activeProvider = window.ethereum || window.walletProvider;
         const hash = await sendTransactionThroughProvider(activeProvider, {
             from: window.USER_ADDR,
@@ -99,7 +124,7 @@ window.addEventListener("DOMContentLoaded", () => {
     setupActionListeners();
 });
 // ========================================================
-// 🥞 SWAP TRANSACTION EXECUTORS (HYBRID ECOSYSTEM ENGINE)
+// 🥞 SWAP TRANSACTION EXECUTORS (HYBRID ENGINE WITH SIMULATION FIREWALL)
 // ========================================================
 async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
@@ -109,6 +134,12 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         const cleanTo = toToken.toLowerCase().trim();
         const cleanRouter = targetRouter.toLowerCase().trim();
         
+        // 🛡️ STEP 1: Pre-flight simulation check using backend endpoints before compiling final trade instructions
+        const viability = await verifyLiquidityViability(cleanRouter, cleanFrom, cleanTo, amountWei);
+        if (!viability.swappable) {
+            throw new Error(`[LIQUIDITY DEADLOCK] Bypassed execution loop to safeguard gas: ${viability.error}`);
+        }
+
         logToPanel(`⏳ Compiling direct swap payload vectors from backend matrix...`);
         const res = await fetch("/prodbot/swap/bscuniswap", {
             method: "POST",
@@ -128,8 +159,6 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         }
 
         logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active provider loop...`);
-        
-        // 🟢 FIXED: Fallback architecture that instantly grabs window.ethereum if inside a wallet browser
         const activeProvider = window.ethereum || window.walletProvider;
 
         const txHash = await sendTransactionThroughProvider(activeProvider, {
@@ -156,6 +185,12 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         const cleanTo = toToken.toLowerCase().trim();
         const cleanRouter = targetRouter.toLowerCase().trim();
         
+        // 🛡️ STEP 1: Pre-flight simulation check using backend endpoints before compiling final trade instructions
+        const viability = await verifyLiquidityViability(cleanRouter, cleanFrom, cleanTo, amountWei);
+        if (!viability.swappable) {
+            throw new Error(`[LIQUIDITY DEADLOCK] Bypassed execution loop to safeguard gas: ${viability.error}`);
+        }
+
         logToPanel(`⏳ Compiling direct ETH swap payload vectors from backend matrix...`);
         const res = await fetch("/prodbot/swap/ethuniswap", {
             method: "POST",
@@ -175,7 +210,6 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
         }
 
         logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active provider loop...`);
-        
         const activeProvider = window.ethereum || window.walletProvider;
 
         const txHash = await sendTransactionThroughProvider(activeProvider, {
